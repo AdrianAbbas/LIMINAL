@@ -14,6 +14,8 @@ The four main macros are Presence, Scale, Activity and Unreal. Select a panel in
 
 ## Download for Mac
 
+Download [install.sh](https://github.com/AdrianAbbas/LIMINAL/raw/refs/heads/main/install.sh), type `bash ` in Terminal, drag the downloaded file into Terminal, and press Return. It downloads and verifies the prebuilt universal Mac release, then installs the AU, VST3 and standalone app in your user folders. No Xcode, build tools or administrator password is needed. It preserves existing installations as dated backups.
+
 Use the macOS installer (`LIMINAL-macOS-universal.pkg`) from [Releases](https://github.com/AdrianAbbas/LIMINAL/releases). The release workflow builds it on GitHub's Mac runners and publishes it only after compilation and automated checks pass. A release asset is available only once that workflow succeeds. You do not need Xcode or build tools to install a release.
 
 The installer includes the standalone app, AU for Logic/GarageBand, and VST3 for other compatible hosts, for Intel and Apple Silicon on macOS 11+. Restart your DAW after installing. Early previews are not Developer ID signed or notarized; macOS may require your explicit approval in Privacy & Security. See the included READ-ME.
