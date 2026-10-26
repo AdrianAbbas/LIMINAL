@@ -35,9 +35,9 @@ jobs:
           set -euo pipefail
           {
           ctest --test-dir build -C Release --output-on-failure
-          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3/Contents/MacOS/LIMINAL
-          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/AU/LIMINAL.component/Contents/MacOS/LIMINAL
-          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/Standalone/LIMINAL.app/Contents/MacOS/LIMINAL
+          lipo build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3/Contents/MacOS/LIMINAL -verify_arch x86_64 arm64
+          lipo build/LIMINAL_artefacts/Release/AU/LIMINAL.component/Contents/MacOS/LIMINAL -verify_arch x86_64 arm64
+          lipo build/LIMINAL_artefacts/Release/Standalone/LIMINAL.app/Contents/MacOS/LIMINAL -verify_arch x86_64 arm64
           build/host_smoke_artefacts/Release/host_smoke "$PWD/build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3"
           } 2>&1 | tee .ci-diagnostics/validation.log
       - name: Package downloadable installer, bundles and corresponding source

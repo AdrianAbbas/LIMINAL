@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-if(APPLE)
+if(CMAKE_HOST_APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Universal Intel and Apple Silicon")
 endif()
