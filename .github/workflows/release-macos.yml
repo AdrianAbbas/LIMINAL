@@ -24,15 +24,22 @@ jobs:
           path: .deps/JUCE
       - name: Build universal VST3, AU and application
         run: |
+          set -euo pipefail
+          mkdir -p .ci-diagnostics
+          {
           cmake -S . -B build -G Xcode -DJUCE_PATH="$PWD/.deps/JUCE" -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
           cmake --build build --config Release --parallel 3
+          } 2>&1 | tee .ci-diagnostics/build.log
       - name: Test and verify both CPU architectures
         run: |
+          set -euo pipefail
+          {
           ctest --test-dir build -C Release --output-on-failure
           lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3/Contents/MacOS/LIMINAL
           lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/AU/LIMINAL.component/Contents/MacOS/LIMINAL
           lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/Standalone/LIMINAL.app/Contents/MacOS/LIMINAL
           build/host_smoke_artefacts/Release/host_smoke "$PWD/build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3"
+          } 2>&1 | tee .ci-diagnostics/validation.log
       - name: Package downloadable installer, bundles and corresponding source
         shell: bash
         run: |
@@ -62,7 +69,7 @@ jobs:
           ditto -c -k --keepParent dist/source/LIMINAL dist/LIMINAL-corresponding-source.zip
           cp packaging/MAC-README.txt dist/READ-ME.txt
           cp LICENSES/AGPL-3.0.txt dist/AGPL-3.0.txt
-          shasum -a 256 dist/*.pkg dist/*.zip > dist/SHA256SUMS.txt
+          (cd dist && shasum -a 256 *.pkg *.zip > SHA256SUMS.txt)
       - name: Save downloadable build files
         uses: actions/upload-artifact@v4
         with:
@@ -78,3 +85,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*.pkg dist/*.zip dist/*.txt --title "LIMINAL $GITHUB_REF_NAME — Mac universal preview" --prerelease --notes-file packaging/MAC-README.txt --verify-tag
+      - name: Preserve failure diagnostics for remote troubleshooting
+        if: failure()
+        run: |
+          mkdir -p .ci-diagnostics
+          if [ -f build/Testing/Temporary/LastTest.log ]; then cp build/Testing/Temporary/LastTest.log .ci-diagnostics/; fi
+          if [ -f build/CMakeFiles/CMakeConfigureLog.yaml ]; then cp build/CMakeFiles/CMakeConfigureLog.yaml .ci-diagnostics/; fi
+          printf 'Failed run: https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > .ci-diagnostics/run.txt
+          git add --force .ci-diagnostics
+          git -c user.name="LIMINAL CI" -c user.email="github-actions[bot]@users.noreply.github.com" commit -m "Preserve macOS build diagnostics [skip ci]"
+          git push origin "HEAD:refs/heads/diagnostics/macos-$GITHUB_RUN_ID"
