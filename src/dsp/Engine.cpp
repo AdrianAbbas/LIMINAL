@@ -348,11 +348,18 @@ Stereo Engine::tick(Stereo instrument) noexcept
     float transportTarget = (target[follow] > .5f && !playing) ? 0.f : 1.f;
     transportGain += smooth * (transportTarget - transportGain);
     float inputGain = p[active] * transportGain * (.3f + 1.4f * p[presence]);
-    dry.l *= inputGain;
-    dry.r *= inputGain;
-    dry.l += instrument.l * p[active] * transportGain;
-    dry.r += instrument.r * p[active] * transportGain;
-    auto out = room(dry);
+    auto busGain = [](float db) { return db <= -59.9f ? 0.f : std::pow(10.f, db / 20.f); };
+    float ambienceGain = busGain(p[ambienceBusLevel]);
+    float musicalGain = 6.f * busGain(p[instrumentBusLevel]) * p[active] * transportGain;
+    dry.l *= inputGain * ambienceGain;
+    dry.r *= inputGain * ambienceGain;
+    instrument.l *= musicalGain;
+    instrument.r *= musicalGain;
+    // Preserve a foreground musical direct path. Architecture processes the send,
+    // rather than attenuating the entire instrument through the source-distance model.
+    auto out = room({dry.l + instrument.l * .25f, dry.r + instrument.r * .25f});
+    out.l += instrument.l * .75f;
+    out.r += instrument.r * .75f;
     float mid = (out.l + out.r) * .5f, side = (out.l - out.r) * .5f * p[stereoWidth];
     out = {mid + side, mid - side};
     float gain = std::pow(10.f, p[master] / 20.f) * (1 - p[mute]);
@@ -364,7 +371,7 @@ Stereo Engine::tick(Stereo instrument) noexcept
         hpPrevIn[std::size_t(c)] = x;
         hpPrevOut[std::size_t(c)] = y;
         // Bounded soft protection. Normal gain staging stays well below this knee.
-        *channels[c] = std::tanh(y * gain);
+        *channels[c] = .89f * std::tanh(y * gain / .89f);
         if (std::abs(hpPrevOut[std::size_t(c)]) < 1e-25f)
             hpPrevOut[std::size_t(c)] = 0;
     }

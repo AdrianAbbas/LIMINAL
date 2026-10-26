@@ -1,4 +1,4 @@
-LIMINAL 0.2 — Milestone 1 instrument test build
+LIMINAL 0.2.1 — instrument / ambience balance test build
 
 Compatible build target: Intel and Apple Silicon, macOS 11 or later.
 No Xcode, compiler, CMake, or JUCE installation is needed to use this download.
@@ -39,3 +39,9 @@ Click the INSTRUMENTS page/card names to edit the families. The ENVIRONMENT
 button returns to the previous room controls. This is a partial Milestone 1
 checkpoint, not the completed seven-milestone overhaul. Sound quality needs
 your listening feedback; maximum six-family polyphony can be expensive.
+
+BALANCE FIX
+Independent Instrument Level and Ambience Level header faders. Musical
+instruments now retain a foreground direct path instead of having their whole
+output attenuated by architectural source distance. Factory ambience is quieter.
+The release gain-staging.csv records measured phrase peak/RMS and bus balance.

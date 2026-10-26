@@ -27,6 +27,7 @@ LiminalEditor::Control::Control(LiminalProcessor &p, std::size_t i, bool rotary)
     slider.textFromValueFunction = [places = spec.discrete ? 0 : (spec.max > 10 ? 1 : 2)](double value)
     { return juce::String(value, places); };
     slider.valueFromTextFunction = [](const juce::String &text) { return text.getDoubleValue(); };
+    slider.updateText();
 }
 void LiminalEditor::Control::resized()
 {
@@ -53,6 +54,7 @@ LiminalEditor::LayerStrip::LayerStrip(LiminalProcessor &p, Param on, Param gain,
         p.state, specs[gain].id, level);
     level.textFromValueFunction = [](double value) { return juce::String(value, 2); };
     level.valueFromTextFunction = [](const juce::String &text) { return text.getDoubleValue(); };
+    level.updateText();
 }
 void LiminalEditor::LayerStrip::resized()
 {
@@ -172,6 +174,10 @@ LiminalEditor::LiminalEditor(LiminalProcessor &p) : AudioProcessorEditor(p), pro
     };
     instrumentPage.setButtonText("ENVIRONMENT");
     groups.setSelectedId(12);
+    busControls[0] = std::make_unique<Control>(p, instrumentBusLevel);
+    busControls[1] = std::make_unique<Control>(p, ambienceBusLevel);
+    for (auto &control : busControls)
+        addAndMakeVisible(*control);
     setResizable(true, true);
     setResizeLimits(1040, 760, 1600, 1100);
     setSize(1160, 820);
@@ -227,6 +233,9 @@ void LiminalEditor::resized()
         layer->setBounds(strip.removeFromTop(stripH));
     room.setBounds(b);
     instrumentPage.setBounds(350, 20, 150, 28);
+    for (int i = 0; i < 2; ++i)
+        if (busControls[i])
+            busControls[i]->setBounds(520 + i * 220, 5, 210, 52);
     room.setVisible(!showingInstruments);
     for (int i = 0; i < 6; ++i)
     {
@@ -260,8 +269,7 @@ void LiminalEditor::paint(juce::Graphics &g)
     g.drawText("L I M I N A L", 22, 12, 300, 38, juce::Justification::centredLeft);
     g.setColour(dim);
     g.setFont(juce::FontOptions(12));
-    g.drawText("ENVIRONMENTAL SYNTHESIS  /  0.1", getWidth() - 380, 20, 350, 22,
-               juce::Justification::centredRight);
+
     int x = getWidth() - 78, y = getHeight() - 205, h = 140;
     g.setColour(panel);
     g.fillRect(x, y, 38, h);

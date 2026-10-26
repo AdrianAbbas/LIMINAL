@@ -139,7 +139,10 @@ namespace liminal
     X(drone2, "Harmonics", 0, 1, .35f, 0, "Hollow Drone")                                                    \
     X(drone3, "Sub", 0, 1, .35f, 0, "Hollow Drone")                                                          \
     X(drone4, "Movement", 0, 1, .35f, 0, "Hollow Drone")                                                     \
-    X(drone5, "Release", 0, 1, .35f, 0, "Hollow Drone")
+    X(drone5, "Release", 0, 1, .35f, 0, "Hollow Drone")                                                      \
+    X(instrumentBusLevel, "Instrument Level dB", -60, 6, 0, 0, "Output")                                     \
+    X(ambienceBusLevel, "Ambience Level dB", -60, 6, -12, 0, "Output")
+
 enum Param : std::size_t
 {
 #define ENUM(id, ...) id,

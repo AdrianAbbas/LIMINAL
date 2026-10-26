@@ -185,7 +185,7 @@ juce::String LiminalProcessor::presetName() const
 void LiminalProcessor::getStateInformation(juce::MemoryBlock &dest)
 {
     auto tree = state.copyState();
-    tree.setProperty("version", 2, nullptr);
+    tree.setProperty("version", 3, nullptr);
     tree.setProperty("presetName", presetName(), nullptr);
     tree.setProperty("scenesEnabled", scenesEnabled.load(), nullptr);
     for (int slot = 0; slot < 2; ++slot)
@@ -212,7 +212,7 @@ bool LiminalProcessor::restoreState(const void *data, int size)
         return false;
     auto tree = juce::ValueTree::fromXml(*xml);
     int version = int(tree.getProperty("version", 0));
-    if (version != 1 && version != 2)
+    if (version != 1 && version != 2 && version != 3)
         return false;
     // Validate the complete parameter payload before altering live state.
     auto validated = defaults();
@@ -236,8 +236,11 @@ bool LiminalProcessor::restoreState(const void *data, int size)
             if (!known)
                 return false;
         }
-    if (std::find(seen.begin(), version == 1 ? seen.begin() + pianoOn : seen.end(), false) !=
-        (version == 1 ? seen.begin() + pianoOn : seen.end()))
+    if (std::find(seen.begin(),
+                  version == 1 ? seen.begin() + pianoOn
+                               : (version == 2 ? seen.begin() + instrumentBusLevel : seen.end()),
+                  false) != (version == 1 ? seen.begin() + pianoOn
+                                          : (version == 2 ? seen.begin() + instrumentBusLevel : seen.end())))
         return false;
     auto a = tree.getChildWithName("SceneA"), b = tree.getChildWithName("SceneB");
     Settings av{}, bv{};
@@ -282,7 +285,8 @@ juce::Result LiminalProcessor::loadPreset(const juce::File &file)
         return juce::Result::fail("Cannot read preset");
     auto xml = getXmlFromBinary(data.getData(), int(data.getSize()));
     if (!xml || !xml->hasTagName("LIMINAL") ||
-        (xml->getIntAttribute("version") != 1 && xml->getIntAttribute("version") != 2))
+        (xml->getIntAttribute("version") != 1 && xml->getIntAttribute("version") != 2 &&
+         xml->getIntAttribute("version") != 3))
         return juce::Result::fail("Unsupported preset");
     // State restoration performs full range and schema validation.
     if (!restoreState(data.getData(), int(data.getSize())))

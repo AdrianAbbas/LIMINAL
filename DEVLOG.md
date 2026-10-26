@@ -95,3 +95,29 @@ published native installer before handing them off for user testing.
 
 Release: https://github.com/AdrianAbbas/LIMINAL/releases/tag/v0.2.0-milestone1.2
 Native validation: https://github.com/AdrianAbbas/LIMINAL/actions/runs/40272030404
+
+## Instrument/ambience balance correction — 0.2.1
+
+Audited the model/velocity/envelope/family/master chain. The musical bank was
+conservatively scaled and its entire output was then attenuated by architectural
+source distance/reverb. Presence was already applied only to the ambience input;
+an isolated-instrument regression now proves it does not attenuate music.
+
+Added independent always-visible Instrument Level and Ambience Level controls,
+family reference calibration, family-layer power compensation, a foreground
+musical direct path plus architectural send, quieter per-preset ambience defaults
+and a -1 dBFS bounded protection ceiling. Master default remains -9 dB.
+State schema 3 migrates version-1/2 sessions to the new bus defaults.
+
+Four local suites pass: existing ambience, instruments, gain staging and state.
+The gain suite compares six instruments against all six ambience layers using
+a fixed phrase in default/Mall/Hospital/Industrial configurations (24 cases).
+Final local musical RMS: -31.94 to -25.41 dBFS; foreground advantage: 21.33 to
+31.39 dB; worst normal mixed peak: -8.18 dBFS. Maximum 72-voice layered chord:
+-4.51 dBFS peak, -18.20 dBFS RMS. Independent fader calibration and Presence
+isolation are checked. CSV: docs/validation/gain-staging-0.2.1.csv.
+
+These verify rendered balance/headroom, not subjective timbre or universal MIDI
+performance. GarageBand listening verification remains with the user. A native
+Mac test installer is being generated before continuing Milestone 2.
+See docs/GAIN_STAGING.md for the signal-path audit and exact regression criteria.

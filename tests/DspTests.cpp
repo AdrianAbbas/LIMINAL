@@ -226,6 +226,7 @@ int main(int argc, char **argv)
                 presetIndex == 0
                     ? 6.20047493653e-5
                     : (presetIndex == 9 ? 8.0524456745e-5 : (presetIndex == 14 ? 9.8280357815e-6 : 0));
+            reference *= std::pow(10., preset.values[ambienceBusLevel] / 10.);
             if (reference > 0)
                 check(std::abs(energy - reference) < reference * .02, "preset render energy regression");
             ++presetIndex;

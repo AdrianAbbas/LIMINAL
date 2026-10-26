@@ -59,6 +59,7 @@ class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Tim
         muteAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
     std::array<std::unique_ptr<Control>, 6> macros;
+    std::array<std::unique_ptr<Control>, 2> busControls;
     std::vector<std::unique_ptr<Control>> details;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::TooltipWindow tooltip{this, 600};

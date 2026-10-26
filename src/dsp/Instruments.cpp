@@ -283,6 +283,8 @@ Stereo Instruments::tick() noexcept
     for (int ch = 0; ch < 16; ++ch)
         bendCurrent[ch] += smoothing * (bendTarget[ch] - bendCurrent[ch]);
     Stereo out;
+    float enabledPower = 0;
+    constexpr float calibration[]{1.f, 1.1f, 1.f, 1.8f, 1.3f, 2.2f};
     for (int i = 0; i < 6; ++i)
     {
         auto &f = families[i];
@@ -290,11 +292,12 @@ Stereo Instruments::tick() noexcept
         f.level += smoothing * (target[first[i] + 1] - f.level);
         for (int j = 0; j < 6; ++j)
             f.controls[j] += smoothing * (target[first[i] + 2 + j] - f.controls[j]);
+        enabledPower += f.on * f.on * std::pow(std::min(1.f, f.level / .65f), 2.f);
         auto add = [&](Voice &v)
         {
             if (v.note < 0)
                 return;
-            float s = render(v, i, f.controls) * f.level * f.on;
+            float s = render(v, i, f.controls) * f.level * f.on * calibration[i];
             float width = i == 1 ? f.controls[5] : (i == 3 ? f.controls[3] : (i == 5 ? f.controls[4] : .35f));
             float pan = std::sin(float(v.note) * 1.7f + float(v.age) * .12f) * width * .5f;
             out.l += s * (1 - pan) * .7071f;
@@ -305,6 +308,9 @@ Stereo Instruments::tick() noexcept
         for (auto &v : f.tails)
             add(v);
     }
+    float layering = 1 / std::sqrt(std::max(1.f, enabledPower));
+    out.l *= layering;
+    out.r *= layering;
     return out;
 }
 } // namespace liminal

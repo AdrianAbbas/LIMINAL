@@ -114,6 +114,30 @@ int main()
         for (std::size_t i = liminal::pianoOn; i < liminal::count; ++i)
             check(std::abs(q.settings()[i] - liminal::specs[i].initial) < 1e-5,
                   "legacy instrument defaults migration");
+        auto version2 = originalTree.createCopy();
+        version2.setProperty("version", 2, nullptr);
+        for (int index = version2.getNumChildren() - 1; index >= 0; --index)
+        {
+            auto child = version2.getChild(index);
+            if (child.hasType("PARAM"))
+            {
+                auto id = child.getProperty("id").toString();
+                if (id == "instrumentBusLevel" || id == "ambienceBusLevel")
+                    version2.removeChild(index, nullptr);
+            }
+            else
+            {
+                child.removeProperty("instrumentBusLevel", nullptr);
+                child.removeProperty("ambienceBusLevel", nullptr);
+            }
+        }
+        auto v2xml = version2.createXml();
+        juce::MemoryBlock v2data;
+        juce::AudioProcessor::copyXmlToBinary(*v2xml, v2data);
+        q.setStateInformation(v2data.getData(), int(v2data.getSize()));
+        check(std::abs(q.settings()[liminal::instrumentBusLevel]) < 1e-5 &&
+                  std::abs(q.settings()[liminal::ambienceBusLevel] + 12) < 1e-5,
+              "version 2 bus gain defaults migration");
         const char bad[]{'x', 'y', 'z'};
         q.setStateInformation(bad, 3);
         check(q.presetName() == p.presetName(), "invalid state rejected");

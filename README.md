@@ -10,6 +10,13 @@ The seven-milestone overhaul is tracked in [DEVLOG](DEVLOG.md), following the [u
 
 Generate six dry listening examples with `build/instrument_demo build/DEMO_AUDIO/milestone-1`. These use the live synthesis code without room effects. An index records notes, velocity and settings. Listening review remains outstanding.
 
+## Instrument / ambience balance update
+
+The 0.2.1 test build adds separate **Instrument Level** and **Ambience Level**
+header faders, foreground musical routing and calibrated quieter ambience.
+Master volume is unchanged. See [gain audit and tests](docs/GAIN_STAGING.md) and
+[measured phrase levels](docs/validation/gain-staging-0.2.1.csv).
+
 ## Play
 
 Load LIMINAL as an instrument in a VST3 host (or AU on macOS). Start with a factory preset, enable **ACTIVE**, and use Environment mode for continuous ambience. Enable **Follow host** to gate new input with playback; reverb tails continue. The development source provides twelve MIDI voices per enabled family, velocity, sustain pedal and pitch bend, alongside optional note-gated ambience. MPE is not implemented. The downloadable v0.1.0-preview.3 still uses the older eight-voice bank.

@@ -34,6 +34,9 @@ const std::array<FactoryPreset, 15> &factoryPresets()
         for (std::size_t i = 0; i < result.size(); ++i)
         {
             auto p = defaults();
+            constexpr float ambienceDb[]{-12, -13, -15, -14, -12, -13, -14, -14,
+                                         -13, -15, -15, -12, -12, -14, -14};
+            p[ambienceBusLevel] = ambienceDb[i];
             p[roomWidth] = widths[i];
             p[roomLength] = lengths[i];
             p[roomHeight] = heights[i];
