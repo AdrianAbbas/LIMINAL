@@ -124,3 +124,11 @@ All presets store the complete registry; values are generated in `src/presets/Fa
 | Empty Airport Terminal | Enormous glass volume with distant movement and long tails. | 85 x 140 x 24 | 3 | 0.24 | 12988 |
 | Impossible Room | Unstable resonances and spatial drift in an impossible volume. | 65 x 95 x 28 | 2 | 0.75 | 13985 |
 | The Backrooms | Oppressive fluorescent hum, carpet absorption and slow unreality. | 32 x 90 x 3 | 4 | 0.9 | 14982 |
+
+## Direction Update 1 additions
+
+State version 2 appends the six family enable/level pairs and 36 model controls.
+See [INSTRUMENTS.md](INSTRUMENTS.md) for mappings. Prefixes are `piano`, `synth`,
+`glass`, `choir`, `box`, `drone`; enable IDs end in `On`, level IDs in `Level`,
+and the six controls use suffixes `0` through `5` in the documented table order.
+Old IDs and factory ambience values remain unchanged.

@@ -42,7 +42,9 @@ class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Tim
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> levelAttachment;
     };
-    std::array<std::unique_ptr<LayerStrip>, 6> layers;
+    std::array<std::unique_ptr<LayerStrip>, 6> layers, instrumentCards;
+    juce::TextButton instrumentPage{"INSTRUMENTS"};
+    bool showingInstruments = true;
     void selectGroup();
     void browsePreset(bool save);
     void timerCallback() override;

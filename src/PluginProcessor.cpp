@@ -66,6 +66,7 @@ Settings LiminalProcessor::settings() const
 void LiminalProcessor::prepareToPlay(double sr, int)
 {
     engine.prepare(sr, settings());
+    instruments.prepare(sr, settings());
 }
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout &b) const
 {
@@ -86,6 +87,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Midi
                 p[i] = sceneA[i].load() + (sceneB[i].load() - sceneA[i].load()) * p[morph];
     }
     engine.setSettings(p);
+    instruments.setSettings(p);
     if (resetRequested.exchange(false))
         engine.reset(std::uint32_t(p[seed]));
     bool play = true;
@@ -111,14 +113,18 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Midi
             }
             auto msg = (*it).getMessage();
             if (msg.isNoteOn())
-                engine.noteOn(msg.getNoteNumber(), msg.getFloatVelocity());
+                instruments.noteOn(msg.getChannel(), msg.getNoteNumber(), msg.getFloatVelocity());
             else if (msg.isNoteOff())
-                engine.noteOff(msg.getNoteNumber());
+                instruments.noteOff(msg.getChannel(), msg.getNoteNumber());
             else if (msg.isAllNotesOff() || msg.isAllSoundOff())
-                engine.allNotesOff(msg.isAllSoundOff());
+                instruments.allNotesOff(msg.getChannel(), msg.isAllSoundOff());
+            else if (msg.isController() && msg.getControllerNumber() == 64)
+                instruments.sustain(msg.getChannel(), msg.getControllerValue() >= 64);
+            else if (msg.isPitchWheel())
+                instruments.bend(msg.getChannel(), msg.getPitchWheelValue());
             ++it;
         }
-        auto out = engine.tick();
+        auto out = engine.tick(instruments.tick());
         if (buffer.getNumChannels() == 1)
             buffer.setSample(0, i, (out.l + out.r) * .5f);
         else
@@ -179,7 +185,7 @@ juce::String LiminalProcessor::presetName() const
 void LiminalProcessor::getStateInformation(juce::MemoryBlock &dest)
 {
     auto tree = state.copyState();
-    tree.setProperty("version", 1, nullptr);
+    tree.setProperty("version", 2, nullptr);
     tree.setProperty("presetName", presetName(), nullptr);
     tree.setProperty("scenesEnabled", scenesEnabled.load(), nullptr);
     for (int slot = 0; slot < 2; ++slot)
@@ -205,7 +211,8 @@ bool LiminalProcessor::restoreState(const void *data, int size)
     if (!xml || !xml->hasTagName("LIMINAL"))
         return false;
     auto tree = juce::ValueTree::fromXml(*xml);
-    if (int(tree.getProperty("version", 0)) != 1)
+    int version = int(tree.getProperty("version", 0));
+    if (version != 1 && version != 2)
         return false;
     // Validate the complete parameter payload before altering live state.
     auto validated = defaults();
@@ -229,7 +236,8 @@ bool LiminalProcessor::restoreState(const void *data, int size)
             if (!known)
                 return false;
         }
-    if (std::find(seen.begin(), seen.end(), false) != seen.end())
+    if (std::find(seen.begin(), version == 1 ? seen.begin() + pianoOn : seen.end(), false) !=
+        (version == 1 ? seen.begin() + pianoOn : seen.end()))
         return false;
     auto a = tree.getChildWithName("SceneA"), b = tree.getChildWithName("SceneB");
     Settings av{}, bv{};
@@ -273,7 +281,8 @@ juce::Result LiminalProcessor::loadPreset(const juce::File &file)
     if (!file.loadFileAsData(data))
         return juce::Result::fail("Cannot read preset");
     auto xml = getXmlFromBinary(data.getData(), int(data.getSize()));
-    if (!xml || !xml->hasTagName("LIMINAL") || xml->getIntAttribute("version") != 1)
+    if (!xml || !xml->hasTagName("LIMINAL") ||
+        (xml->getIntAttribute("version") != 1 && xml->getIntAttribute("version") != 2))
         return juce::Result::fail("Unsupported preset");
     // State restoration performs full range and schema validation.
     if (!restoreState(data.getData(), int(data.getSize())))

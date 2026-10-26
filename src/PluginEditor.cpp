@@ -3,9 +3,10 @@ using namespace liminal;
 namespace
 {
 const juce::Colour bg{0xff11191b}, panel{0xff1b2729}, ink{0xffe3e3d5}, accent{0xff8db4aa}, dim{0xff829493};
-const juce::StringArray groupNames{"Room",        "Electrical", "Ventilation",  "Structure",
-                                   "Atmosphere",  "Distant",    "Substructure", "Evolution",
-                                   "Performance", "Output",     "Scenes"};
+const juce::StringArray groupNames{
+    "Room",         "Electrical",     "Ventilation", "Structure",      "Atmosphere",  "Distant",
+    "Substructure", "Evolution",      "Performance", "Output",         "Scenes",      "Forgotten Piano",
+    "Faded Synth",  "Glass Memories", "Empty Choir", "Lost Music Box", "Hollow Drone"};
 } // namespace
 LiminalEditor::Control::Control(LiminalProcessor &p, std::size_t i, bool rotary)
 {
@@ -153,6 +154,24 @@ LiminalEditor::LiminalEditor(LiminalProcessor &p) : AudioProcessorEditor(p), pro
     status.setFont(juce::FontOptions(12));
     status.setText("Procedural environmental synthesis / approximate architectural acoustics",
                    juce::dontSendNotification);
+    addAndMakeVisible(instrumentPage);
+    const Param instrumentOns[]{pianoOn, synthOn, glassOn, choirOn, boxOn, droneOn};
+    const Param instrumentLevels[]{pianoLevel, synthLevel, glassLevel, choirLevel, boxLevel, droneLevel};
+    for (int i = 0; i < 6; ++i)
+    {
+        instrumentCards[i] = std::make_unique<LayerStrip>(p, instrumentOns[i], instrumentLevels[i],
+                                                          groupNames[i + 11].toRawUTF8(),
+                                                          [this, i] { groups.setSelectedId(i + 12); });
+        addAndMakeVisible(*instrumentCards[i]);
+    }
+    instrumentPage.onClick = [this]
+    {
+        showingInstruments = !showingInstruments;
+        instrumentPage.setButtonText(showingInstruments ? "ENVIRONMENT" : "INSTRUMENTS");
+        resized();
+    };
+    instrumentPage.setButtonText("ENVIRONMENT");
+    groups.setSelectedId(12);
     setResizable(true, true);
     setResizeLimits(1040, 760, 1600, 1100);
     setSize(1160, 820);
@@ -207,6 +226,18 @@ void LiminalEditor::resized()
     for (auto &layer : layers)
         layer->setBounds(strip.removeFromTop(stripH));
     room.setBounds(b);
+    instrumentPage.setBounds(350, 20, 150, 28);
+    room.setVisible(!showingInstruments);
+    for (int i = 0; i < 6; ++i)
+    {
+        if (!instrumentCards[i])
+            continue;
+        instrumentCards[i]->setVisible(showingInstruments);
+        instrumentCards[i]->setBounds(b.getX() + (i % 2) * b.getWidth() / 2,
+                                      b.getY() + (i / 2) * b.getHeight() / 3, b.getWidth() / 2 - 8,
+                                      b.getHeight() / 3 - 12);
+    }
+
     groups.setBounds(side.removeFromTop(30));
     side.removeFromTop(8);
     auto actions = side.removeFromBottom(62);

@@ -204,7 +204,7 @@ Stereo Engine::room(Stereo in) noexcept
             (directMid - directSide) * (1 + balance) * distanceGain * (1 - .7f * mix) +
                 mix * (er.r + wetR * .6f)};
 }
-Stereo Engine::tick() noexcept
+Stereo Engine::tick(Stereo instrument) noexcept
 {
     for (std::size_t i = 0; i < count; ++i)
     {
@@ -350,6 +350,8 @@ Stereo Engine::tick() noexcept
     float inputGain = p[active] * transportGain * (.3f + 1.4f * p[presence]);
     dry.l *= inputGain;
     dry.r *= inputGain;
+    dry.l += instrument.l * p[active] * transportGain;
+    dry.r += instrument.r * p[active] * transportGain;
     auto out = room(dry);
     float mid = (out.l + out.r) * .5f, side = (out.l - out.r) * .5f * p[stereoWidth];
     out = {mid + side, mid - side};

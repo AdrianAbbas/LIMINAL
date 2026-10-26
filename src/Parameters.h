@@ -91,7 +91,55 @@ namespace liminal
     X(lowCut, "Low cut Hz", 15, 250, 25, 0, "Output")                                                        \
     X(highCut, "High cut Hz", 1000, 20000, 15000, 0, "Output")                                               \
     X(mute, "Mute", 0, 1, 0, 1, "Output")                                                                    \
-    X(morph, "Scene morph", 0, 1, 0, 0, "Scenes")
+    X(morph, "Scene morph", 0, 1, 0, 0, "Scenes")                                                            \
+    X(pianoOn, "Forgotten Piano enabled", 0, 1, 1, 1, "Forgotten Piano")                                     \
+    X(pianoLevel, "Forgotten Piano level", 0, 1, .65f, 0, "Forgotten Piano")                                 \
+    X(piano0, "Age", 0, 1, .35f, 0, "Forgotten Piano")                                                       \
+    X(piano1, "Detune", 0, 1, .35f, 0, "Forgotten Piano")                                                    \
+    X(piano2, "Softness", 0, 1, .35f, 0, "Forgotten Piano")                                                  \
+    X(piano3, "Mechanical Noise", 0, 1, .35f, 0, "Forgotten Piano")                                          \
+    X(piano4, "Decay", 0, 1, .35f, 0, "Forgotten Piano")                                                     \
+    X(piano5, "Distance", 0, 1, .35f, 0, "Forgotten Piano")                                                  \
+    X(synthOn, "Faded Synth enabled", 0, 1, 0, 1, "Faded Synth")                                             \
+    X(synthLevel, "Faded Synth level", 0, 1, .65f, 0, "Faded Synth")                                         \
+    X(synth0, "Detune", 0, 1, .35f, 0, "Faded Synth")                                                        \
+    X(synth1, "Warmth", 0, 1, .35f, 0, "Faded Synth")                                                        \
+    X(synth2, "Drift", 0, 1, .35f, 0, "Faded Synth")                                                         \
+    X(synth3, "Attack", 0, 1, .35f, 0, "Faded Synth")                                                        \
+    X(synth4, "Release", 0, 1, .35f, 0, "Faded Synth")                                                       \
+    X(synth5, "Width", 0, 1, .35f, 0, "Faded Synth")                                                         \
+    X(glassOn, "Glass Memories enabled", 0, 1, 0, 1, "Glass Memories")                                       \
+    X(glassLevel, "Glass Memories level", 0, 1, .65f, 0, "Glass Memories")                                   \
+    X(glass0, "Fragility", 0, 1, .35f, 0, "Glass Memories")                                                  \
+    X(glass1, "Brightness", 0, 1, .35f, 0, "Glass Memories")                                                 \
+    X(glass2, "Resonance", 0, 1, .35f, 0, "Glass Memories")                                                  \
+    X(glass3, "Detune", 0, 1, .35f, 0, "Glass Memories")                                                     \
+    X(glass4, "Decay", 0, 1, .35f, 0, "Glass Memories")                                                      \
+    X(glass5, "Distance", 0, 1, .35f, 0, "Glass Memories")                                                   \
+    X(choirOn, "Empty Choir enabled", 0, 1, 0, 1, "Empty Choir")                                             \
+    X(choirLevel, "Empty Choir level", 0, 1, .65f, 0, "Empty Choir")                                         \
+    X(choir0, "Breath", 0, 1, .35f, 0, "Empty Choir")                                                        \
+    X(choir1, "Formant", 0, 1, .35f, 0, "Empty Choir")                                                       \
+    X(choir2, "Detune", 0, 1, .35f, 0, "Empty Choir")                                                        \
+    X(choir3, "Width", 0, 1, .35f, 0, "Empty Choir")                                                         \
+    X(choir4, "Darkness", 0, 1, .35f, 0, "Empty Choir")                                                      \
+    X(choir5, "Release", 0, 1, .35f, 0, "Empty Choir")                                                       \
+    X(boxOn, "Lost Music Box enabled", 0, 1, 0, 1, "Lost Music Box")                                         \
+    X(boxLevel, "Lost Music Box level", 0, 1, .65f, 0, "Lost Music Box")                                     \
+    X(box0, "Wear", 0, 1, .35f, 0, "Lost Music Box")                                                         \
+    X(box1, "Pitch Drift", 0, 1, .35f, 0, "Lost Music Box")                                                  \
+    X(box2, "Mechanism", 0, 1, .35f, 0, "Lost Music Box")                                                    \
+    X(box3, "Brightness", 0, 1, .35f, 0, "Lost Music Box")                                                   \
+    X(box4, "Decay", 0, 1, .35f, 0, "Lost Music Box")                                                        \
+    X(box5, "Distance", 0, 1, .35f, 0, "Lost Music Box")                                                     \
+    X(droneOn, "Hollow Drone enabled", 0, 1, 0, 1, "Hollow Drone")                                           \
+    X(droneLevel, "Hollow Drone level", 0, 1, .65f, 0, "Hollow Drone")                                       \
+    X(drone0, "Density", 0, 1, .35f, 0, "Hollow Drone")                                                      \
+    X(drone1, "Instability", 0, 1, .35f, 0, "Hollow Drone")                                                  \
+    X(drone2, "Harmonics", 0, 1, .35f, 0, "Hollow Drone")                                                    \
+    X(drone3, "Sub", 0, 1, .35f, 0, "Hollow Drone")                                                          \
+    X(drone4, "Movement", 0, 1, .35f, 0, "Hollow Drone")                                                     \
+    X(drone5, "Release", 0, 1, .35f, 0, "Hollow Drone")
 enum Param : std::size_t
 {
 #define ENUM(id, ...) id,

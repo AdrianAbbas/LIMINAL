@@ -19,7 +19,7 @@ class Engine
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
     void allNotesOff(bool immediately = false) noexcept;
-    Stereo tick() noexcept;
+    Stereo tick(Stereo instrument = {}) noexcept;
     std::uint64_t structureEvents() const { return structureCount; }
     std::uint64_t distantEvents() const { return distantCount; }
     double reflectionSeconds() const { return erTimes[0] / sr; }

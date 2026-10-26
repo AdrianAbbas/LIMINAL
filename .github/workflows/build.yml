@@ -21,6 +21,9 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release --parallel 3
+      - name: Dry instrument listening renders
+        if: runner.os == 'Linux'
+        run: build/instrument_demo build/DEMO_AUDIO/milestone-1
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Verify macOS universal binaries
@@ -35,4 +38,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LIMINAL-${{ runner.os }}
-          path: build/LIMINAL_artefacts/Release/
+          path: |
+            build/LIMINAL_artefacts/Release/
+            build/DEMO_AUDIO/

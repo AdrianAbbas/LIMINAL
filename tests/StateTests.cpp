@@ -87,6 +87,33 @@ int main()
         auto original = q.settings();
         q.setStateInformation(invalid.getData(), int(invalid.getSize()));
         check(q.settings() == original, "invalid range rejected atomically");
+        auto legacy = originalTree.createCopy();
+        legacy.setProperty("version", 1, nullptr);
+        for (int index = legacy.getNumChildren() - 1; index >= 0; --index)
+        {
+            auto child = legacy.getChild(index);
+            if (child.hasType("PARAM"))
+            {
+                for (std::size_t i = liminal::pianoOn; i < liminal::count; ++i)
+                    if (child.getProperty("id").toString() == liminal::specs[i].id)
+                    {
+                        legacy.removeChild(index, nullptr);
+                        break;
+                    }
+            }
+            else if (child.hasType("SceneA") || child.hasType("SceneB"))
+            {
+                for (std::size_t i = liminal::pianoOn; i < liminal::count; ++i)
+                    child.removeProperty(liminal::specs[i].id, nullptr);
+            }
+        }
+        auto legacyXml = legacy.createXml();
+        juce::MemoryBlock legacyData;
+        juce::AudioProcessor::copyXmlToBinary(*legacyXml, legacyData);
+        q.setStateInformation(legacyData.getData(), int(legacyData.getSize()));
+        for (std::size_t i = liminal::pianoOn; i < liminal::count; ++i)
+            check(std::abs(q.settings()[i] - liminal::specs[i].initial) < 1e-5,
+                  "legacy instrument defaults migration");
         const char bad[]{'x', 'y', 'z'};
         q.setStateInformation(bad, 3);
         check(q.presetName() == p.presetName(), "invalid state rejected");

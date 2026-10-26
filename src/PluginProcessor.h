@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "dsp/Engine.h"
+#include "dsp/Instruments.h"
 #include "presets/Factory.h"
 class LiminalProcessor final : public juce::AudioProcessor
 {
@@ -39,6 +40,7 @@ class LiminalProcessor final : public juce::AudioProcessor
     static juce::AudioProcessorValueTreeState::ParameterLayout layout();
     bool restoreState(const void *, int);
     liminal::Engine engine;
+    liminal::Instruments instruments;
     std::array<std::atomic<float> *, liminal::count> raw{};
     // Scene slots use atomics: the audio callback never waits for UI/state I/O.
     std::array<std::atomic<float>, liminal::count> sceneA{}, sceneB{};

@@ -4,9 +4,15 @@ A local, procedural cinematic environmental instrument built with C++17 and JUCE
 
 This is an initial implementation, not a production-certified release. See [validation](docs/VALIDATION.md) for evidence and limitations.
 
+## Direction Update 1 — development branch
+
+The seven-milestone overhaul is tracked in [DEVLOG](DEVLOG.md), following the [updated specification](docs/DIRECTION_UPDATE_1.md). The first source checkpoint adds six separate MIDI instrument families, layered enables/levels, sustain, pitch bend, temporary instrument cards and version-1 state migration. See [instrument controls and limitations](docs/INSTRUMENTS.md). This source checkpoint is newer than the downloadable preview; `install.sh` still installs v0.1.0-preview.3, not these unreleased changes.
+
+Generate six dry listening examples with `build/instrument_demo build/DEMO_AUDIO/milestone-1`. These use the live synthesis code without room effects. An index records notes, velocity and settings. Listening review remains outstanding.
+
 ## Play
 
-Load LIMINAL as an instrument in a VST3 host (or AU on macOS). Start with a factory preset, enable **ACTIVE**, and use Environment mode for continuous ambience. Enable **Follow host** to gate new input with playback; reverb tails continue. Instrument mode provides eight MIDI voices, attack/release, velocity sensitivity and optionally gated noise. MIDI channels share the voice pool; sustain pedal and MPE are not implemented.
+Load LIMINAL as an instrument in a VST3 host (or AU on macOS). Start with a factory preset, enable **ACTIVE**, and use Environment mode for continuous ambience. Enable **Follow host** to gate new input with playback; reverb tails continue. The development source provides twelve MIDI voices per enabled family, velocity, sustain pedal and pitch bend, alongside optional note-gated ambience. MPE is not implemented. The downloadable v0.1.0-preview.3 still uses the older eight-voice bank.
 
 The four main macros are Presence, Scale, Activity and Unreal. Select a panel in the right dropdown for the complete parameter set. Drag **S** and **L** to position source and listener. All displayed controls connect to parameters. Save/Load writes portable `.liminal` presets (versioned JUCE XML binary, without external assets). Loading occurs on the UI thread. State and A/B slots persist in host sessions; random evolution restarts from its seed on restoration rather than resuming a sample-exact running tail.
 
