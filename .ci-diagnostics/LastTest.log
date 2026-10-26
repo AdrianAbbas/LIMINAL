@@ -1,0 +1,58 @@
+Start testing: Oct 26 04:58 UTC
+----------------------------------------------------------
+1/3 Testing: dsp
+1/3 Test: dsp
+Command: "/Users/runner/work/LIMINAL/LIMINAL/build/Release/dsp_tests"
+Directory: /Users/runner/work/LIMINAL/LIMINAL/build
+"dsp" start time: Oct 26 04:58 UTC
+Output:
+----------------------------------------------------------
+68 DSP checks passed. 10 s offline render: 0.339793 s (single instance, this machine). Total 11.5832 s
+<end of output>
+Test time =  11.59 sec
+----------------------------------------------------------
+Test Passed.
+"dsp" end time: Oct 26 04:58 UTC
+"dsp" time elapsed: 00:00:11
+----------------------------------------------------------
+
+2/3 Testing: instruments
+2/3 Test: instruments
+Command: "/Users/runner/work/LIMINAL/LIMINAL/build/Release/instrument_tests"
+Directory: /Users/runner/work/LIMINAL/LIMINAL/build
+"instruments" start time: Oct 26 04:58 UTC
+Output:
+----------------------------------------------------------
+Forgotten Piano chord energy 0.00204103 passed
+Faded Synth chord energy 0.00135508 passed
+Glass Memories chord energy 0.0015868 passed
+Empty Choir chord energy 0.000621945 passed
+Lost Music Box chord energy 0.00110529 passed
+Hollow Drone chord energy 5.72051e-05 passed
+Six dry families, chords, pedal, bend, stealing, release, layering and sample rates passed
+<end of output>
+Test time =   5.97 sec
+----------------------------------------------------------
+Test Passed.
+"instruments" end time: Oct 26 04:58 UTC
+"instruments" time elapsed: 00:00:05
+----------------------------------------------------------
+
+3/3 Testing: state
+3/3 Test: state
+Command: "/Users/runner/work/LIMINAL/LIMINAL/build/state_tests_artefacts/Release/state_tests"
+Directory: /Users/runner/work/LIMINAL/LIMINAL/build
+"state" start time: Oct 26 04:58 UTC
+Output:
+----------------------------------------------------------
+100 MIDI/SysEx audio callbacks: zero guarded C++ allocations
+State, scenes, 15 presets, invalid input, mono/stereo, and sample-accurate MIDI passed
+<end of output>
+Test time =   0.80 sec
+----------------------------------------------------------
+Test Passed.
+"state" end time: Oct 26 04:58 UTC
+"state" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 26 04:58 UTC
