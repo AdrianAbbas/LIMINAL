@@ -19,4 +19,8 @@ jobs:
           bash -n install.sh
           version=$(sed -n 's/^version=//p' install.sh)
           test -n "$version"
-          gh release upload "$version" install.sh --clobber
+          if gh release view "$version" >/dev/null 2>&1; then
+            gh release upload "$version" install.sh --clobber
+          else
+            echo "The release workflow will attach install.sh when the matching build passes."
+          fi

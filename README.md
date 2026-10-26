@@ -6,7 +6,7 @@ This is an initial implementation, not a production-certified release. See [vali
 
 ## Direction Update 1 — development branch
 
-The seven-milestone overhaul is tracked in [DEVLOG](DEVLOG.md), following the [updated specification](docs/DIRECTION_UPDATE_1.md). The first source checkpoint adds six separate MIDI instrument families, layered enables/levels, sustain, pitch bend, temporary instrument cards and version-1 state migration. See [instrument controls and limitations](docs/INSTRUMENTS.md). This source checkpoint is newer than the downloadable preview; `install.sh` still installs v0.1.0-preview.3, not these unreleased changes.
+The seven-milestone overhaul is tracked in [DEVLOG](DEVLOG.md), following the [updated specification](docs/DIRECTION_UPDATE_1.md). The first source checkpoint adds six separate MIDI instrument families, layered enables/levels, sustain, pitch bend, temporary instrument cards and version-1 state migration. See [instrument controls and limitations](docs/INSTRUMENTS.md). The Milestone 1 test build is published by the tagged Mac release workflow. Its updated `install.sh` installs v0.2.0-milestone1.1 once that build passes.
 
 Generate six dry listening examples with `build/instrument_demo build/DEMO_AUDIO/milestone-1`. These use the live synthesis code without room effects. An index records notes, velocity and settings. Listening review remains outstanding.
 

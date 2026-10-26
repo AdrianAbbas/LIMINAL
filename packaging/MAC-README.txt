@@ -1,4 +1,4 @@
-LIMINAL 0.1 — macOS universal preview
+LIMINAL 0.2 — Milestone 1 instrument test build
 
 Compatible build target: Intel and Apple Silicon, macOS 11 or later.
 No Xcode, compiler, CMake, or JUCE installation is needed to use this download.
@@ -32,3 +32,10 @@ Source and releases: https://github.com/AdrianAbbas/LIMINAL
 This is an early preview. Read docs/VALIDATION.md in the corresponding source
 for remaining limitations. Automated build/tests do not certify artistic
 sound quality or compatibility with every DAW.
+
+NEW IN THIS TEST BUILD
+Six selectable, layered MIDI instrument models with sustain and pitch bend.
+Click the INSTRUMENTS page/card names to edit the families. The ENVIRONMENT
+button returns to the previous room controls. This is a partial Milestone 1
+checkpoint, not the completed seven-milestone overhaul. Sound quality needs
+your listening feedback; maximum six-family polyphony can be expensive.

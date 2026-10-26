@@ -56,12 +56,13 @@ jobs:
           ditto dist/bundles/LIMINAL.component dist/pkgroot/Library/Audio/Plug-Ins/Components/LIMINAL.component
           ditto dist/bundles/LIMINAL.vst3 dist/pkgroot/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3
           cp packaging/MAC-README.txt dist/bundles/READ-ME.txt
+          cp install.sh dist/bundles/install.sh
           cp LICENSES/AGPL-3.0.txt dist/bundles/AGPL-3.0.txt
           cp LICENSE dist/bundles/LIMINAL-MIT-LICENSE.txt
           cp .deps/JUCE/LICENSE.md dist/bundles/JUCE-LICENSE.md
           mkdir -p dist/pkgroot/Library/Application\ Support/LIMINAL
           cp dist/bundles/*.txt dist/bundles/*.md dist/pkgroot/Library/Application\ Support/LIMINAL/
-          pkgbuild --root dist/pkgroot --identifier audio.liminal.instrument --version 0.1.0 --install-location / dist/LIMINAL-macOS-universal.pkg
+          pkgbuild --root dist/pkgroot --identifier audio.liminal.instrument --version 0.2.0 --install-location / dist/LIMINAL-macOS-universal.pkg
           pkgutil --payload-files dist/LIMINAL-macOS-universal.pkg > dist/installer-contents.txt
           ditto -c -k --sequesterRsrc --keepParent dist/bundles dist/LIMINAL-macOS-universal.zip
           git archive --prefix=LIMINAL/ HEAD | tar -x -C dist/source
@@ -70,6 +71,13 @@ jobs:
           cp packaging/MAC-README.txt dist/READ-ME.txt
           cp LICENSES/AGPL-3.0.txt dist/AGPL-3.0.txt
           (cd dist && shasum -a 256 *.pkg *.zip > SHA256SUMS.txt)
+      - name: Validate signed Audio Unit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto dist/bundles/LIMINAL.component "$HOME/Library/Audio/Plug-Ins/Components/LIMINAL.component"
+          auval -v aumu Lm01 Lmnl 2>&1 | tee .ci-diagnostics/auval.log
       - name: Save downloadable build files
         uses: actions/upload-artifact@v4
         with:
@@ -84,7 +92,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.pkg dist/*.zip dist/*.txt --title "LIMINAL $GITHUB_REF_NAME — Mac universal preview" --prerelease --notes-file packaging/MAC-README.txt --verify-tag
+          gh release create "$GITHUB_REF_NAME" install.sh dist/*.pkg dist/*.zip dist/*.txt --title "LIMINAL $GITHUB_REF_NAME — Mac universal preview" --prerelease --notes-file packaging/MAC-README.txt --verify-tag
       - name: Preserve failure diagnostics for remote troubleshooting
         if: failure()
         run: |
