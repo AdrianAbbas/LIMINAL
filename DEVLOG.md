@@ -157,3 +157,25 @@ without listening/host review. Approximate acoustics and variable-delay pitch
 movement are documented. Per-instrument effects remain Milestone 3; photographic/
 vector environment artwork and animation remain Milestone 4. Milestones 3–7
 are not claimed complete by the new source models or technical palette changes.
+
+## Published balance and environment test installers
+
+- v0.2.1-balance.1: native Mac build, four suites, AU validation, package/archive
+  integrity and both CPU architectures verified. Native render balance remains
+  21.33–31.39 dB musical foreground advantage in the representative gain suite.
+- v0.3.0-environments.1: native Mac build, all five suites and AU validation
+  passed. Installer/ZIP SHA256, all three bundle versions (0.3.0), Intel/Apple
+  Silicon slices and the 20 native thirty-second comparison WAVs were downloaded
+  and verified. Native maximum layered peak across locations: -3.0737 dBFS.
+- Native CSV evidence is recorded under docs/validation/ for gain, comparison
+  spectra/events and layering. No subjective listening claim or GarageBand/Logic
+  acceptance claim is inferred from those passing checks.
+
+Install/release: https://github.com/AdrianAbbas/LIMINAL/releases/tag/v0.3.0-environments.1
+Comparison audio: release asset LIMINAL-environment-comparisons.zip
+Native validation: https://github.com/AdrianAbbas/LIMINAL/actions/runs/40278298083
+
+Milestone 2 remains **Implemented but not fully tested** pending user listening
+and DAW review. The loudness correction is verified by rendered stems/headroom
+regressions; its perception in the user's GarageBand session remains feedback
+to collect. Both updated builds are published, not source-only checkpoints.
