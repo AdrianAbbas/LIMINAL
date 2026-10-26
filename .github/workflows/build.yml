@@ -1,0 +1,33 @@
+name: Build and test
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev libgl1-mesa-dev xvfb
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --parallel 3
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Verify macOS universal binaries
+        if: runner.os == 'macOS'
+        run: |
+          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3/Contents/MacOS/LIMINAL
+          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/AU/LIMINAL.component/Contents/MacOS/LIMINAL
+          build/host_smoke_artefacts/Release/host_smoke build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3
+      - name: Linux VST3 host and editor smoke
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python3 tests/headless.py build/host_smoke_artefacts/Release/host_smoke build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LIMINAL-${{ runner.os }}
+          path: build/LIMINAL_artefacts/Release/
