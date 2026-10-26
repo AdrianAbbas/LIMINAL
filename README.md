@@ -12,6 +12,14 @@ The four main macros are Presence, Scale, Activity and Unreal. Select a panel in
 
 **Capture A**, edit with **Live controls**, then **Capture B**. Morph interpolates continuous environmental controls from Electrical through Event Density, including room geometry and evolution amount. Enable switches, mains choice, room material, seed, freeze, performance/global settings and output controls remain live. Capture activates morph; Live controls exits it. Factory/preset changes disable morph. This is a reduced morph system, not two independent running engines or an arbitrary state crossfade.
 
+## Download for Mac
+
+Use the macOS installer (`LIMINAL-macOS-universal.pkg`) from [Releases](https://github.com/AdrianAbbas/LIMINAL/releases). The release workflow builds it on GitHub's Mac runners and publishes it only after compilation and automated checks pass. A release asset is available only once that workflow succeeds. You do not need Xcode or build tools to install a release.
+
+The installer includes the standalone app, AU for Logic/GarageBand, and VST3 for other compatible hosts, for Intel and Apple Silicon on macOS 11+. Restart your DAW after installing. Early previews are not Developer ID signed or notarized; macOS may require your explicit approval in Privacy & Security. See the included READ-ME.
+
+Combined JUCE-based preview binaries are distributed under AGPLv3, with the full corresponding LIMINAL/JUCE source included in the release. Original LIMINAL code remains MIT licensed. [Distribution details](packaging/MAC-README.txt).
+
 ## Build
 
 See [BUILDING](docs/BUILDING.md). CMake defaults to universal Intel (`x86_64`) and Apple Silicon (`arm64`) binaries on macOS 11+, including **VST3, AU and standalone**. Windows x64 and Linux VST3/standalone are configured too. macOS and Windows require native platform validation before release; a Linux build cannot establish compatibility with those hosts.

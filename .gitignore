@@ -2,3 +2,5 @@
 /.deps/
 *.wav
 .DS_Store
+
+/dist/

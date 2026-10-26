@@ -1,0 +1,80 @@
+name: Downloadable macOS release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: macos-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact JUCE source
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: 51a8a6d7aeae7326956d747737ccf1575e61e209
+          path: .deps/JUCE
+      - name: Build universal VST3, AU and application
+        run: |
+          cmake -S . -B build -G Xcode -DJUCE_PATH="$PWD/.deps/JUCE" -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build --config Release --parallel 3
+      - name: Test and verify both CPU architectures
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3/Contents/MacOS/LIMINAL
+          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/AU/LIMINAL.component/Contents/MacOS/LIMINAL
+          lipo -verify_arch x86_64 arm64 build/LIMINAL_artefacts/Release/Standalone/LIMINAL.app/Contents/MacOS/LIMINAL
+          build/host_smoke_artefacts/Release/host_smoke "$PWD/build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3"
+      - name: Package downloadable installer, bundles and corresponding source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/bundles dist/pkgroot/Applications dist/pkgroot/Library/Audio/Plug-Ins/Components dist/pkgroot/Library/Audio/Plug-Ins/VST3 dist/source
+          ditto build/LIMINAL_artefacts/Release/Standalone/LIMINAL.app dist/bundles/LIMINAL.app
+          ditto build/LIMINAL_artefacts/Release/AU/LIMINAL.component dist/bundles/LIMINAL.component
+          ditto build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3 dist/bundles/LIMINAL.vst3
+          for bundle in dist/bundles/LIMINAL.app dist/bundles/LIMINAL.component dist/bundles/LIMINAL.vst3; do
+            codesign --force --deep --sign - "$bundle"
+            codesign --verify --deep --strict "$bundle"
+          done
+          ditto dist/bundles/LIMINAL.app dist/pkgroot/Applications/LIMINAL.app
+          ditto dist/bundles/LIMINAL.component dist/pkgroot/Library/Audio/Plug-Ins/Components/LIMINAL.component
+          ditto dist/bundles/LIMINAL.vst3 dist/pkgroot/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3
+          cp packaging/MAC-README.txt dist/bundles/READ-ME.txt
+          cp LICENSES/AGPL-3.0.txt dist/bundles/AGPL-3.0.txt
+          cp LICENSE dist/bundles/LIMINAL-MIT-LICENSE.txt
+          cp .deps/JUCE/LICENSE.md dist/bundles/JUCE-LICENSE.md
+          mkdir -p dist/pkgroot/Library/Application\ Support/LIMINAL
+          cp dist/bundles/*.txt dist/bundles/*.md dist/pkgroot/Library/Application\ Support/LIMINAL/
+          pkgbuild --root dist/pkgroot --identifier audio.liminal.instrument --version 0.1.0 --install-location / dist/LIMINAL-macOS-universal.pkg
+          pkgutil --payload-files dist/LIMINAL-macOS-universal.pkg > dist/installer-contents.txt
+          ditto -c -k --sequesterRsrc --keepParent dist/bundles dist/LIMINAL-macOS-universal.zip
+          git archive --prefix=LIMINAL/ HEAD | tar -x -C dist/source
+          git -C .deps/JUCE archive --prefix=LIMINAL/.deps/JUCE/ HEAD | tar -x -C dist/source
+          ditto -c -k --keepParent dist/source/LIMINAL dist/LIMINAL-corresponding-source.zip
+          cp packaging/MAC-README.txt dist/READ-ME.txt
+          cp LICENSES/AGPL-3.0.txt dist/AGPL-3.0.txt
+          shasum -a 256 dist/*.pkg dist/*.zip > dist/SHA256SUMS.txt
+      - name: Save downloadable build files
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIMINAL-macOS-universal
+          path: |
+            dist/*.pkg
+            dist/*.zip
+            dist/*.txt
+          if-no-files-found: error
+      - name: Publish preview release with direct downloads
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.pkg dist/*.zip dist/*.txt --title "LIMINAL $GITHUB_REF_NAME — Mac universal preview" --prerelease --notes-file packaging/MAC-README.txt --verify-tag
