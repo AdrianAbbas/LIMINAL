@@ -62,13 +62,14 @@ jobs:
           cp .deps/JUCE/LICENSE.md dist/bundles/JUCE-LICENSE.md
           mkdir -p dist/pkgroot/Library/Application\ Support/LIMINAL
           cp dist/bundles/*.txt dist/bundles/*.md dist/pkgroot/Library/Application\ Support/LIMINAL/
-          pkgbuild --root dist/pkgroot --identifier audio.liminal.instrument --version 0.2.1 --install-location / dist/LIMINAL-macOS-universal.pkg
+          pkgbuild --root dist/pkgroot --identifier audio.liminal.instrument --version 0.3.0 --install-location / dist/LIMINAL-macOS-universal.pkg
           pkgutil --payload-files dist/LIMINAL-macOS-universal.pkg > dist/installer-contents.txt
           ditto -c -k --sequesterRsrc --keepParent dist/bundles dist/LIMINAL-macOS-universal.zip
           git archive --prefix=LIMINAL/ HEAD | tar -x -C dist/source
           git -C .deps/JUCE archive --prefix=LIMINAL/.deps/JUCE/ HEAD | tar -x -C dist/source
           ditto -c -k --keepParent dist/source/LIMINAL dist/LIMINAL-corresponding-source.zip
           cp build/BALANCE_REPORT/gain-staging.csv dist/gain-staging.csv
+          ditto -c -k --keepParent build/DEMO_AUDIO/milestone-2 dist/LIMINAL-environment-comparisons.zip
           cp packaging/MAC-README.txt dist/READ-ME.txt
           cp LICENSES/AGPL-3.0.txt dist/AGPL-3.0.txt
           (cd dist && shasum -a 256 *.pkg *.zip > SHA256SUMS.txt)

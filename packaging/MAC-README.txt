@@ -1,4 +1,4 @@
-LIMINAL 0.2.1 — instrument / ambience balance test build
+LIMINAL 0.3 — core environment test build
 
 Compatible build target: Intel and Apple Silicon, macOS 11 or later.
 No Xcode, compiler, CMake, or JUCE installation is needed to use this download.
@@ -45,3 +45,9 @@ Independent Instrument Level and Ambience Level header faders. Musical
 instruments now retain a foreground direct path instead of having their whole
 output attenuated by architectural source distance. Factory ambience is quieter.
 The release gain-staging.csv records measured phrase peak/RMS and bus balance.
+
+CORE ENVIRONMENTS
+Choose CORE ENVIRONMENTS in the preset menu for ten new procedural locations.
+Older factory sounds remain under LEGACY FACTORY PRESETS. A separate comparison
+audio ZIP contains matching 30-second ambience and piano examples for listening.
+Independent Instrument/Ambience Level controls and the verified gain fix remain.

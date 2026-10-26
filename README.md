@@ -6,7 +6,7 @@ This is an initial implementation, not a production-certified release. See [vali
 
 ## Direction Update 1 — development branch
 
-The seven-milestone overhaul is tracked in [DEVLOG](DEVLOG.md), following the [updated specification](docs/DIRECTION_UPDATE_1.md). The first source checkpoint adds six separate MIDI instrument families, layered enables/levels, sustain, pitch bend, temporary instrument cards and version-1 state migration. See [instrument controls and limitations](docs/INSTRUMENTS.md). The Milestone 1 test build is published by the tagged Mac release workflow. Its updated `install.sh` installs v0.2.0-milestone1.2 once that build passes.
+The seven-milestone overhaul is tracked in [DEVLOG](DEVLOG.md), following the [updated specification](docs/DIRECTION_UPDATE_1.md). The first source checkpoint adds six separate MIDI instrument families, layered enables/levels, sustain, pitch bend, temporary instrument cards and version-1 state migration. See [instrument controls and limitations](docs/INSTRUMENTS.md). The Milestone 1 test build is published by the tagged Mac release workflow. The current environment test installer is version v0.3.0-environments.1, published after native checks.
 
 Generate six dry listening examples with `build/instrument_demo build/DEMO_AUDIO/milestone-1`. These use the live synthesis code without room effects. An index records notes, velocity and settings. Listening review remains outstanding.
 
@@ -16,6 +16,20 @@ The 0.2.1 test build adds separate **Instrument Level** and **Ambience Level**
 header faders, foreground musical routing and calibrated quieter ambience.
 Master volume is unchanged. See [gain audit and tests](docs/GAIN_STAGING.md) and
 [measured phrase levels](docs/validation/gain-staging-0.2.1.csv).
+
+## Ten core environments
+
+The Milestone 2 test build adds ten location-specific source/event models and
+common musical coloration/warped-delay/echo profiles. Choose **CORE ENVIRONMENTS**
+in the preset menu, or choose an **ENVIRONMENT + RECOMMENDED INSTRUMENTS** patch.
+Old factory configurations remain available under LEGACY FACTORY PRESETS.
+See [environment models and limitations](docs/ENVIRONMENTS.md).
+
+The release includes a comparison-audio ZIP with twenty matched 30-second WAVs
+and an index: each location alone and with the same piano phrase. Technical
+tests pass; perceptual distinction, realism and GarageBand/Logic behavior still
+need listening/host review. Full artwork and per-instrument effect chains remain
+later milestones. The separately tagged gain fix is v0.2.1-balance.1.
 
 ## Play
 

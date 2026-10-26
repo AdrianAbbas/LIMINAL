@@ -1,14 +1,12 @@
 #pragma once
 #include "Parameters.h"
+#include "AudioTypes.h"
+#include "environments/Locations.h"
 #include <array>
 #include <cstdint>
 #include <vector>
 namespace liminal
 {
-struct Stereo
-{
-    float l = 0, r = 0;
-};
 class Engine
 {
   public:
@@ -20,6 +18,7 @@ class Engine
     void noteOff(int note) noexcept;
     void allNotesOff(bool immediately = false) noexcept;
     Stereo tick(Stereo instrument = {}) noexcept;
+    std::uint64_t locationEvents() const { return locations.events(); }
     std::uint64_t structureEvents() const { return structureCount; }
     std::uint64_t distantEvents() const { return distantCount; }
     double reflectionSeconds() const { return erTimes[0] / sr; }
@@ -47,6 +46,7 @@ class Engine
         void push(float) noexcept;
         void clear();
     };
+    Locations locations;
     double sr = 48000, bpm = 120, rt60 = 2;
     bool playing = true;
     Settings target = defaults(), p = defaults();

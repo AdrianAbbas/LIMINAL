@@ -55,6 +55,7 @@ LiminalProcessor::LiminalProcessor()
         sceneA[i].store(d[i]);
         sceneB[i].store(d[i]);
     }
+    loadEnvironment(0);
 }
 Settings LiminalProcessor::settings() const
 {
@@ -151,6 +152,22 @@ void LiminalProcessor::loadSettings(const Settings &input)
             parameter->endChangeGesture();
         }
 }
+void LiminalProcessor::loadEnvironment(int index)
+{
+    index = std::clamp(index, 0, 9);
+    loadSettings(environmentSettings(index, settings()));
+    {
+        const juce::ScopedLock lock(metadataLock);
+        currentPreset = environments[index].name;
+    }
+}
+void LiminalProcessor::loadRecommendedEnvironment(int index)
+{
+    index = std::clamp(index, 0, 9);
+    loadSettings(recommendedEnvironmentSettings(index, settings()));
+    const juce::ScopedLock lock(metadataLock);
+    currentPreset = juce::String(environments[index].name) + " / instruments";
+}
 void LiminalProcessor::loadFactory(int i)
 {
     auto &f = factoryPresets()[std::size_t(std::clamp(i, 0, 14))];
@@ -185,7 +202,7 @@ juce::String LiminalProcessor::presetName() const
 void LiminalProcessor::getStateInformation(juce::MemoryBlock &dest)
 {
     auto tree = state.copyState();
-    tree.setProperty("version", 3, nullptr);
+    tree.setProperty("version", 4, nullptr);
     tree.setProperty("presetName", presetName(), nullptr);
     tree.setProperty("scenesEnabled", scenesEnabled.load(), nullptr);
     for (int slot = 0; slot < 2; ++slot)
@@ -212,7 +229,7 @@ bool LiminalProcessor::restoreState(const void *data, int size)
         return false;
     auto tree = juce::ValueTree::fromXml(*xml);
     int version = int(tree.getProperty("version", 0));
-    if (version != 1 && version != 2 && version != 3)
+    if (version != 1 && version != 2 && version != 3 && version != 4)
         return false;
     // Validate the complete parameter payload before altering live state.
     auto validated = defaults();
@@ -237,10 +254,14 @@ bool LiminalProcessor::restoreState(const void *data, int size)
                 return false;
         }
     if (std::find(seen.begin(),
-                  version == 1 ? seen.begin() + pianoOn
-                               : (version == 2 ? seen.begin() + instrumentBusLevel : seen.end()),
-                  false) != (version == 1 ? seen.begin() + pianoOn
-                                          : (version == 2 ? seen.begin() + instrumentBusLevel : seen.end())))
+                  version == 1
+                      ? seen.begin() + pianoOn
+                      : (version == 2 ? seen.begin() + instrumentBusLevel
+                                      : (version == 3 ? seen.begin() + environmentModel : seen.end())),
+                  false) !=
+        (version == 1 ? seen.begin() + pianoOn
+                      : (version == 2 ? seen.begin() + instrumentBusLevel
+                                      : (version == 3 ? seen.begin() + environmentModel : seen.end()))))
         return false;
     auto a = tree.getChildWithName("SceneA"), b = tree.getChildWithName("SceneB");
     Settings av{}, bv{};
@@ -286,7 +307,7 @@ juce::Result LiminalProcessor::loadPreset(const juce::File &file)
     auto xml = getXmlFromBinary(data.getData(), int(data.getSize()));
     if (!xml || !xml->hasTagName("LIMINAL") ||
         (xml->getIntAttribute("version") != 1 && xml->getIntAttribute("version") != 2 &&
-         xml->getIntAttribute("version") != 3))
+         xml->getIntAttribute("version") != 3 && xml->getIntAttribute("version") != 4))
         return juce::Result::fail("Unsupported preset");
     // State restoration performs full range and schema validation.
     if (!restoreState(data.getData(), int(data.getSize())))

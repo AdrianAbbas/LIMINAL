@@ -141,7 +141,9 @@ namespace liminal
     X(drone4, "Movement", 0, 1, .35f, 0, "Hollow Drone")                                                     \
     X(drone5, "Release", 0, 1, .35f, 0, "Hollow Drone")                                                      \
     X(instrumentBusLevel, "Instrument Level dB", -60, 6, 0, 0, "Output")                                     \
-    X(ambienceBusLevel, "Ambience Level dB", -60, 6, -12, 0, "Output")
+    X(ambienceBusLevel, "Ambience Level dB", -60, 6, -12, 0, "Output")                                       \
+    X(environmentModel, "Environment model (-1 legacy)", -1, 9, -1, 1, "Room")                               \
+    X(environmentInfluence, "Environment Influence", 0, 1, 1, 0, "Room")
 
 enum Param : std::size_t
 {

@@ -10,7 +10,7 @@ if [ "$major" -lt 11 ]; then
   printf 'LIMINAL needs macOS 11 or newer.\n' >&2
   exit 1
 fi
-version=v0.2.1-balance.1
+version=v0.3.0-environments.1
 base="https://github.com/AdrianAbbas/LIMINAL/releases/download/$version"
 archive=LIMINAL-macOS-universal.zip
 work=$(mktemp -d "${TMPDIR:-/tmp}/liminal-install.XXXXXX")

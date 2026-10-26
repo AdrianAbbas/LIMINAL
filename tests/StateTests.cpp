@@ -138,6 +138,30 @@ int main()
         check(std::abs(q.settings()[liminal::instrumentBusLevel]) < 1e-5 &&
                   std::abs(q.settings()[liminal::ambienceBusLevel] + 12) < 1e-5,
               "version 2 bus gain defaults migration");
+        auto v3 = originalTree.createCopy();
+        v3.setProperty("version", 3, nullptr);
+        for (int index = v3.getNumChildren() - 1; index >= 0; --index)
+        {
+            auto child = v3.getChild(index);
+            if (child.hasType("PARAM"))
+            {
+                auto id = child.getProperty("id").toString();
+                if (id == "environmentModel" || id == "environmentInfluence")
+                    v3.removeChild(index, nullptr);
+            }
+            else
+            {
+                child.removeProperty("environmentModel", nullptr);
+                child.removeProperty("environmentInfluence", nullptr);
+            }
+        }
+        auto v3xml = v3.createXml();
+        juce::MemoryBlock v3data;
+        juce::AudioProcessor::copyXmlToBinary(*v3xml, v3data);
+        q.setStateInformation(v3data.getData(), int(v3data.getSize()));
+        check(q.settings()[liminal::environmentModel] == -1 &&
+                  q.settings()[liminal::environmentInfluence] == 1,
+              "version 3 legacy location migration");
         const char bad[]{'x', 'y', 'z'};
         q.setStateInformation(bad, 3);
         check(q.presetName() == p.presetName(), "invalid state rejected");
@@ -178,6 +202,7 @@ int main()
             check(b.getMagnitude(0, 128) > 0, "MIDI through processor");
         }
         p.loadFactory(0);
+        p.loadEnvironment(0);
         p.prepareToPlay(48000, 512);
         juce::AudioBuffer<float> audio(2, 512);
         juce::MidiBuffer events;

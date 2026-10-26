@@ -132,3 +132,11 @@ See [INSTRUMENTS.md](INSTRUMENTS.md) for mappings. Prefixes are `piano`, `synth`
 `glass`, `choir`, `box`, `drone`; enable IDs end in `On`, level IDs in `Level`,
 and the six controls use suffixes `0` through `5` in the documented table order.
 Old IDs and factory ambience values remain unchanged.
+
+## Gain and environment additions
+
+Schema 3 adds `instrumentBusLevel` (-60 to +6 dB, default 0) and
+`ambienceBusLevel` (-60 to +6 dB, default -12), with -60 muting new bus input.
+Schema 4 adds `environmentModel` (-1 legacy, 0–9 core locations) and
+`environmentInfluence` (0–1). See GAIN_STAGING.md and ENVIRONMENTS.md. Old
+IDs remain unchanged; earlier state schemas migrate missing controls to defaults.

@@ -27,6 +27,8 @@ class LiminalProcessor final : public juce::AudioProcessor
     liminal::Settings settings() const;
     void loadSettings(const liminal::Settings &);
     void loadFactory(int);
+    void loadEnvironment(int);
+    void loadRecommendedEnvironment(int);
     void captureScene(bool b);
     void disableScenes() { scenesEnabled.store(false); }
     juce::Result savePreset(const juce::File &);

@@ -82,6 +82,13 @@ LiminalEditor::LiminalEditor(LiminalProcessor &p) : AudioProcessorEditor(p), pro
                                                             &save, &load, &active, &follow, &mute, &reset,
                                                             &sceneA, &sceneB, &live, &status})
         addAndMakeVisible(c);
+    presets.addSectionHeading("CORE ENVIRONMENTS");
+    for (int i = 0; i < 10; ++i)
+        presets.addItem(environments[i].name, 101 + i);
+    presets.addSectionHeading("ENVIRONMENT + RECOMMENDED INSTRUMENTS");
+    for (int i = 0; i < 10; ++i)
+        presets.addItem(juce::String(environments[i].name) + " / instruments", 201 + i);
+    presets.addSectionHeading("LEGACY FACTORY PRESETS");
     const auto &f = factoryPresets();
     for (int i = 0; i < 15; ++i)
     {
@@ -92,6 +99,22 @@ LiminalEditor::LiminalEditor(LiminalProcessor &p) : AudioProcessorEditor(p), pro
     presets.setText(p.presetName(), juce::dontSendNotification);
     presets.onChange = [this]
     {
+        if (presets.getSelectedId() >= 201)
+        {
+            int i = presets.getSelectedId() - 201;
+            processor.loadRecommendedEnvironment(i);
+            status.setText(environments[i].recommended, juce::dontSendNotification);
+            return;
+        }
+        if (presets.getSelectedId() >= 101)
+        {
+            int i = presets.getSelectedId() - 101;
+            processor.loadEnvironment(i);
+            status.setText(juce::String(environments[i].description) +
+                               " Recommended: " + environments[i].recommended,
+                           juce::dontSendNotification);
+            return;
+        }
         selectedPreset = presets.getSelectedId() - 1;
         if (selectedPreset >= 0)
         {
@@ -100,8 +123,16 @@ LiminalEditor::LiminalEditor(LiminalProcessor &p) : AudioProcessorEditor(p), pro
                            juce::dontSendNotification);
         }
     };
-    prev.onClick = [this] { presets.setSelectedId((selectedPreset + 14) % 15 + 1); };
-    next.onClick = [this] { presets.setSelectedId((selectedPreset + 1) % 15 + 1); };
+    prev.onClick = [this]
+    {
+        int model = int(processor.settings()[environmentModel]);
+        presets.setSelectedId(model >= 0 ? 101 + (model + 9) % 10 : (selectedPreset + 14) % 15 + 1);
+    };
+    next.onClick = [this]
+    {
+        int model = int(processor.settings()[environmentModel]);
+        presets.setSelectedId(model >= 0 ? 101 + (model + 1) % 10 : (selectedPreset + 1) % 15 + 1);
+    };
     const Param ons[]{electricalOn, ventilationOn, structureOn, atmosphereOn, distantOn, subOn};
     const Param levels[]{electricalLevel, ventilationLevel, structureLevel,
                          atmosphereLevel, distantLevel,     subLevel};
@@ -329,7 +360,9 @@ juce::Point<float> LiminalEditor::RoomView::marker(bool listener) const
 }
 void LiminalEditor::RoomView::paint(juce::Graphics &g)
 {
-    g.fillAll(panel);
+    int model = int(processor.settings()[environmentModel]);
+    g.fillAll(model >= 0 ? juce::Colour(environments[std::size_t(std::clamp(model, 0, 9))].colour).darker(2.f)
+                         : panel);
     g.setColour(dim.withAlpha(.12f));
     for (int x = 0; x < getWidth(); x += 20)
         g.drawVerticalLine(x, 0, float(getHeight()));

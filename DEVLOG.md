@@ -2,7 +2,7 @@
 
 ## Milestone checklist
 - [ ] 1 — Six playable musical instrument families — **Partially completed** (engine checkpoint implemented; listening/host acceptance and card artwork outstanding)
-- [ ] 2 — Ten distinct procedural environments and comparison renders
+- [ ] 2 — **Implemented but not fully tested** — ten procedural models, musical profiles, comparison renders; subjective/DAW review pending
 - [ ] 3 — Independent cinematic effects per instrument
 - [ ] 4 — Environment artwork and page-based visual redesign
 - [ ] 5 — Thirty Characters and expanded scene transitions
@@ -121,3 +121,39 @@ These verify rendered balance/headroom, not subjective timbre or universal MIDI
 performance. GarageBand listening verification remains with the user. A native
 Mac test installer is being generated before continuing Milestone 2.
 See docs/GAIN_STAGING.md for the signal-path audit and exact regression criteria.
+
+## Milestone 2 — environment audio overhaul
+
+Implemented ten separate procedural source/event configurations: medical tones,
+escalator drives, bending pipes, concrete impacts, gliding water drops, elevator
+ramps, rail modes, random long compressor cycles, electronic activity and
+inharmonic disturbances. Shaped airflow, machinery and sparse foreground events
+replace the old bed as the primary identity. Each model has geometry/material,
+common musical filtering/modulated delay/echo, a palette and actual optional
+recommended layered instrument presets. Old sounds remain explicitly legacy.
+
+Sources/musical profiles crossfade; location selection retains room tails.
+Influence bypass and layer mutes work. Delay buffers are preallocated and bounded.
+State schema 4 migrates older projects to legacy model -1. An active-location
+allocation guard exercises hospital events and musical effects in processBlock.
+
+Validation: all five local suites passed, followed by targeted environment/state
+checks after adding recommended-preset/layering tests. Twenty 30-second WAVs
+were rendered from live DSP at 48 kHz with seed 4242 and a matching RMS target;
+headers/frame counts verified. Tests cover ten ambience and piano renders,
+60 family/location foreground-balance comparisons, source events, deterministic
+seed/freeze, all-layer muting, influence bypass, switching bounds, state
+migration, recommended-preset output and maximum 72-voice layering.
+Maximum-layer location peaks measured -3.07 to -4.61 dBFS, RMS -15.14 to -18.55
+dBFS. The built VST3 loads/renders/restores state and opens/reopens its editor.
+
+Evidence: build/DEMO_AUDIO/milestone-2/ (INDEX.md, WAVs, comparison CSV and
+layering.csv). Native test release is being built from this checkpoint; the
+separately published balance-fix installer already passed Mac tests/AU validation.
+
+Status: **Implemented but not fully tested**. No claim of emotional distinction,
+realism, absence of perceived repetition or GarageBand/Logic acceptance is made
+without listening/host review. Approximate acoustics and variable-delay pitch
+movement are documented. Per-instrument effects remain Milestone 3; photographic/
+vector environment artwork and animation remain Milestone 4. Milestones 3–7
+are not claimed complete by the new source models or technical palette changes.

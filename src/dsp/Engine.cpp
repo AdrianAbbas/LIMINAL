@@ -62,11 +62,13 @@ void Engine::prepare(double rate, const Settings &initial)
         d.data.resize(std::size_t(sr * .5) + 8);
     earlyL.data.resize(std::size_t(sr * 2) + 8);
     earlyR.data.resize(std::size_t(sr * 2) + 8);
+    locations.prepare(sr, p);
     reset(std::uint32_t(p[seed]));
     coefficients();
 }
 void Engine::reset(std::uint32_t s)
 {
+    locations.reset(s);
     transportGain = 1;
     rng = lastSeed = std::max(1u, s);
     sampleCounter = voiceAge = structureCount = distantCount = 0;
@@ -348,6 +350,11 @@ Stereo Engine::tick(Stereo instrument) noexcept
     float transportTarget = (target[follow] > .5f && !playing) ? 0.f : 1.f;
     transportGain += smooth * (transportTarget - transportGain);
     float inputGain = p[active] * transportGain * (.3f + 1.4f * p[presence]);
+    auto location = locations.ambience(p);
+    float legacyBlend = 1.f - .88f * locations.amount();
+    dry.l = dry.l * legacyBlend + location.l;
+    dry.r = dry.r * legacyBlend + location.r;
+    instrument = locations.music(instrument, p);
     auto busGain = [](float db) { return db <= -59.9f ? 0.f : std::pow(10.f, db / 20.f); };
     float ambienceGain = busGain(p[ambienceBusLevel]);
     float musicalGain = 6.f * busGain(p[instrumentBusLevel]) * p[active] * transportGain;
