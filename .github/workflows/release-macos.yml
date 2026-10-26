@@ -71,12 +71,30 @@ jobs:
           cp packaging/MAC-README.txt dist/READ-ME.txt
           cp LICENSES/AGPL-3.0.txt dist/AGPL-3.0.txt
           (cd dist && shasum -a 256 *.pkg *.zip > SHA256SUMS.txt)
+      - name: Retain compiled test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIMINAL-compiled-test-packages
+          path: dist/*.*
+          if-no-files-found: error
       - name: Validate signed Audio Unit
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
           ditto dist/bundles/LIMINAL.component "$HOME/Library/Audio/Plug-Ins/Components/LIMINAL.component"
+          # Refresh the CI user's registrar after installing a new AU bundle.
+          killall AudioComponentRegistrar 2>/dev/null || true
+          found=0
+          for attempt in {1..15}; do
+            auval -a > .ci-diagnostics/registered-audio-units.txt 2>&1
+            if grep -E 'aumu[[:space:]]+Lm01[[:space:]]+Lmnl' .ci-diagnostics/registered-audio-units.txt; then
+              found=1
+              break
+            fi
+            sleep 2
+          done
+          test "$found" -eq 1
           auval -v aumu Lm01 Lmnl 2>&1 | tee .ci-diagnostics/auval.log
       - name: Save downloadable build files
         uses: actions/upload-artifact@v4
