@@ -66,8 +66,9 @@ Known limitations / next steps:
   professional quality. Saturation is not oversampled.
 - Scene slots persist new values, but old reduced morph behavior is retained;
   full scene/instrument/discrete switching is Milestone 5.
-- No new Mac release was published for this partial checkpoint. Existing
-  `install.sh` continues to install the earlier preview.
+- Mac test release `v0.2.0-milestone1.2` is now published. Its matching
+  `install.sh` installs the six-family checkpoint. GarageBand/Logic still
+  require user acceptance testing.
 - Milestones 2–7: **Not started**. Finish Milestone 1 listening/host acceptance,
   then implement ten genuinely distinct environments before visual polish.
 
@@ -80,3 +81,17 @@ maximum layering here; quality/voice-limit work is still required. These are
 cloud CPU observations, not Apple Silicon benchmarks.
 
 A three-note piano benchmark rendered 2 s in 0.109 s on the same machine.
+
+## Milestone 1 Mac test release
+
+Published v0.2.0-milestone1.2 after native Mac compilation, all three test suites,
+both-architecture verification, VST3 host rendering, signature verification and
+Apple auval validation passed. The initial validation attempt could not discover
+the newly copied AU; refreshing the CI user's AudioComponentRegistrar and waiting
+for discovery resolved it. Download checksums and bundle version 0.2.0 are checked
+before handoff. This is a partial Milestone 1 test release, not completion of the
+seven-milestone overhaul. Future testable checkpoints must include a matching
+published native installer before handing them off for user testing.
+
+Release: https://github.com/AdrianAbbas/LIMINAL/releases/tag/v0.2.0-milestone1.2
+Native validation: https://github.com/AdrianAbbas/LIMINAL/actions/runs/40272030404
