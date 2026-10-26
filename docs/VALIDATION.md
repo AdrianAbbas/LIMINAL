@@ -1,6 +1,6 @@
 # Validation and release status
 
-LIMINAL 0.1 is an implemented development instrument, not a finished commercial release. Validation below was performed in the Debian 13 x86_64 cloud environment with GCC 14.2, CMake 3.31.6 and JUCE 8.0.6. macOS and Windows builds have not run here. The CI workflow is provided but has not been dispatched or observed remotely.
+LIMINAL 0.1 is an implemented development instrument, not a finished commercial release. Validation below was performed in the Debian 13 x86_64 cloud environment with GCC 14.2, CMake 3.31.6 and JUCE 8.0.6. Additional GitHub Actions runs passed Windows and Linux builds/tests. The [macOS release run](https://github.com/AdrianAbbas/LIMINAL/actions/runs/40263605883) passed on a Mac runner: universal VST3/AU/standalone compilation, DSP and processor tests, verification of both Intel and Apple Silicon slices, VST3 host rendering, bundle signature integrity checks and installer packaging. The [v0.1.0-preview.3 release](https://github.com/AdrianAbbas/LIMINAL/releases/tag/v0.1.0-preview.3) contains the installer, bundles and corresponding source. Physical Intel hardware, commercial Mac DAWs, AU validation and subjective listening remain untested.
 
 ## Executed checks
 
@@ -17,7 +17,7 @@ Observed default-engine Release performance: a 10-second render took about 0.44â
 
 | Criterion from specification | Status | Evidence / remaining work |
 |---|---|---|
-| 1. Compiles on a supported toolchain | Validated | Linux Release; Windows and macOS untested |
+| 1. Compiles on a supported toolchain | Validated | Linux, Windows x64, macOS universal builds; native Mac CI tests passed |
 | 2. Loads in a VST3 host | Validated | JUCE test host; commercial DAWs untested |
 | 3. Continuous Environment audio | Validated | Non-silent engine and hosted renders |
 | 4. Instrument MIDI response | Validated | Gating, note audio, release, sample offsets, eight-voice pool |
@@ -35,14 +35,14 @@ Observed default-engine Release performance: a 10-second render took about 0.44â
 
 ## Known limitations and priorities
 
-1. Build on Xcode and verify both slices of VST3/AU using `lipo`; run AU validation, native Apple Silicon DAWs, Intel DAWs under Rosetta and physical Intel hardware. Minimum deployment target is macOS 11. No macOS artifact is supplied by a Linux build.
-2. Run Windows x64 CI and real DAW project/automation/offline-bounce checks on every release platform. Add pluginval/host conformance testing before distribution.
+1. Universal Mac VST3/AU/app and installer are now built and verified on GitHub Mac runners. Next run AU validation, native Apple Silicon DAWs, Intel DAWs under Rosetta and physical Intel hardware. Minimum deployment target is macOS 11.
+2. Windows x64 CI has passed. Run real DAW project/automation/offline-bounce checks on every release platform, and add pluginval/host conformance testing before a production release.
 3. Perform subjective listening and spectral/aliasing review. Extreme nonlinear overload may alias; the protection curve is not an oversampled mastering limiter. No subjective audio-quality claim is made.
 4. Reset Evolution clears voices, oscillators and acoustic tails, and clears preallocated buffers inside the callback. It can click or cause a CPU spike; use stopped, not as a performance gesture. Restore restarts the seed sequence, not the exact transient DSP state of a running session.
 5. A/B is a documented reduced continuous-parameter morph, not a crossfade of independent engines. Discrete choices, performance/output settings and stochastic state are not morphed. Captures/restoration are atomic per parameter, not a transaction across the entire scene.
 6. The room is approximate. Structure and distant events are simplified modal/filtered excitation models; distant activity is not a detailed physical door simulation. No convolution, ray tracing, explicit frequency shifter or real recorded spaces are claimed. Structure/distant event pitches remain environmental in MIDI mode; the electrical, ventilation, atmosphere and substructure tonal bank follows notes.
 7. MIDI supports note on/off and all-notes/all-sound-off across a shared pool. Sustain, MPE, aftertouch, per-channel voice isolation and sample-exact running-state restore are not implemented. MIDI stealing preserves amplitude/phase but may change pitch abruptly.
 8. Standalone is compiled; actual audio-device playback is untested in this cloud machine. No persistent service is required for offline/plugin development.
-9. Signing, notarization, installer packaging, commercial licensing and release certification remain outstanding. Original source is MIT; JUCE's separate licensing applies.
+9. Installer packaging is complete. Binaries have ad-hoc signatures for integrity, not Developer ID signatures or Apple notarization. The open-source preview binaries are distributed under AGPLv3 with corresponding source; original LIMINAL source remains MIT. Production signing/notarization and release certification remain outstanding.
 
-The source commits are local to this checkout. No push or remote CI run has been performed. Cloud draft saving does not publish a snapshot, and fresh-task restoration of local-only commits has not been verified. Preserve/push the development branch through the normal repository workflow before depending on a fresh remote checkout.
+Source is pushed to GitHub main, with tagged preview releases. Cloud environment draft saving and snapshot publication remain separate; fresh-task snapshot restoration has not been verified.

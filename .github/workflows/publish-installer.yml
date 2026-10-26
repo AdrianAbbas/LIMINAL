@@ -1,0 +1,22 @@
+name: Publish terminal installer
+on:
+  push:
+    branches: [main]
+    paths: ['install.sh', '.github/workflows/publish-installer.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Attach installer to its matching binary release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash -n install.sh
+          version=$(sed -n 's/^version=//p' install.sh)
+          test -n "$version"
+          gh release upload "$version" install.sh --clobber
