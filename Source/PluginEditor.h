@@ -8,6 +8,7 @@
 // per size into an Image, each animation tick repaints only the small regions that
 // changed (REC dot, clock, meters, one flickering light), and the FrameGovernor (from
 // WORLDBUILDER) keeps frames from piling up on the message thread.
+#include "Export.h"
 #include "PluginProcessor.h"
 #include "UI/FrameGovernor.h"
 #include "UI/SceneArt.h"
@@ -48,7 +49,7 @@ private:
 // hover, filled while its drawer is open, with a pointing-hand cursor.
 class DrawerButton final : public juce::Button {
 public:
-    enum class Icon { instruments, environment, effects, perform };
+    enum class Icon { instruments, environment, effects, perform, presets };
     DrawerButton(const juce::String& text, Icon);
     void paintButton(juce::Graphics&, bool highlighted, bool down) override;
 
@@ -175,9 +176,49 @@ private:
     std::array<juce::TextButton, params::instrumentCount> tabs;
     std::vector<Row> rows;
     std::unique_ptr<LevelControl> mix, influence;
+    std::vector<std::unique_ptr<LevelControl>> midi;   // key range, velocity to volume and filter
     std::unique_ptr<juce::ComboBox> order;
     std::unique_ptr<ComboAttachment> orderAttachment;
     int current = 0;
+};
+
+// The presets drawer (Milestone 6): the five groups as tabs, a scrolling list (click to
+// load), saving your own; quality (Eco / Standard / High); exporting the place's ambience.
+class PresetDrawer final : public juce::Component {
+public:
+    explicit PresetDrawer(LiminalProcessor&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    void showCategory(int category);
+    void load(int row);              // as a click on that row (tests)
+    int rows() const;
+    bool poll();                     // export progress; true if something changed
+    std::function<void()> onLoad;
+
+private:
+    juce::Rectangle<int> rowArea(int visibleRow) const;
+    juce::String rowName(int row) const;
+    juce::String rowDescription(int row) const;
+    void startExport();
+    LiminalProcessor& processor;
+    int category = 3, scroll = 0, hover = -1;
+    juce::Array<juce::File> userFiles;
+    std::array<juce::TextButton, 5> tabs;
+    juce::TextEditor nameField;
+    juce::TextButton save { "SAVE" };
+    std::array<juce::TextButton, 3> quality;
+    juce::ComboBox duration, rate;
+    juce::ToggleButton room { "WITH ROOM" };
+    juce::TextButton exportButton { "EXPORT AMBIENCE" };
+    std::unique_ptr<juce::FileChooser> chooser;
+    std::unique_ptr<exporter::Job> job;
+    juce::String status;
+    float shownProgress = -1;
+    static constexpr int visibleRows = 9;
 };
 
 class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Timer {
@@ -198,6 +239,9 @@ public:
     juce::Button& environmentToggle() { return environmentButton; }
     void showEffects(bool show);
     void showPerform(bool show);
+    void showPresets(bool show);
+    PresetDrawer& presetDrawer() { return presetsPanel; }
+    juce::Button& presetsToggle() { return presetsButton; }
     PerformDrawer& performDrawer() { return perform; }
     juce::Button& performToggle() { return performButton; }
     EffectsDrawer& effectsDrawer() { return effects; }
@@ -225,11 +269,14 @@ private:
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };
     DrawerButton performButton { "PERFORM", DrawerButton::Icon::perform };
+    DrawerButton presetsButton { "PRESETS", DrawerButton::Icon::presets };
     ActiveInstruments active;
     InstrumentDrawer drawer;
     EnvironmentDrawer places;
     EffectsDrawer effects;
     PerformDrawer perform;
+    PresetDrawer presetsPanel;
+    void closeDrawersExcept(juce::Component* keep);
     int characterShown = -1;
     int activityLit = -1;
     juce::Rectangle<int> activityArea() const { return { 52, 70, 240, 14 }; }

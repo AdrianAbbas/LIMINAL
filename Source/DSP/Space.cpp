@@ -112,6 +112,7 @@ void Space::reset() {
     std::fill(early.begin(), early.end(), 0.0f);
     earlyWrite = 0;
     lowCutL.z = lowCutR.z = highCutL.z = highCutR.z = 0;
+    modNow = lean ? 0.0f : modSamples;
 }
 
 Stereo Space::tick(Stereo in) {
@@ -120,7 +121,8 @@ Stereo Space::tick(Stereo in) {
     early[std::size_t(earlyWrite)] = 0.5f * (in.l + in.r);
     const auto history = [&](int delay) { return early[std::size_t((earlyWrite - delay + historySize) % historySize)]; };
     float erL = 0, erR = 0;
-    for (int k = 0; k < taps; ++k) {
+    const int used = lean ? std::min(taps, 8) : taps;
+    for (int k = 0; k < used; ++k) {
         const float x = history(tapDelay[std::size_t(k)]);
         erL += x * tapL[std::size_t(k)];
         erR += x * tapR[std::size_t(k)];
@@ -138,14 +140,15 @@ Stereo Space::tick(Stereo in) {
 
     std::array<float, lines> out {};
     float sum = 0;
+    modNow += 0.0002f * ((lean ? 0.0f : modSamples) - modNow);   // modulation glides in and out (no jump)
     for (int i = 0; i < lines; ++i) {
         auto& d = delays[std::size_t(i)];
         const int size = int(d.data.size());
         float y;
-        if (modSamples > 0.0f) {   // read a little behind, wobbling slowly
+        if (modNow > 0.001f) {   // read a little behind, wobbling slowly
             d.phase += d.rate / float(sr);
             if (d.phase >= 1.0f) d.phase -= 1.0f;
-            const float back = float(d.length) - modSamples * (1.0f + sinCycle(d.phase));
+            const float back = float(d.length) - modNow * (1.0f + sinCycle(d.phase));
             float pos = float(d.write) - back;
             while (pos < 0.0f) pos += float(size);
             const int a = int(pos);

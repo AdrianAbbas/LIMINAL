@@ -6,6 +6,7 @@
 //   LiminalTests --render-places f.wav the same phrase in each environment (listening aid)
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
+#include "Export.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <algorithm>
@@ -173,6 +174,7 @@ double frequency(const std::vector<float>& x, double rate) {
 #include "EnvironmentTests.h"
 #include "EffectsTests.h"
 #include "CharacterTests.h"
+#include "WorkflowTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -595,6 +597,19 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                     juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
                 }
                 lm->showPerform(false);
+                // The presets drawer: a scene loads from a click.
+                lm->showPresets(true);
+                lm->presetDrawer().showCategory(3);
+                lm->presetDrawer().load(1);
+                s.check(lm->presetDrawer().isVisible() && p.presetName() == "THE LAST PATIENT" && p.parameters.getRawParameterValue(params::droneOn)->load() > 0.5f,
+                        "the PRESETS drawer opens and a click loads a scene");
+                if (snapshot.isNotEmpty()) {
+                    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile("editor-presets.png");
+                    file.deleteFile();
+                    juce::FileOutputStream out(file);
+                    juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                }
+                lm->showPresets(false);
             }
         }
         s.metric("editor open + first 2x paint", ms, " ms");
@@ -738,6 +753,7 @@ int main(int argc, char** argv) {
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);
     if (run("characters")) testCharacters(s);
+    if (run("workflow")) testWorkflow(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

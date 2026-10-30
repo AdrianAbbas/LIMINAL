@@ -29,7 +29,7 @@ void GlassMemories::noteOn(int note, float velocity) {
     if (velocity <= 0.0f) { noteOff(note); return; }
     velocity = std::clamp(velocity, 0.0f, 1.0f);
     const auto& st = settings;
-    auto& v = pool.allocate(note, polyphony, sr, 0.04, [this](const Voice& x) { return level(x); });
+    auto& v = pool.allocate(note, voices(polyphony), sr, 0.04, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
 
     const float frag = st.fragility, bright = st.brightness;

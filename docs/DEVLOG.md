@@ -24,7 +24,7 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 - [x] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (2026-10-30)
   - [x] Part 1: `DSP/Characters` (30 Characters, Unreal flavours, macro responses, Evolution), Character/evolution/macro/scene parameters, parameter mirror for scene morphing, 64-sample control grid, tests group `characters` (320 checks pass)
   - [x] Part 2: editor (Character choice in the PLACE drawer, PERFORM drawer: macros, evolution, scenes; activity indicator; Character grade), DEVLOG section, push without `[skip ci]`
-- [ ] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (push without `[skip ci]`)
+- [x] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (2026-10-30)
 - [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)
 - [ ] Final handoff: per milestone, what to listen for and look at in GarageBand
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
@@ -674,3 +674,60 @@ macOS (this push runs CI), listening, and the look of the grades in GarageBand.
 - Scene storage is per song, not per preset (Milestone 6 presets store the knobs).
 - The Character's light and flicker values are stored but only the grade is drawn until
   Milestone 4.
+
+---
+
+## Milestone 6 — presets, MIDI details, export, quality, state (2026-10-30)
+
+### What changed
+
+| | |
+|---|---|
+| `Presets` (new) | 86 factory presets: **10 places**, **30 Characters**, **26 instruments** (the six as they come + 20 variations: Felt Upright, Detuned Parlour, Distant Rehearsal Room, Worn Tape Piano, Warm Pad, VHS Lead, Dotted Echo Pluck, Wine Glass Rim, Cracked Crystal, Far Away Chimes, Ooh Choir, Breathy Ghosts, Bright Ee, Smeared Choir, New Music Box, Broken Music Box, Box in the Attic, Sub Hum, Bright Swarm, Slow Tide) and **20 scenes** (Forgotten Childhood, The Last Patient, Closing Time, Dream of an Empty Pool, Corridor Without End, Mall After Midnight, Memories of Summer, Something Below the Station, Rooms That Shouldn't Exist, Home But Wrong, Night Shift, Level P3, Room 412, Fluorescent Aisles, Saturday 1996, Underwater Lullaby, After the Bell, The Lift Is Coming, Overtime Forever, Familiar Walls). A scene sets everything; a place/Character preset only the place's controls; an instrument preset only the instruments. |
+| Processor | `applyPreset`, host programs (**Init + the 20 scenes**, GarageBand's preset menu), user presets as `.liminalpreset` XML files in the user's application-data folder (`Veil Audio/LIMINAL/Presets`; inside GarageBand's sandbox that is the host's container). MIDI: per-instrument **key range** and **velocity to volume / to filter**. **Quality** Eco/Standard/High. |
+| Quality | Eco: piano 16 partials below 9 kHz, ~5/8 of the voices, room modulation glided out and 8 reflections, at most 5 ambience events and 4 grains at once. High: piano partials up to 19 kHz. New notes only / glided, so switching is silent. No oversampling anywhere (the nonlinearities are gentle; recorded as a decision). |
+| `Export` (new) | Renders the place's ambience to WAV (stereo, 24-bit, 44.1/48/96 kHz, 30 s–10 min, with or without the room) on a worker thread with a second processor restored from the live state: the same engine, offline, deterministic. The drawer asks where to save (works inside sandboxed hosts). |
+| Editor | **PRESETS** drawer (strip): five tabs, a scrolling list (click to load; hover shows the description), save your own (USER), quality buttons, ambience export with progress. The EFFECTS drawer gains a MIDI row per instrument (low/high key, velocity to volume, velocity to filter). One drawer at a time (shared helper). |
+| Parameters (appended) | `quality`; per instrument `<i>_key_low`, `<i>_key_high`, `<i>_vel_volume`, `<i>_vel_filter`. |
+| Tests | Group `workflow` (shard 9). |
+
+### Tested (Linux, this container) — 350 checks pass, 0 fail
+
+- Every preset value names a real parameter and is in range; **all 86 presets load** and
+  play a chord cleanly over their ambience; every place/Character/scene preset keeps the
+  place over -45 dBFS one second after loading without MIDI (the AU harness's own check of
+  factory presets) — 80 of 86 also with 1 dB to spare (report-only).
+- Group semantics (a place preset keeps the instruments; an instrument preset keeps the
+  place); host programs: 21, names, choosing one loads it, Init resets.
+- User preset saved, listed, loaded back exactly.
+- MIDI: a note below an instrument's lowest key does not play it; Velocity to Volume 100 % →
+  20.5 dB between velocity 30 and 120, 0 % → 0.0 dB; Velocity to Filter darkens soft notes
+  (centroid ratio 0.81; the 0.8 target is report-only).
+- A pedalled 16-note chord on all six for 10 s is stable in all three modes. Report-only CPU
+  (x86, one core, shards in parallel): Eco ~15 %, Standard ~21 %, High ~22 % — Eco clearly
+  cheaper. Switching quality while notes ring is click-free.
+- Export: 6 s stereo WAV at 48 and 96 kHz; deterministic (identical twice); equals live
+  playback of the same state to 1.2e-7 (24-bit rounding); the dry stem differs.
+- State: a duplicated instance plays identically; saving a reopened project returns the
+  same state, scenes included; a version-1 project (no scenes) loads; loading presets
+  between blocks never allocates on the audio thread.
+
+### Not verified here
+
+macOS/GarageBand (this push runs CI, which also exercises the 21 programs through the AU
+harness), the native save panel for export, and listening to the presets.
+
+### Decisions (recorded instead of asking)
+
+- **Host programs = the 20 scenes** (plus Init): the most useful list for GarageBand's
+  menu; the other groups live in the PRESETS drawer.
+- **User presets exclude scenes A/B** (those belong to the song) and Power/morph.
+- **Velocity to filter** follows the latest note per instrument (the effects are after the
+  voices are mixed): fine for melodies, approximate for chords.
+- **No oversampling** in High: nothing here aliases audibly (gentle saturation only); High
+  spends its budget on piano partials instead.
+
+### Known limitations
+
+- The preset list is not searchable; 86 entries in five tabs.
+- Export length is chosen from a menu (30 s, 1, 2, 5, 10 min).

@@ -66,6 +66,14 @@ public:
     virtual void allSoundOff() = 0;               // short fade of everything
     virtual void render(float* left, float* right, int n) = 0;
     virtual int activeVoices() const = 0;
+    // Quality (Milestone 6): 0 Eco, 1 Standard, 2 High. Affects new notes only (never a
+    // sounding one), so changing it is silent.
+    void setQuality(int q) { quality = std::clamp(q, 0, 2); }
+    int voices(int polyphony) const { return quality == 0 ? std::max(4, polyphony * 5 / 8) : polyphony; }
+
+protected:
+    int quality = 1;
+public:
 
     static float bendRatio(int value14bit) {
         return std::exp2(2.0f * float(std::clamp(value14bit, 0, 16383) - 8192) / 8192.0f / 12.0f);

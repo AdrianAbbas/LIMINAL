@@ -61,7 +61,7 @@ void ViewfinderLook::drawButtonBackground(juce::Graphics& g, juce::Button& b, co
 void ViewfinderLook::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool highlighted, bool) {
     g.setColour(ink.withAlpha(b.getToggleState() || highlighted ? 0.95f : 0.6f));
     g.setFont(font(11.0f));
-    g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred);
+    g.drawFittedText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred, 1, 0.7f);
 }
 
 juce::Font ViewfinderLook::getComboBoxFont(juce::ComboBox&) { return font(10.5f); }
@@ -142,6 +142,8 @@ void DrawerButton::paintButton(juce::Graphics& g, bool highlighted, bool down) {
     if (icon == Icon::instruments) {   // three keys of a keyboard
         for (int k = 0; k < 3; ++k) g.drawRect(glyph.getX() + 5.0f * float(k), glyph.getY(), 5.5f, glyph.getHeight(), 1.0f);
         for (int k = 0; k < 2; ++k) g.fillRect(glyph.getX() + 3.5f + 5.0f * float(k), glyph.getY(), 3.0f, 7.0f);
+    } else if (icon == Icon::presets) {   // a stack of cards
+        for (int k = 0; k < 3; ++k) g.drawRect(glyph.getX() + 2.0f * float(k), glyph.getY() + 4.0f - 2.0f * float(k), glyph.getWidth() - 4.0f, 8.0f, 1.0f);
     } else if (icon == Icon::perform) {   // a fader between two scenes
         g.drawRect(glyph.getX(), glyph.getY() + 2.0f, 4.0f, 8.0f, 1.0f);
         g.drawRect(glyph.getRight() - 4.0f, glyph.getY() + 2.0f, 4.0f, 8.0f, 1.0f);
@@ -599,6 +601,12 @@ void EffectsDrawer::focus(int instrument) {
         }
         rows.push_back(std::move(row));
     }
+    midi.clear();
+    for (const auto& [n, label] : { std::pair<const char*, const char*> { params::midi::keyLow, "LOW KEY" }, { params::midi::keyHigh, "HIGH KEY" },
+                                    { params::midi::velocityVolume, "VEL>VOL" }, { params::midi::velocityFilter, "VEL>FLT" } }) {
+        midi.push_back(std::make_unique<LevelControl>(state, params::midiId(current, n).toRawUTF8(), label));
+        addAndMakeVisible(*midi.back());
+    }
     mix = std::make_unique<LevelControl>(state, id(params::fx::mix).toRawUTF8(), "EFFECTS MIX");
     influence = std::make_unique<LevelControl>(state, id(params::fx::influence).toRawUTF8(), "INFLUENCE");
     addAndMakeVisible(*mix);
@@ -624,6 +632,12 @@ void EffectsDrawer::paint(juce::Graphics& g) {
     g.drawText("EFFECTS  -  EACH INSTRUMENT HAS ITS OWN", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
     g.setColour(ink.withAlpha(0.1f));
     for (std::size_t i = 1; i < rows.size(); ++i) g.fillRect(16.0f, float(rows[i].on->getY() - 3), area.getWidth() - 32.0f, 1.0f);
+    if (!midi.empty()) {
+        g.fillRect(16.0f, float(midi[0]->getY() - 3), area.getWidth() - 32.0f, 1.0f);
+        g.setColour(ink.withAlpha(0.75f));
+        g.setFont(font(11.0f));
+        g.drawText("MIDI", 38, midi[0]->getY() + 1, 60, 18, juce::Justification::centredLeft);
+    }
     // What the place adds to this instrument at full Influence.
     const int place = std::clamp(int(std::lround(state.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
     const auto e = dsp::placeEffects(dsp::Place(place), current);
@@ -640,7 +654,7 @@ void EffectsDrawer::paint(juce::Graphics& g) {
     g.setColour(ink.withAlpha(0.5f));
     g.setFont(font(9.0f));
     g.drawFittedText(juce::String(dsp::profile(dsp::Place(place)).name) + " ADDS (AT 100 %):  " + adds.joinIntoString("  /  "),
-                     juce::Rectangle<int>(16, getHeight() - 30, getWidth() - 32, 24), juce::Justification::topLeft, 2, 1.0f);
+                     juce::Rectangle<int>(16, getHeight() - 28, getWidth() - 32, 24), juce::Justification::topLeft, 2, 1.0f);
 }
 
 void EffectsDrawer::resized() {
@@ -651,7 +665,7 @@ void EffectsDrawer::resized() {
     for (auto& tab : tabs) tab.setBounds(tabRow.removeFromLeft(tabWidth));
     area.removeFromTop(6);
     for (auto& row : rows) {
-        auto r = area.removeFromTop(38);
+        auto r = area.removeFromTop(34);
         auto left = r.removeFromLeft(96);
         row.on->setBounds(left.removeFromTop(19));
         if (row.choice != nullptr) row.choice->setBounds(left.withTrimmedTop(1).withHeight(17).withTrimmedRight(8));
@@ -659,7 +673,13 @@ void EffectsDrawer::resized() {
         const int w = r.getWidth() / 4;
         for (auto& c : row.controls) c->setBounds(r.removeFromLeft(w).withTrimmedRight(8).withSizeKeepingCentre(w - 8, 34));
     }
-    area.removeFromTop(4);
+    {   // MIDI: which keys play this instrument, and what velocity does
+        auto r = area.removeFromTop(34);
+        r.removeFromLeft(96);
+        const int w = r.getWidth() / 4;
+        for (auto& c : midi) c->setBounds(r.removeFromLeft(w).withTrimmedRight(8).withSizeKeepingCentre(w - 8, 32));
+    }
+    area.removeFromTop(2);
     auto bottom = area.removeFromTop(36);
     const int w = bottom.getWidth() / 3;
     mix->setBounds(bottom.removeFromLeft(w).withTrimmedRight(10));
@@ -750,6 +770,232 @@ void PerformDrawer::resized() {
 }
 
 //==============================================================================
+PresetDrawer::PresetDrawer(LiminalProcessor& p) : processor(p) {
+    const char* tabText[] { "PLACES", "CHARACTERS", "INSTRUMENTS", "SCENES", "USER" };
+    for (int i = 0; i < 5; ++i) {
+        tabs[std::size_t(i)].setButtonText(tabText[i]);
+        tabs[std::size_t(i)].onClick = [this, i] { showCategory(i); };
+        addAndMakeVisible(tabs[std::size_t(i)]);
+    }
+    nameField.setTextToShowWhenEmpty("NAME YOUR PRESET", ink.withAlpha(0.4f));
+    nameField.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0x2207100f));
+    nameField.setColour(juce::TextEditor::outlineColourId, ink.withAlpha(0.3f));
+    nameField.setColour(juce::TextEditor::textColourId, ink);
+    nameField.setFont(font(11.0f));
+    addChildComponent(nameField);
+    save.onClick = [this] {
+        if (processor.saveUserPreset(nameField.getText()).existsAsFile()) {
+            nameField.clear();
+            showCategory(4);
+        }
+    };
+    addChildComponent(save);
+    const char* qualityText[] { "ECO", "STANDARD", "HIGH" };
+    for (int i = 0; i < 3; ++i) {
+        quality[std::size_t(i)].setButtonText(qualityText[i]);
+        quality[std::size_t(i)].onClick = [this, i] {
+            auto* q = processor.parameters.getParameter(params::quality);
+            q->beginChangeGesture();
+            q->setValueNotifyingHost(q->convertTo0to1(float(i)));
+            q->endChangeGesture();
+            repaint();
+        };
+        addAndMakeVisible(quality[std::size_t(i)]);
+    }
+    duration.addItemList({ "30 SECONDS", "1 MINUTE", "2 MINUTES", "5 MINUTES", "10 MINUTES" }, 1);
+    duration.setSelectedId(2, juce::dontSendNotification);
+    rate.addItemList({ "44.1 KHZ", "48 KHZ", "96 KHZ" }, 1);
+    rate.setSelectedId(2, juce::dontSendNotification);
+    for (auto* c : { &duration, &rate }) {
+        styleCombo(*c);
+        addAndMakeVisible(c);
+    }
+    room.setToggleState(true, juce::dontSendNotification);
+    addAndMakeVisible(room);
+    exportButton.setTooltip("Render the place's own sounds (no instruments) to a WAV file, with the same engine, offline");
+    exportButton.onClick = [this] { startExport(); };
+    addAndMakeVisible(exportButton);
+    showCategory(3);
+}
+
+int PresetDrawer::rows() const {
+    return category == 4 ? userFiles.size() : int(presets::inCategory(presets::Category(category)).size());
+}
+juce::String PresetDrawer::rowName(int row) const {
+    if (category == 4) return userFiles[row].getFileNameWithoutExtension().toUpperCase();
+    return presets::factory()[std::size_t(presets::inCategory(presets::Category(category))[std::size_t(row)])].name;
+}
+juce::String PresetDrawer::rowDescription(int row) const {
+    if (category == 4) return "Your preset (" + userFiles[row].getFileName() + ")";
+    return presets::factory()[std::size_t(presets::inCategory(presets::Category(category))[std::size_t(row)])].description;
+}
+
+void PresetDrawer::showCategory(int c) {
+    category = std::clamp(c, 0, 4);
+    scroll = 0;
+    hover = -1;
+    if (category == 4) userFiles = processor.userPresets();
+    for (int i = 0; i < 5; ++i) tabs[std::size_t(i)].setToggleState(i == category, juce::dontSendNotification);
+    nameField.setVisible(category == 4);
+    save.setVisible(category == 4);
+    repaint();
+}
+
+void PresetDrawer::load(int row) {
+    if (row < 0 || row >= rows()) return;
+    if (category == 4) processor.loadUserPreset(userFiles[row]);
+    else processor.applyPreset(presets::factory()[std::size_t(presets::inCategory(presets::Category(category))[std::size_t(row)])]);
+    if (onLoad) onLoad();
+    repaint();
+}
+
+juce::Rectangle<int> PresetDrawer::rowArea(int visibleRow) const { return { 16, 60 + visibleRow * 22, getWidth() - 32, 21 }; }
+
+void PresetDrawer::paint(juce::Graphics& g) {
+    const auto area = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0x5507100f));
+    g.fillRect(area);
+    g.setColour(ink.withAlpha(0.18f));
+    g.drawRect(area, 1.0f);
+    g.setFont(font(9.5f));
+    g.setColour(ink.withAlpha(0.45f));
+    g.drawText("PRESETS  -  NOW: " + processor.presetName().toUpperCase(), area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    const int total = rows();
+    for (int i = 0; i < visibleRows && scroll + i < total; ++i) {
+        const auto r = rowArea(i).toFloat();
+        const int row = scroll + i;
+        const bool current = rowName(row).equalsIgnoreCase(processor.presetName());
+        if (current || hover == i) {
+            g.setColour(ink.withAlpha(current ? 0.14f : 0.07f));
+            g.fillRoundedRectangle(r, 3.0f);
+        }
+        g.setColour(ink.withAlpha(current ? 1.0f : hover == i ? 0.9f : 0.72f));
+        g.setFont(font(10.5f, current));
+        g.drawText(rowName(row), r.reduced(10, 0), juce::Justification::centredLeft);
+    }
+    if (total == 0) {
+        g.setColour(ink.withAlpha(0.45f));
+        g.setFont(font(10.0f));
+        g.drawText("NO PRESETS OF YOUR OWN YET - NAME ONE BELOW AND SAVE", rowArea(0), juce::Justification::centredLeft);
+    }
+    if (total > visibleRows) {   // a thin scroll indicator
+        const float h = float(visibleRows * 22), y0 = 60.0f + h * float(scroll) / float(total), len = h * float(visibleRows) / float(total);
+        g.setColour(ink.withAlpha(0.35f));
+        g.fillRect(area.getRight() - 9.0f, y0, 2.0f, len);
+    }
+    if (hover >= 0 && scroll + hover < total) {
+        g.setColour(ink.withAlpha(0.55f));
+        g.setFont(font(9.0f));
+        g.drawFittedText(rowDescription(scroll + hover).toUpperCase(), rowArea(visibleRows).withHeight(14).translated(0, -4), juce::Justification::centredLeft, 1, 0.8f);
+    }
+    g.setColour(ink.withAlpha(0.12f));
+    g.fillRect(16, quality[0].getY() - 22, getWidth() - 32, 1);
+    g.setColour(ink.withAlpha(0.45f));
+    g.setFont(font(9.0f));
+    g.drawText("QUALITY", 16, quality[0].getY() - 16, 120, 12, juce::Justification::centredLeft);
+    g.drawText("EXPORT THE PLACE'S AMBIENCE (WAV, STEREO, NO INSTRUMENTS)", 16, duration.getY() - 16, getWidth() - 32, 12, juce::Justification::centredLeft);
+    const int q = int(std::lround(processor.parameters.getRawParameterValue(params::quality)->load()));
+    for (int i = 0; i < 3; ++i) quality[std::size_t(i)].setToggleState(i == q, juce::dontSendNotification);
+    g.setColour(ink.withAlpha(0.6f));
+    g.drawFittedText(status, juce::Rectangle<int>(exportButton.getRight() + 12, exportButton.getY(), getWidth() - exportButton.getRight() - 28, exportButton.getHeight()),
+                     juce::Justification::centredLeft, 1, 0.8f);
+}
+
+void PresetDrawer::resized() {
+    auto area = getLocalBounds().reduced(16, 10);
+    area.removeFromTop(18);
+    auto tabRow = area.removeFromTop(24);
+    const int widths[] { 58, 92, 100, 62, 0 };   // by the length of each word
+    for (int i = 0; i < 5; ++i) tabs[std::size_t(i)].setBounds(i < 4 ? tabRow.removeFromLeft(widths[i]) : tabRow);
+    const int listBottom = rowArea(visibleRows - 1).getBottom() + 18;
+    auto user = juce::Rectangle<int>(16, listBottom, getWidth() - 32, 24);
+    save.setBounds(user.removeFromRight(70));
+    nameField.setBounds(user.withTrimmedRight(8));
+    auto q = juce::Rectangle<int>(16, listBottom + 46, getWidth() - 32, 22);
+    const int qw = q.getWidth() / 3;
+    for (auto& b : quality) b.setBounds(q.removeFromLeft(qw));
+    auto e = juce::Rectangle<int>(16, listBottom + 88, getWidth() - 32, 22);
+    duration.setBounds(e.removeFromLeft(108));
+    e.removeFromLeft(6);
+    rate.setBounds(e.removeFromLeft(86));
+    e.removeFromLeft(6);
+    room.setBounds(e);
+    exportButton.setBounds(16, listBottom + 114, 150, 22);
+}
+
+void PresetDrawer::mouseMove(const juce::MouseEvent& e) {
+    int h = -1;
+    for (int i = 0; i < visibleRows; ++i)
+        if (rowArea(i).contains(e.getPosition()) && scroll + i < rows()) h = i;
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover) {
+        hover = h;
+        repaint();
+    }
+}
+
+void PresetDrawer::mouseExit(const juce::MouseEvent&) {
+    hover = -1;
+    repaint();
+}
+
+void PresetDrawer::mouseUp(const juce::MouseEvent& e) {
+    if (!e.mouseWasClicked()) return;
+    for (int i = 0; i < visibleRows; ++i)
+        if (rowArea(i).contains(e.getPosition())) load(scroll + i);
+}
+
+void PresetDrawer::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) {
+    const int next = std::clamp(scroll + (wheel.deltaY < 0 ? 2 : -2), 0, std::max(0, rows() - visibleRows));
+    if (next != scroll) {
+        scroll = next;
+        repaint();
+    }
+}
+
+void PresetDrawer::startExport() {
+    if (job != nullptr && !job->finished()) return;
+    const double seconds[] { 30.0, 60.0, 120.0, 300.0, 600.0 };
+    const double rates[] { 44100.0, 48000.0, 96000.0 };
+    exporter::Options options;
+    options.seconds = seconds[std::clamp(duration.getSelectedId() - 1, 0, 4)];
+    options.sampleRate = rates[std::clamp(rate.getSelectedId() - 1, 0, 2)];
+    options.room = room.getToggleState();
+    const auto& where = dsp::profile(processor.placeNow().place());
+    const auto name = juce::File::createLegalFileName(juce::String("LIMINAL ") + where.name + " - " + dsp::character(int(processor.placeNow().place()), processor.placeNow().characterIndex()).name + ".wav");
+    // The host's sandbox allows a file the user picks: ask where.
+    chooser = std::make_unique<juce::FileChooser>("Export the ambience", juce::File::getSpecialLocation(juce::File::userMusicDirectory).getChildFile(name), "*.wav");
+    chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+                         [this, options](const juce::FileChooser& fc) {
+                             const auto file = fc.getResult();
+                             if (file == juce::File()) return;
+                             juce::MemoryBlock state;
+                             processor.getStateInformation(state);
+                             job = std::make_unique<exporter::Job>(std::move(state), options, file.withFileExtension("wav"));
+                             status = "EXPORTING...";
+                             repaint();
+                         });
+}
+
+bool PresetDrawer::poll() {
+    if (job == nullptr) return false;
+    if (job->finished()) {
+        status = job->succeeded() ? "SAVED " + job->file().getFileName().toUpperCase() : "EXPORT FAILED";
+        job.reset();
+        shownProgress = -1;
+        repaint();
+        return true;
+    }
+    const float p = job->progress();
+    if (std::abs(p - shownProgress) > 0.01f) {
+        shownProgress = p;
+        status = "EXPORTING  " + juce::String(juce::roundToInt(p * 100.0f)) + " %";
+        repaint(exportButton.getRight(), exportButton.getY(), getWidth() - exportButton.getRight(), exportButton.getHeight());
+    }
+    return false;
+}
+
+//==============================================================================
 LiminalEditor::LiminalEditor(LiminalProcessor& p)
     : AudioProcessorEditor(p), processor(p),
       master(p.parameters, params::master, "MASTER"),
@@ -760,7 +1006,8 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
       drawer(p.parameters),
       places(p.parameters),
       effects(p.parameters),
-      perform(p) {
+      perform(p),
+      presetsPanel(p) {
     setLookAndFeel(&look);
     setOpaque(true);
     powerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::power, power);
@@ -774,11 +1021,19 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     addAndMakeVisible(effectsButton);
     performButton.onClick = [this] { showPerform(!perform.isVisible()); };
     addAndMakeVisible(performButton);
+    presetsButton.onClick = [this] { showPresets(!presetsPanel.isVisible()); };
+    addAndMakeVisible(presetsButton);
     addAndMakeVisible(active);
     addChildComponent(drawer);
     addChildComponent(places);
     addChildComponent(effects);
     addChildComponent(perform);
+    addChildComponent(presetsPanel);
+    presetsPanel.onLoad = [this] {
+        effects.focus(effects.focused());   // re-attach to what the preset set
+        perform.refreshScenes();
+        if (syncPlace()) repaint();
+    };
     places.onChoose = [this] { if (syncPlace()) repaint(); };
     syncPlace();
     setSize(defaultWidth, defaultHeight);
@@ -805,11 +1060,29 @@ bool LiminalEditor::syncPlace() {
     return true;
 }
 
+// One drawer at a time: opening one closes the others.
+void LiminalEditor::closeDrawersExcept(juce::Component* keep) {
+    const std::pair<juce::Component*, DrawerButton*> all[] { { &drawer, &instrumentsButton }, { &places, &environmentButton }, { &effects, &effectsButton },
+                                                             { &perform, &performButton }, { &presetsPanel, &presetsButton } };
+    for (const auto& [panel, button] : all)
+        if (panel != keep && panel->isVisible()) {
+            panel->setVisible(false);
+            button->setToggleState(false, juce::dontSendNotification);
+            repaint(button->getBounds());
+        }
+}
+
+void LiminalEditor::showPresets(bool show) {
+    if (show) closeDrawersExcept(&presetsPanel);
+    presetsPanel.setVisible(show);
+    presetsButton.setToggleState(show, juce::dontSendNotification);
+    repaint(drawerArea());
+    repaint(presetsButton.getBounds());
+}
+
 void LiminalEditor::showPerform(bool show) {
     if (show) {
-        if (drawer.isVisible()) showInstruments(false);
-        if (places.isVisible()) showEnvironment(false);
-        if (effects.isVisible()) showEffects(false);
+        closeDrawersExcept(&perform);
         perform.refreshScenes();
     }
     perform.setVisible(show);
@@ -820,9 +1093,7 @@ void LiminalEditor::showPerform(bool show) {
 
 void LiminalEditor::showEffects(bool show) {
     if (show) {
-        if (perform.isVisible()) showPerform(false);
-        if (drawer.isVisible()) showInstruments(false);
-        if (places.isVisible()) showEnvironment(false);
+        closeDrawersExcept(&effects);
         effects.focus(drawer.focused());   // the instrument last looked at
     }
     effects.setVisible(show);
@@ -832,11 +1103,7 @@ void LiminalEditor::showEffects(bool show) {
 }
 
 void LiminalEditor::showEnvironment(bool show) {
-    if (show) {
-        showInstruments(false);
-        if (effects.isVisible()) showEffects(false);
-        if (perform.isVisible()) showPerform(false);
-    }
+    if (show) closeDrawersExcept(&places);
     places.setVisible(show);
     environmentButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
@@ -844,9 +1111,7 @@ void LiminalEditor::showEnvironment(bool show) {
 }
 
 void LiminalEditor::showInstruments(bool show) {
-    if (show && places.isVisible()) showEnvironment(false);
-    if (show && effects.isVisible()) showEffects(false);
-    if (show && perform.isVisible()) showPerform(false);
+    if (show) closeDrawersExcept(&drawer);
     drawer.setVisible(show);
     instrumentsButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
@@ -857,11 +1122,11 @@ void LiminalEditor::resized() {
     auto strip = stripArea().reduced(32, 0);
     {
         auto top = strip.removeFromTop(38).withTrimmedTop(8);
-        environmentButton.setBounds(top.removeFromRight(230).withSizeKeepingCentre(230, 26));
-        top.removeFromRight(10);
-        effectsButton.setBounds(top.removeFromRight(112).withSizeKeepingCentre(112, 26));
-        top.removeFromRight(10);
-        performButton.setBounds(top.removeFromRight(118).withSizeKeepingCentre(118, 26));
+        environmentButton.setBounds(top.removeFromRight(190).withSizeKeepingCentre(190, 26));
+        for (auto* b : { &effectsButton, &performButton, &presetsButton }) {
+            top.removeFromRight(6);
+            b->setBounds(top.removeFromRight(116).withSizeKeepingCentre(116, 26));
+        }
         active.setBounds(top.withTrimmedRight(16));
     }
     strip = strip.withTrimmedBottom(16);
@@ -878,6 +1143,7 @@ void LiminalEditor::resized() {
     places.setBounds(drawerArea());
     effects.setBounds(drawerArea());
     perform.setBounds(drawerArea());
+    presetsPanel.setBounds(drawerArea());
     scene = {};
     sceneScale = 0;
 }
@@ -900,7 +1166,7 @@ void LiminalEditor::paint(juce::Graphics& g) {
         g.fillEllipse(r);
     }
 
-    if (drawer.isVisible() || places.isVisible() || effects.isVisible() || perform.isVisible()) {   // frosted glass behind the drawer
+    if (drawer.isVisible() || places.isVisible() || effects.isVisible() || perform.isVisible() || presetsPanel.isVisible()) {   // frosted glass behind the drawer
         juce::Graphics::ScopedSaveState save(g);
         g.reduceClipRegion(drawerArea());
         g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
@@ -1041,6 +1307,7 @@ void LiminalEditor::timerCallback() {
             dirty.add(activityArea());
         }
     }
+    if (presetsPanel.isVisible()) presetsPanel.poll();
     active.refresh();   // repaints itself when the instruments or the solo change
     places.refresh();
     if (syncPlace()) repaint();

@@ -103,11 +103,13 @@ void ForgottenPiano::start(Voice& v, int note, float velocity) {
     v.hasDamper = note < 89;
     const float damperT60 = (0.12f + 0.35f * std::clamp(float(89 - note) / 68.0f, 0.0f, 1.0f)) * (1.0f + 2.5f * age);
 
-    const float limit = std::min(0.45f * float(sr), 16000.0f);
+    // Quality: Eco keeps 16 partials below 9 kHz, High lets them reach 19 kHz.
+    const float limit = std::min(0.45f * float(sr), quality == 0 ? 9000.0f : quality == 2 ? 19000.0f : 16000.0f);
+    const int partialLimit = quality == 0 ? 16 : maxPartials;
     std::array<float, maxPartials> amps {}, freqs {};
     int partials = 0;
     float energy = 0;
-    for (int i = 0; i < maxPartials; ++i) {
+    for (int i = 0; i < partialLimit; ++i) {
         const float n = float(i + 1);
         const float f = n * f0 * std::sqrt(1.0f + stiffness * n * n);
         if (f > limit) break;
@@ -160,7 +162,7 @@ void ForgottenPiano::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
     velocity = std::clamp(velocity, 0.0f, 1.0f);
-    auto& v = pool.allocate(note, polyphony, sr, 0.03, [this](const Voice& x) { return level(x); });
+    auto& v = pool.allocate(note, voices(polyphony), sr, 0.03, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
     start(v, note, velocity);
 }

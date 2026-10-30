@@ -188,6 +188,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     layout.add(amount(unreal, "Unreal", 0.0f));
     layout.add(toggle(sceneOn, "Scene Morph On", false));
     layout.add(amount(sceneMorph, "Scene Morph", 0.0f));
+    // Milestone 6: quality and the instruments' MIDI details.
+    layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { quality, 1 }, "Quality", juce::StringArray { "Eco", "Standard", "High" }, 1));
+    for (int i = 0; i < instrumentCount; ++i) {
+        const juce::String who = instrumentLabels[i];
+        const auto noteName = [](int v, int) { return juce::MidiMessage::getMidiNoteName(v, true, true, 3); };
+        layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { midiId(i, midi::keyLow), 1 }, who + " Lowest Key", 0, 127, 0,
+                                                             juce::AudioParameterIntAttributes().withStringFromValueFunction(noteName)));
+        layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { midiId(i, midi::keyHigh), 1 }, who + " Highest Key", 0, 127, 127,
+                                                             juce::AudioParameterIntAttributes().withStringFromValueFunction(noteName)));
+        const auto pct = [&](const char* n, const juce::String& name, float v) {
+            layout.add(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { midiId(i, n), 1 }, who + " " + name, juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), v,
+                juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
+        };
+        pct(midi::velocityVolume, "Velocity to Volume", 1.0f);
+        pct(midi::velocityFilter, "Velocity to Filter", 0.0f);
+    }
     return layout;
 }
 

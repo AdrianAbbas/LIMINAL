@@ -20,7 +20,7 @@ void HollowDrone::reset() {
 void HollowDrone::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
-    auto& v = pool.allocate(note, polyphony, sr, 0.15, [this](const Voice& x) { return level(x); });
+    auto& v = pool.allocate(note, voices(polyphony), sr, 0.15, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
     v.velocity = std::clamp(velocity, 0.0f, 1.0f);
     v.level = 0.11f * (0.3f + 0.7f * std::pow(v.velocity, 1.3f));

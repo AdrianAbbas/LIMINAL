@@ -141,6 +141,15 @@ inline constexpr const char* activity = "macro_activity";
 inline constexpr const char* unreal = "macro_unreal";
 inline constexpr const char* sceneOn = "scene_on";                 // play the morph between scenes A and B
 inline constexpr const char* sceneMorph = "scene_morph";           // 0 = A, 1 = B
+// Milestone 6: quality, and per instrument MIDI details ("<instrument>_key_low", ...).
+inline constexpr const char* quality = "quality";   // Eco / Standard / High
+namespace midi {
+inline constexpr const char* keyLow = "key_low";
+inline constexpr const char* keyHigh = "key_high";
+inline constexpr const char* velocityVolume = "vel_volume";   // 1 = the instrument's own response, 0 = every note the same
+inline constexpr const char* velocityFilter = "vel_filter";   // soft notes darker
+} // namespace midi
+inline juce::String midiId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_" + name; }
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
 
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence

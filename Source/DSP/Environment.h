@@ -176,6 +176,7 @@ public:
         float ambienceGain = 1;   // Presence: the place's sounds recede as the instruments come near
     };
     void setLive(const Live&);
+    void setQuality(int q) { room.setQuality(q); ambience.setQuality(q); }
     void resetEvolution();
     void resetEvolution(unsigned seed) { evolutionSeedNow = seed; resetEvolution(); }
     const Evolution& evolution() const { return evo; }
@@ -224,6 +225,7 @@ public:
     void select(Place, int character = 0);   // called once per block with the parameters' values
     void setLive(const EnvironmentChain::Live&);
     void maintain();   // call on a fixed control grid (between process calls)
+    void setQuality(int q) { for (auto& c : chains) c.setQuality(q); }
     void resetEvolution() { chains[std::size_t(active)].resetEvolution(evolutionSeed); }
     void setEvolutionSeed(unsigned s) { evolutionSeed = s; }
     const EnvironmentChain& current() const { return chains[std::size_t(active)]; }

@@ -47,7 +47,7 @@ void FadedSynth::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
     velocity = std::clamp(velocity, 0.0f, 1.0f);
-    auto& v = pool.allocate(note, polyphony, sr, 0.012, [this](const Voice& x) { return level(x); });
+    auto& v = pool.allocate(note, voices(polyphony), sr, 0.012, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
     const std::uint64_t id = pool.counter;
     v.targetHz = noteHz(float(note));

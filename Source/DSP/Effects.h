@@ -33,6 +33,7 @@ struct EffectSettings {
     bool chorusOn = true;  float chorus = 0, chorusRate = 0.3f;
     bool filterOn = true;  float filter = 1, filterLow = 20000, filterHigh = 20, filterRes = 0.1f;
     bool grainOn = true;   float grain = 0, grainSize = 0.4f, grainSpread = 0.5f; bool grainFreeze = false;
+    float velocityFilter = 0;   // Milestone 6: soft notes darker (the latest note's velocity)
 };
 
 // What a place does to one instrument by default (at Influence 100 %).
@@ -58,6 +59,8 @@ public:
     // Once per block. `environmentAmount` is the global Environment Amount; `bpm` the host's.
     void setSettings(const EffectSettings&, float environmentAmount, double bpm, const EffectLive& = {});
     void setPlace(Place, int character = 0);   // cross-fades the place's processing over 60 ms on a change
+    void noteVelocity(float v) { velocity = std::clamp(v, 0.0f, 1.0f); setSettings(user, envAmount, bpm, liveNow); }
+    void setQuality(int q) { grainCap = q == 0 ? 4 : 8; }
     // In place. Adds the room send (scaled by `sendFactor`, from Distance) and the place's
     // echo send.
     void process(float* left, float* right, float* roomL, float* roomR, float* echoL, float* echoR, float sendFactor, int n);
@@ -118,7 +121,8 @@ private:
     std::vector<float> grainLine;
     int grainWrite = 0, grainCountdown = 0;
     std::array<Grain, 8> grains {};
-    float placeGrainSize = 0, chorusStereo = 0, echoStereo = 0;
+    float placeGrainSize = 0, chorusStereo = 0, echoStereo = 0, velocity = 1;
+    int grainCap = 8;
     // Echo
     std::vector<float> echoLineL, echoLineR;
     int echoWrite = 0;

@@ -185,7 +185,7 @@ void EffectRack::setSettings(const EffectSettings& s, float environmentAmount, d
     target.echoMs = std::clamp(own ? ms : e.echoMs, 20.0f, 1500.0f);
     target.echoFeedback = std::clamp(own ? s.echoFeedback : e.echoFeedback, 0.0f, 0.95f);
     if (s.filterOn) {
-        target.lowPass = std::clamp(s.filterLow * std::pow(2.0f, -k * e.lowOctaves), 60.0f, 20000.0f);
+        target.lowPass = std::clamp(s.filterLow * std::pow(2.0f, -k * e.lowOctaves + 6.0f * s.velocityFilter * (velocity - 1.0f)), 60.0f, 20000.0f);
         target.highPass = std::clamp(s.filterHigh * std::pow(2.0f, k * e.highOctaves), 20.0f, 4000.0f);
     } else {
         target.lowPass = 20000.0f;
@@ -373,8 +373,10 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
         if (now.grain <= 1.0e-4f) return;
         const float length = fs * 0.03f * std::pow(10.0f, user.grainSize * 0.7f + 0.3f * placeGrainSize);
         if (--grainCountdown <= 0) {   // a new grain somewhere in the last second or two
+            int busy = 0;
+            for (auto& g : grains) busy += g.active ? 1 : 0;
             for (auto& g : grains) {
-                if (g.active) continue;
+                if (g.active || busy >= grainCap) continue;
                 const float spread = user.grainSpread;
                 g.active = true;
                 g.age = 0;

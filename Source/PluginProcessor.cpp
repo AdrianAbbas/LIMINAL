@@ -75,8 +75,15 @@ LiminalProcessor::LiminalProcessor()
     const char* droneIds[] { params::droneDensity, params::droneInstability, params::droneHarmonics, params::droneSub,
                              params::droneMovement, params::droneRelease, params::droneAttack };
     for (int i = 0; i < 7; ++i) droneSettings[i] = raw(droneIds[i]);
-    for (int i = 0; i < instrumentCount; ++i)
-        for (int k = 0; k < params::fx::count; ++k) slots[std::size_t(i)].fx[std::size_t(k)] = mirrorOf(params::fxId(i, params::fx::all[k]));
+    for (int i = 0; i < instrumentCount; ++i) {
+        auto& slot = slots[std::size_t(i)];
+        for (int k = 0; k < params::fx::count; ++k) slot.fx[std::size_t(k)] = mirrorOf(params::fxId(i, params::fx::all[k]));
+        slot.keyLow = mirrorOf(params::midiId(i, params::midi::keyLow));
+        slot.keyHigh = mirrorOf(params::midiId(i, params::midi::keyHigh));
+        slot.velocityVolume = mirrorOf(params::midiId(i, params::midi::velocityVolume));
+        slot.velocityFilter = mirrorOf(params::midiId(i, params::midi::velocityFilter));
+    }
+    qualityChoice = mirrorOf(params::quality);
     soloParam = raw(params::solo);
     environmentChoice = raw(params::environment);
     environmentAmount = raw(params::environmentAmount);
@@ -154,6 +161,7 @@ dsp::EffectSettings LiminalProcessor::effectSettings(const Slot& slot) const {
     s.chorusOn = b(19); s.chorus = v(20); s.chorusRate = v(21);
     s.filterOn = b(22); s.filter = v(23); s.filterLow = v(24); s.filterHigh = v(25); s.filterRes = v(26);
     s.grainOn = b(27); s.grain = v(28); s.grainSize = v(29); s.grainSpread = v(30); s.grainFreeze = b(31);
+    s.velocityFilter = slot.velocityFilter->load();
     return s;
 }
 
@@ -177,6 +185,7 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     updateMirror();
     updateSettings();
+    qualityNow = -1;
     updateSolo();
     for (int i = 0; i < instrumentCount; ++i) {
         auto& slot = slots[std::size_t(i)];
@@ -195,6 +204,7 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     samplePosition = 0;
     lastSeed = evolutionSeed->load();
     environments.prepare(sampleRate, selectedPlace(), selectedCharacter(), unsigned(lastSeed));
+    applyQuality();
     juce::ignoreUnused(samplesPerBlock);
     // 20 ms smoothing for levels; Power fades over about 60 ms.
     const float levelCoef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
@@ -215,10 +225,15 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
     for (auto& slot : slots) {
         auto& in = *slot.instrument;
         if (m.isNoteOn()) {
-            if (slot.enabled()) {
+            const int note = m.getNoteNumber();
+            const bool inRange = note >= int(std::lround(slot.keyLow->load())) && note <= int(std::lround(slot.keyHigh->load()));
+            if (slot.enabled() && inRange) {
                 if (!slot.running) slot.rack.reset();   // starts fresh, on its current settings
                 slot.running = true;
-                in.noteOn(m.getNoteNumber(), m.getFloatVelocity());
+                // Velocity to Volume: 1 = the instrument's own response, 0 = every note alike.
+                const float v = 0.75f + slot.velocityVolume->load() * (m.getFloatVelocity() - 0.75f);
+                in.noteOn(note, std::clamp(v, 0.01f, 1.0f));
+                slot.rack.noteVelocity(m.getFloatVelocity());
             }
         } else if (!slot.running) {
             continue;
@@ -236,6 +251,19 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
             in.allNotesOff();
         }
     }
+}
+
+// Quality (Milestone 6): applied when it changes. Instruments: new notes only; the room's
+// modulation glides out; the ambience caps simultaneous events; granular caps grains.
+void LiminalProcessor::applyQuality() {
+    const int q = std::clamp(int(std::lround(qualityChoice->load())), 0, 2);
+    if (q == qualityNow) return;
+    qualityNow = q;
+    for (auto& slot : slots) {
+        slot.instrument->setQuality(q);
+        slot.rack.setQuality(q);
+    }
+    environments.setQuality(q);
 }
 
 void LiminalProcessor::updateSettings() {
@@ -403,6 +431,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     spaceMix.target = space->load();
     updateSettings();
     updateSolo();
+    applyQuality();
     environments.setAmount(environmentAmount->load());
     const auto place = selectedPlace();
     const int characterIndex = selectedCharacter();
@@ -479,6 +508,122 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     meters.place.store(int(environments.place()), std::memory_order_relaxed);
     meters.character.store(environments.current().characterIndex(), std::memory_order_relaxed);
     meters.activity.store(environments.current().evolution().movement(), std::memory_order_relaxed);
+}
+
+//==============================================================================
+// Presets.
+void LiminalProcessor::setParameter(const juce::String& id, float value) {
+    if (auto* p = parameters.getParameter(id)) {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(p->convertTo0to1(value));
+        p->endChangeGesture();
+    }
+}
+
+void LiminalProcessor::resetToDefaults() {
+    for (const auto& m : mirrored) {
+        const auto id = m.parameter->getParameterID();
+        if (id == params::power) continue;
+        m.parameter->beginChangeGesture();
+        m.parameter->setValueNotifyingHost(m.parameter->getDefaultValue());
+        m.parameter->endChangeGesture();
+    }
+}
+
+// What a preset resets before it applies its values depends on its group: a scene sets
+// everything; a place or Character preset only the place's controls; an instrument preset
+// only the instruments (the chosen one back to its defaults).
+void LiminalProcessor::applyPreset(const presets::Preset& preset) {
+    using presets::Category;
+    const auto resetIds = [&](const juce::StringArray& ids) {
+        for (const auto& id : ids)
+            if (auto* p = parameters.getParameter(id)) p->setValueNotifyingHost(p->getDefaultValue());
+    };
+    switch (preset.category) {
+    case Category::scene:
+        resetToDefaults();
+        break;
+    case Category::environment:
+    case Category::character:
+        resetIds({ params::environment, params::character, params::environmentAmount, params::presence, params::scale, params::activity, params::unreal,
+                   params::evolution, params::evolutionFreeze });
+        break;
+    case Category::instrument: {
+        juce::StringArray ids { params::solo };
+        for (const char* key : params::instrumentKeys) ids.add(juce::String(key) + "_on");
+        if (preset.instrument >= 0)
+            for (const auto& m : mirrored) {
+                const auto id = m.parameter->getParameterID();
+                if (id.startsWith(juce::String(params::instrumentKeys[preset.instrument]) + "_")) ids.add(id);
+            }
+        resetIds(ids);
+        break;
+    }
+    case Category::user:
+        break;
+    }
+    for (const auto& [id, value] : preset.values) setParameter(id, value);
+    currentPresetName = preset.name;
+}
+
+int LiminalProcessor::getNumPrograms() { return 1 + int(presets::inCategory(presets::Category::scene).size()); }
+
+const juce::String LiminalProcessor::getProgramName(int index) {
+    const auto scenes = presets::inCategory(presets::Category::scene);
+    if (index <= 0 || index > int(scenes.size())) return "Init";
+    return presets::factory()[std::size_t(scenes[std::size_t(index - 1)])].name;
+}
+
+void LiminalProcessor::setCurrentProgram(int index) {
+    const auto scenes = presets::inCategory(presets::Category::scene);
+    currentProgram = std::clamp(index, 0, int(scenes.size()));
+    if (currentProgram == 0) {
+        resetToDefaults();
+        currentPresetName = "INIT";
+    } else {
+        applyPreset(presets::factory()[std::size_t(scenes[std::size_t(currentProgram - 1)])]);
+    }
+}
+
+// User presets: one XML file each, every parameter by ID (scenes A/B are part of the song,
+// not of a preset).
+juce::File LiminalProcessor::userPresetFolder() {
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Veil Audio").getChildFile("LIMINAL").getChildFile("Presets");
+}
+
+juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
+    const auto clean = juce::File::createLegalFileName(name.trim().isEmpty() ? juce::String("Untitled") : name.trim());
+    auto folder = userPresetFolder();
+    if (!folder.createDirectory()) return {};
+    juce::XmlElement xml("LIMINAL_PRESET");
+    xml.setAttribute("name", clean);
+    xml.setAttribute("stateVersion", stateVersion);
+    for (const auto& m : mirrored) {
+        const auto id = m.parameter->getParameterID();
+        if (id == params::power || id == params::sceneOn || id == params::sceneMorph) continue;
+        auto* e = xml.createNewChildElement("PARAM");
+        e->setAttribute("id", id);
+        e->setAttribute("value", double(m.parameter->convertFrom0to1(m.parameter->getValue())));
+    }
+    const auto file = folder.getChildFile(clean + ".liminalpreset");
+    if (!xml.writeTo(file)) return {};
+    currentPresetName = clean;
+    return file;
+}
+
+bool LiminalProcessor::loadUserPreset(const juce::File& file) {
+    auto xml = juce::XmlDocument::parse(file);
+    if (xml == nullptr || !xml->hasTagName("LIMINAL_PRESET")) return false;
+    resetToDefaults();   // parameters the preset does not know (added later) take their defaults
+    for (auto* e : xml->getChildWithTagNameIterator("PARAM")) setParameter(e->getStringAttribute("id"), float(e->getDoubleAttribute("value")));
+    currentPresetName = xml->getStringAttribute("name", file.getFileNameWithoutExtension());
+    return true;
+}
+
+juce::Array<juce::File> LiminalProcessor::userPresets() const {
+    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, "*.liminalpreset");
+    files.sort();
+    return files;
 }
 
 juce::AudioProcessorEditor* LiminalProcessor::createEditor() { return new LiminalEditor(*this); }

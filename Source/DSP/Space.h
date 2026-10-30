@@ -36,6 +36,7 @@ public:
     void reset();
     Stereo tick(Stereo in);   // wet only: reflections + tail
     void setDecayScale(float scale);   // the Scale macro: RT60 x scale, without touching the line lengths
+    void setQuality(int q) { lean = q == 0; }   // Eco: no line modulation (glided out), at most 8 reflections
 
 private:
     static constexpr int lines = 8, diffusers = 4, maxTaps = 16;
@@ -61,7 +62,8 @@ private:
     float crossover = 0.1f, modSamples = 0;
     OnePole lowCutL, lowCutR, highCutL, highCutR;
     float lowCutHz = 40.0f, highCutHz = 12000.0f;
-    float decayScale = 1.0f;
+    float decayScale = 1.0f, modNow = 0;
+    bool lean = false;
     void updateDecay();
 };
 

@@ -72,7 +72,7 @@ Profile makeGarage() {
     auto& e = p.echo;     // the far wall of the bay
     e.leftMs = 101.0f; e.rightMs = 107.0f; e.feedback = 0.25f; e.level = 0.3f; e.lowPassHz = 1400.0f; e.highPassHz = 70.0f; e.pingPong = false;
     p.wetDb = -1.0f;
-    p.ambienceTrim = 0.24f;
+    p.ambienceTrim = 0.4f;
     return p;
 }
 Profile makePool() {

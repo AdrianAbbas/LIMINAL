@@ -15,6 +15,7 @@ mkdir -p "$logs"
 "$tests" --only environments > "$logs/6-environments.txt" 2>&1 &
 "$tests" --only effects > "$logs/7-effects.txt" 2>&1 &
 "$tests" --only characters > "$logs/8-characters.txt" 2>&1 &
+"$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
 wait
 "$tests" --only realtime > "$logs/5-cpu.txt" 2>&1
 

@@ -9,6 +9,7 @@
 #include "DSP/LostMusicBox.h"
 #include "DSP/HollowDrone.h"
 #include "Parameters.h"
+#include "Presets.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
 
@@ -33,10 +34,11 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 8.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return "Default"; }
+    // Host programs: "Init" and the twenty factory scenes (GarageBand's preset menu).
+    int getNumPrograms() override;
+    int getCurrentProgram() override { return currentProgram; }
+    void setCurrentProgram(int) override;
+    const juce::String getProgramName(int) override;
     void changeProgramName(int, const juce::String&) override {}
 
     void getStateInformation(juce::MemoryBlock&) override;
@@ -59,6 +61,15 @@ public:
     void storeScene(int which);              // the current settings become scene A (0) or B (1)
     bool sceneStored(int which) const { return stored[std::size_t(which & 1)].load(); }
     void requestEvolutionReset() { evolutionResetRequest.store(true); }
+
+    // Presets (Milestone 6). Message thread only.
+    void applyPreset(const presets::Preset&);
+    void resetToDefaults();
+    juce::String presetName() const { return currentPresetName; }
+    static juce::File userPresetFolder();
+    juce::File saveUserPreset(const juce::String& name);   // returns the file (or {} on failure)
+    bool loadUserPreset(const juce::File&);
+    juce::Array<juce::File> userPresets() const;
     const dsp::EnvironmentChain& placeNow() const { return environments.current(); }   // audio-thread state (tests)
 
     static constexpr int stateVersion = 2;   // 2: scenes A/B saved alongside the parameters
@@ -83,6 +94,10 @@ private:
         dsp::EffectRack rack;                                           // Milestone 3
         dsp::EffectSettings settings;
         std::array<std::atomic<float>*, params::fx::count> fx {};      // in params::fx::all order
+        std::atomic<float>* keyLow = nullptr;
+        std::atomic<float>* keyHigh = nullptr;
+        std::atomic<float>* velocityVolume = nullptr;
+        std::atomic<float>* velocityFilter = nullptr;
         Smooth gain;
         bool running = false;
         bool muted = false;   // another instrument is soloed
@@ -144,8 +159,14 @@ private:
     std::atomic<float>* evolutionFreeze = nullptr;
     std::atomic<float>* evolutionSeed = nullptr;
     std::atomic<float>* macroParams[4] {};
+    std::atomic<float>* qualityChoice = nullptr;
+    int qualityNow = -1;
+    void applyQuality();
     std::atomic<bool> evolutionResetRequest { false };
     float lastSeed = -1;
+    int currentProgram = 0;
+    juce::String currentPresetName { "INIT" };
+    void setParameter(const juce::String& id, float value);
     Smooth presenceDry, presenceRoom;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
     float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};

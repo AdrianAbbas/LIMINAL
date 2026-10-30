@@ -72,31 +72,31 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
         break;
     case Place::garage:     // concrete: deep ventilation, sub vibration, cars far off
         mains = 50.0;
-        airLevel = 0.02f; airHz = 400.0f;
-        rumbleLevel = 0.09f; rumbleHz = 110.0f;
+        airLevel = 0.035f; airHz = 400.0f;
+        rumbleLevel = 0.12f; rumbleHz = 110.0f;
         motorHz = 26.0f; motorLevel = 0.006f; motorWeights = { 1.0f, 0.7f, 0.45f, 0.3f }; motorAmRate = 2.1f; motorAmDepth = 0.5f;
         subHz = 38.0f; subLevel = 0.008f;
         humLevel = 0.002f; humWeights = { 1.0f, 0.3f, 0.5f };
         bedSend = 0.45f;
-        add(Kind::car, 26.0f, 9.0f, 1.0f, 0.6f);
-        add(Kind::thud, 16.0f, 5.0f, 1.0f, 0.7f);
+        add(Kind::car, 26.0f, 9.0f, 0.55f, 0.6f);
+        add(Kind::thud, 16.0f, 5.0f, 0.6f, 0.7f);
         add(Kind::metal, 21.0f, 6.0f, 0.8f, 0.65f);
         add(Kind::rattle, 35.0f, 12.0f, 0.7f, 0.6f);
         break;
     case Place::pool:       // tiles and water: drips, lapping, a low pump
         mains = 50.0;
-        airLevel = 0.045f; airHz = 500.0f;
-        lapLevel = 0.17f;
+        airLevel = 0.06f; airHz = 500.0f;
+        lapLevel = 0.2f;
         motorHz = 50.0f; motorLevel = 0.003f; motorWeights = { 1.0f, 0.4f, 0.2f }; motorAmRate = 0.15f; motorAmDepth = 0.2f;
         bedSend = 0.55f;
-        add(Kind::drip, 1.8f, 0.2f, 1.0f, 0.75f);
-        add(Kind::plop, 9.0f, 2.0f, 1.0f, 0.8f);
+        add(Kind::drip, 1.8f, 0.2f, 1.6f, 0.6f);
+        add(Kind::plop, 9.0f, 2.0f, 1.4f, 0.7f);
         add(Kind::metal, 18.0f, 6.0f, 0.7f, 0.8f);
         break;
     case Place::hotel:      // carpeted quiet: low air, the lift in its shaft, voices through the wall
         mains = 60.0;
-        airLevel = 0.03f; airHz = 320.0f;
-        humLevel = 0.0012f; humWeights = { 1.0f, 0.3f };
+        airLevel = 0.06f; airHz = 1000.0f;
+        humLevel = 0.006f; humWeights = { 0.2f, 1.0f, 0.4f };
         bedSend = 0.2f;
         add(Kind::elevator, 16.0f, 6.0f, 1.0f, 0.25f);
         add(Kind::murmur, 11.0f, 4.0f, 1.0f, 0.2f);
@@ -131,7 +131,7 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
         break;
     case Place::office:     // HVAC, transformers, coil whine, drives seeking in machines nobody uses
         mains = 60.0;
-        airLevel = 0.04f; airHz = 850.0f;
+        airLevel = 0.06f; airHz = 850.0f;
         ductLevel = 0.01f; ductHz = 210.0f; ductQ = 4.0f;
         humLevel = 0.0045f; humWeights = { 0.0f, 1.0f, 0.0f, 0.5f, 0.0f, 0.3f };
         buzzLevel = 0.0018f;
@@ -145,8 +145,8 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
         break;
     case Place::impossible:   // a room tone that will not settle, things that arrive backwards
         mains = 50.0;
-        airLevel = 0.022f; airHz = 300.0f;
-        clusterLevel = 0.004f;
+        airLevel = 0.08f; airHz = 380.0f;
+        clusterLevel = 0.011f;
         bedSend = 0.5f;
         add(Kind::swell, 8.0f, 3.0f, 1.0f, 0.7f);
         add(Kind::phantom, 11.0f, 4.0f, 1.0f, 0.8f);
@@ -246,6 +246,9 @@ void Ambience::disturb() {
 
 Ambience::Event* Ambience::spawn(const Schedule& s, int delay) {
     Event* slot = nullptr;
+    int busy = 0;
+    for (auto& e : events) busy += e.active ? 1 : 0;
+    if (busy >= eventCap) return nullptr;
     for (auto& e : events)
         if (!e.active) { slot = &e; break; }
     if (slot == nullptr) return nullptr;
