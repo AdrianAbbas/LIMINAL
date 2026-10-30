@@ -159,6 +159,9 @@ const char* harnessArchitecture() {
 }
 
 constexpr const char* pluginImageNeedle = "LIMINAL.component/Contents/MacOS/";
+// Direction Update 2: the beds are quiet (the pool and the hotel near -50 dBFS), so "audible"
+// means clearly above silence, not loud.
+constexpr double bedFloorDb = -60.0;
 
 // Out-of-process rendering goes through Apple's render pipe, which expects a host's
 // timing: one block per block-duration with host time set, and playback stopped
@@ -544,7 +547,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
         auto res = host.render(4.0, 2.5);
         r.check(res.status == noErr, "render calls succeed", res.describe());
         r.check(res.finite, "output is finite");
-        r.check(res.rmsDb() > -45.0, "default ambience is audible without MIDI (> -45 dBFS)", strf("%.1f dBFS", res.rmsDb()));
+        r.check(res.rmsDb() > bedFloorDb, "default ambience is audible without MIDI (> -60 dBFS)", strf("%.1f dBFS", res.rmsDb()));
         r.check(toDb(res.outRms[1]) > -50.0, "right channel is written", strf("R %.1f dBFS", toDb(res.outRms[1])));
         r.check(res.peak < 1.0f, "peak stays below 0 dBFS", strf("peak %.3f", double(res.peak)));
 
@@ -572,7 +575,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
             r.check(off.rmsDb() < -90.0, "Power off is silent after the fade", off.describe());
             setParameter(unit, power->id, power->info.maxValue);
             auto on = host.render(3.5, 2.5);
-            r.check(on.rmsDb() > -45.0, "Power on brings the ambience back", on.describe());
+            r.check(on.rmsDb() > bedFloorDb, "Power on brings the ambience back", on.describe());
             setParameter(unit, power->id, original);
         } else {
             r.check(false, "parameter named Power exists");
@@ -611,7 +614,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
                 AUPreset preset = *static_cast<const AUPreset*>(CFArrayGetValueAtIndex(presets, i));
                 s = AudioUnitSetProperty(unit, kAudioUnitProperty_PresentPreset, kAudioUnitScope_Global, 0, &preset, sizeof(preset));
                 auto res = host.render(2.0, 1.0);
-                r.check(s == noErr && res.status == noErr && res.finite && res.rmsDb() > -45.0,
+                r.check(s == noErr && res.status == noErr && res.finite && res.rmsDb() > bedFloorDb,
                         strf("preset %ld '%s' is audible", long(preset.presetNumber), toString(preset.presetName).c_str()),
                         strf("%.1f dBFS", res.rmsDb()));
             }
@@ -667,7 +670,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
         s = host.configure(rate, 2, rate > 50000 ? 4096 : 64);
         if (r.check(s == noErr, strf("stereo @%.0f initialise (max %u frames)", rate, unsigned(host.maxFrames)), statusText(s))) {
             auto res = host.render(3.0, 2.0);
-            r.check(res.status == noErr && res.finite && res.rmsDb() > -45.0, strf("stereo @%.0f is audible", rate), res.describe());
+            r.check(res.status == noErr && res.finite && res.rmsDb() > bedFloorDb, strf("stereo @%.0f is audible", rate), res.describe());
         }
     }
 
@@ -675,7 +678,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
     s = host.configure(48000.0, 1);
     if (s == noErr) {
         auto res = host.render(3.0, 2.0);
-        r.check(res.status == noErr && res.finite && res.rmsDb() > -45.0, "mono ->1 is audible", res.describe());
+        r.check(res.status == noErr && res.finite && res.rmsDb() > bedFloorDb, "mono ->1 is audible", res.describe());
     } else {
         r.info("mono ->1", strf("not accepted (%s)", statusText(s).c_str()));
     }
@@ -777,7 +780,7 @@ void auAudioUnitSuite(Report& r, AudioComponentDescription description, bool use
         else hostOutputBuffers = true;
     }
     r.check(res.status == noErr, "renderBlock calls succeed", res.describe());
-    r.check(res.finite && res.rmsDb() > -45.0, "default ambience is audible", strf("%.1f dBFS", res.rmsDb()));
+    r.check(res.finite && res.rmsDb() > bedFloorDb, "default ambience is audible", strf("%.1f dBFS", res.rmsDb()));
     r.info("parameter tree", strf("%lu parameters", (unsigned long) unit.parameterTree.allParameters.count));
 
     NSDictionary<NSString*, id>* state = unit.fullState;

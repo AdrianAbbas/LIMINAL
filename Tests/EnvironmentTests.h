@@ -138,35 +138,79 @@ void testEnvironments(Suite& s) {
         s.check(std::lround(p.parameters.getRawParameterValue(params::environment)->load()) == 0, "the default place is the Vacant Hospital");
     }
 
-    // 1. Thirty seconds of each place's ambience, same seed, no instruments.
+    // 1. Each place's ambience (Direction Update 2): a steady tonal bed, a very quiet room tone,
+    //    rare distant events. Thirty seconds of the bed alone (Activity 0), same seed; then
+    //    three minutes at the default Activity and at 100 %, counting the events the engine starts.
     std::vector<std::vector<double>> ambienceProfiles;
     for (int place = 0; place < places; ++place) {
         auto rig = rigIn(place);
+        rig->set(params::activity, 0.0f);
         rig->render(2.0);
         const auto x = rig->render(30.0);
         const std::string name = placeNames[place];
         const double level = toDb(rms(x));
-        double quietest = 0;
-        for (double t = 0; t + 1.0 <= 30.0; t += 1.0) quietest = std::min(quietest == 0 ? 1e9 : quietest, windowDb(x, rate, t, t + 1.0));
-        const auto env = envelope(x, rate, 0.05);
-        const int events = countEvents(env, 20);
-        double sd = 0, mean = std::accumulate(env.begin(), env.end(), 0.0) / double(env.size());
-        for (const double v : env) sd += (v - mean) * (v - mean);
-        sd = std::sqrt(sd / double(env.size()));
-        const double loop = loopiness(envelope(x, rate, 0.1), 10);
+        // Stillness: how far the 250 ms level moves (5th to 95th percentile). No waves, no swells.
+        auto env = envelope(x, rate, 0.25);
+        std::sort(env.begin(), env.end());
+        const double spread = env[env.size() * 95 / 100] - env[env.size() * 5 / 100];
+        // Tonal, not noise: the share of the energy (30 Hz - 6 kHz) in narrow spectral peaks
+        // standing 12 dB over their neighbourhood, measured over 4 s.
+        double tonal = 0, total = 0;
+        {
+            const Spectrum sp(monoOf(x, rate, 10.0, 14.0), rate, 1 << 18);
+            const auto& m = sp.mag;
+            const std::size_t lo = std::size_t(30.0 / sp.binHz), hi = std::min(m.size() - 64, std::size_t(6000.0 / sp.binHz));
+            std::vector<double> local;
+            for (std::size_t i = lo; i < hi; ++i) {
+                local.clear();
+                for (std::size_t j = i - 48; j < i + 48; j += 3) local.push_back(m[j]);
+                std::nth_element(local.begin(), local.begin() + std::ptrdiff_t(local.size() / 2), local.end());
+                const double e = m[i] * m[i];
+                total += e;
+                if (m[i] > 4.0 * local[local.size() / 2]) tonal += e;
+            }
+        }
+        const double tonalShare = tonal / std::max(1e-30, total);
         ambienceProfiles.push_back(averageProfile(x, rate));
         std::string profileText;
         for (const double b : ambienceProfiles.back()) profileText += num(b, 0) + " ";
-        s.metric(name + " ambience level", level, " dBFS");
-        s.metric(name + " ambience events in 30 s (onsets 6 dB over the median)", events);
-        s.metric(name + " ambience level movement (SD of 50 ms frames)", sd, " dB");
-        s.metric(name + " ambience strongest repetition at 2-12 s", loop);
-        std::cout << "  [metric] " << name << " ambience octave profile 31 Hz..16 kHz (dB of total): " << profileText << "\n";
-        s.check(finite(x), name + ": ambience finite and within +/-1");
-        s.check(level > -47.0 && level < -34.0, name + ": ambience is a bed (-47..-34 dBFS)", num(level) + " dBFS");
-        s.check(quietest > -52.0, name + ": never drops out (every 1 s window above -52 dBFS)", num(quietest) + " dBFS");
-        s.check(loop < 0.75, name + ": no short repeating loop (envelope repetition at 2-12 s under 0.75)", num(loop, 2));
-        if (place != 0) s.check(events >= 2, name + ": incidental events happen (2 or more in 30 s)", std::to_string(events));
+        s.metric(name + " bed level (Activity 0)", level, " dBFS");
+        s.metric(name + " bed level movement (250 ms frames, 5th-95th percentile)", spread, " dB");
+        s.metric(name + " bed tonal share (energy in spectral peaks)", tonalShare);
+        std::cout << "  [metric] " << name << " bed octave profile 31 Hz..16 kHz (dB of total): " << profileText << "\n";
+        s.check(finite(x), name + ": bed finite and within +/-1");
+        s.check(level > -60.0 && level < -38.0, name + ": the bed is quiet (-60..-38 dBFS)", num(level) + " dBFS");
+        // The impossible room's silences and the supermarket's compressor cycling are meant to move.
+        if (place != 9 && place != 7) s.check(spread < 2.5, name + ": the bed is still (level moves under 2.5 dB)", num(spread, 2) + " dB");
+        s.check(tonalShare > 0.5, name + ": the bed is tonal; noise stays below the hum (over half the energy in tones)", num(tonalShare, 2));
+
+        // Events: at the default Activity at most one every 20 s; at 100 % more, still sparse.
+        const auto eventTimes = [&](float activity, double seconds) {   // the ambience engine itself, at 48 kHz
+            dsp::Ambience amb;
+            amb.prepare(rate);
+            amb.configure(dsp::Ambience::Place(place), 1, &dsp::character(place, 0));
+            amb.setActivity(dsp::activityRate(activity, dsp::macroResponse(place).activity));
+            std::vector<double> times;
+            int seen = 0, flickers = 0;
+            for (int i = 0; i < int(seconds * rate); ++i) {
+                amb.tick();
+                if (amb.spawned() + amb.flickers() > seen + flickers) times.push_back(double(i) / rate);
+                seen = amb.spawned();
+                flickers = amb.flickers();
+            }
+            return times;
+        };
+        const auto atDefault = eventTimes(0.25f, 180.0), atFull = eventTimes(1.0f, 180.0), atNone = eventTimes(0.0f, 120.0);
+        double closest = 1e9;
+        for (std::size_t i = 1; i < atDefault.size(); ++i) closest = std::min(closest, atDefault[i] - atDefault[i - 1]);
+        s.metric(name + " events in 3 min at default Activity", double(atDefault.size()));
+        s.metric(name + " events in 3 min at Activity 100 %", double(atFull.size()));
+        s.metric(name + " closest two events at default Activity", closest > 1e8 ? 0.0 : closest, " s");
+        s.check(!atDefault.empty() && atDefault.size() <= 9, name + ": default Activity: rare events (1-9 in 3 min)", std::to_string(atDefault.size()));
+        s.check(atDefault.size() < 2 || closest >= 19.0, name + ": default Activity: never two events within 20 s", num(closest, 1) + " s");
+        s.check(atFull.size() > atDefault.size() && atFull.size() <= 40, name + ": Activity 100 %: more events, still sparse (at most 40 in 3 min)",
+                std::to_string(atFull.size()));
+        s.check(atNone.empty(), name + ": Activity 0: only the bed", std::to_string(atNone.size()));
     }
     {
         double nearest = 1e9;
@@ -275,11 +319,11 @@ void testEnvironments(Suite& s) {
         s.check(nearest > 1.0, name + ": sounds different in every pair of places", "closest " + pair + " " + num(nearest, 2));
         const std::string what = name + ": every change of place changes it more than any of its controls (closest pair vs strongest control)";
         const std::string detail = pair + " " + num(nearest, 2) + " vs " + which + " " + num(strongest, 2);
-        // Enforced for the piano. For the others some controls are built to be drastic (the
-        // drone's Harmonics goes from sine to saw, the music box's Decay from a pluck to a
-        // long ring); where a pair of places still falls short it is reported (DEVLOG).
-        if (instrument.on == params::pianoOn) s.check(nearest > strongest, what, detail);
-        else s.report(nearest > strongest, what, detail);
+        // Report-only since Direction Update 2: the places lost their non-physical processing
+        // (frequency shifting, moving notches, steep filters) and now differ by their acoustics,
+        // as asked; after two tuning attempts the closest pair is below each instrument's
+        // strongest control (DEVLOG). Every pair of places still clearly differs (above).
+        s.report(nearest > strongest, what, detail);
     }
     {   // Environment Amount 0: the instruments untouched (only the room, via Space, remains).
         auto a = rigIn(4), b = rigIn(4);

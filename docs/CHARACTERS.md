@@ -6,8 +6,8 @@ Code: `Source/DSP/Characters.h/.cpp` (the table, Unreal flavours, macro response
 
 ## The thirty Characters
 
-A Character keeps the place but changes: which events happen and how often (and one
-extra event kind), the bed (level, brightness, hum), the room (decay, brightness, level),
+A Character keeps the place but changes: which events happen and how often (within 0.6–1.6x,
+never below the place's minimum gap; one extra event kind; a flickering Character's tube fails more often), the bed (level, brightness, hum), the room (decay, brightness, level),
 the place's processing of the instruments (low-pass, drift, wow, chorus, frequency shift,
 wandering image, tremolo, nearness), the default effects (drift, tape, chorus, granular,
 echo, room), evolution speed and depth, how strongly Unreal acts, and the look (grade,
@@ -33,7 +33,7 @@ place much as tuned in 2b; 2 and 3 move further away.
 |---|---|---|
 | Presence | instruments ±6 dB direct, their room and the place's echo ∓4 dB, the place's own sounds ∓3 dB | response 0.8 (mall) … 1.9 (office) |
 | Scale | the room's decay x0.5 … x2 (x0.25 … x4 in the impossible room), its level ±4 dB | response 0.5 (hotel) … 1.6 (impossible) |
-| Activity | events x0.35 … x2.8, evolution faster or slower | response 0.8 … 1.5 |
+| Activity | Direction Update 2: 0 % = only the bed, the default 25 % = the place's own rare events, 100 % = up to x4 as often (never busy); evolution faster or slower | response 0.8 … 1.5 |
 | Unreal | each place's own flavour (below) x the Character's Unreal | — |
 
 Unreal flavours: hospital = frequency-shifted dissonance, wow, ghostly shimmer; mall =
@@ -48,7 +48,7 @@ impossible room = all of it.
 ## Evolution
 
 Three smooth seeded random movements (spectral, spatial, harmonic) and occasional
-disturbances (one of the place's events, louder). Spectral moves the instruments'
+disturbances (since Direction Update 2: the place's next event brought forward, never closer than 3/4 of its minimum gap). Spectral moves the instruments'
 low-pass ±0.8 octave and the bed's level ±20 %; spatial moves the room's decay (x2^±0.3)
 and level (±1.5 dB); harmonic adds drift and wow. Rate: a change of direction every ~100 s
 (0 %) to ~5 s (100 %), x the Character's speed and the Activity macro. **Freeze** holds it;

@@ -9,182 +9,175 @@ namespace {
 // is: docs/ENVIRONMENTS.md.
 Profile makeHospital() {
     Profile p { "VACANT HOSPITAL", "EAST WING, LEVEL 2", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // a long, hard, sterile corridor: flutter between the walls
-    r.rt60Low = 2.4f; r.rt60High = 1.5f; r.crossoverHz = 1800.0f; r.size = 1.0f; r.preDelayMs = 22.0f;
-    r.diffusion = 0.45f; r.modulation = 0.15f; r.pattern = Space::Pattern::flutter; r.reflections = 12;
-    r.firstMs = 6.0f; r.spacingMs = 11.0f; r.reflectionDecay = 0.8f; r.reflectionLevel = 0.45f; r.width = 1.6f;
-    r.lowCutHz = 160.0f; r.highCutHz = 6000.0f;
-    auto& c = p.colour;   // thin, filtered, a cold ringing resonance, unsteady, set back and wide
-    c.highPassHz = 300.0f; c.lowPassHz = 2100.0f; c.lowPassQ = 0.8f; c.steep = true; c.peakHz = 1900.0f; c.peakQ = 5.0f; c.peakDb = 11.0f;
-    c.peak2Hz = 520.0f; c.peak2Q = 1.4f; c.peak2Db = -3.0f;
-    c.driftCents = 12.0f; c.wowHz = 0.17f; c.wowCents = 5.0f;
-    c.width = 2.4f; c.dryDb = -1.5f;
-    auto& e = p.echo;     // distant stereo reflections from the corridor's far end
-    e.leftMs = 241.0f; e.rightMs = 367.0f; e.feedback = 0.42f; e.level = 0.5f; e.lowPassHz = 2600.0f; e.highPassHz = 450.0f;
+    auto& r = p.room;   // a long, narrow, hard corridor: flutter between the parallel walls, cold and bright-ish
+    r.rt60Low = 1.5f; r.rt60High = 1.8f; r.crossoverHz = 2200.0f; r.size = 1.0f; r.preDelayMs = 16.0f;
+    r.diffusion = 0.35f; r.modulation = 0.1f; r.pattern = Space::Pattern::flutter; r.reflections = 16;
+    r.firstMs = 5.0f; r.spacingMs = 8.5f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.65f; r.width = 1.5f;
+    r.lowCutHz = 240.0f; r.highCutHz = 9000.0f;
+    auto& c = p.colour;   // thin low end, a slight cold high-mid edge, set back a little
+    c.highPassHz = 280.0f; c.lowPassHz = 9500.0f; c.peakHz = 2700.0f; c.peakQ = 1.1f; c.peakDb = 4.5f;
+    c.peak2Hz = 380.0f; c.peak2Q = 1.0f; c.peak2Db = -5.0f;
+    c.width = 1.6f; c.dryDb = 0.0f;
+    auto& e = p.echo;     // the corridor's far end answering
+    e.leftMs = 186.0f; e.rightMs = 241.0f; e.feedback = 0.35f; e.level = 0.38f; e.lowPassHz = 5200.0f; e.highPassHz = 500.0f;
     p.wetDb = 0.0f;
+    p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeMall() {
     Profile p { "EMPTY SHOPPING MALL", "CENTRAL ATRIUM, AFTER HOURS", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // enormous and diffuse: late, soft, endless
-    r.rt60Low = 7.5f; r.rt60High = 3.8f; r.crossoverHz = 1200.0f; r.size = 2.4f; r.preDelayMs = 70.0f;
-    r.diffusion = 0.85f; r.modulation = 0.6f; r.pattern = Space::Pattern::sparse; r.reflections = 6;
-    r.firstMs = 40.0f; r.spacingMs = 22.0f; r.reflectionDecay = 0.75f; r.reflectionLevel = 0.2f; r.width = 1.2f;
-    r.lowCutHz = 50.0f; r.highCutHz = 5500.0f;
-    auto& c = p.colour;   // washed out: soft highs, a wide chorus wash, far away
-    c.highPassHz = 50.0f; c.lowPassHz = 4800.0f; c.shelfHz = 2000.0f; c.shelfDb = -12.0f;
-    c.peak2Hz = 200.0f; c.peak2Q = 0.7f; c.peak2Db = 3.0f;
-    c.chorusHz = 0.37f; c.chorusCents = 9.0f; c.chorusMix = 0.7f; c.driftCents = 3.0f;
-    c.width = 1.6f; c.dryDb = -6.0f;
+    auto& r = p.room;   // a huge atrium: RT60 7 s, diffuse, slightly dark highs
+    r.rt60Low = 7.5f; r.rt60High = 5.2f; r.crossoverHz = 1600.0f; r.size = 2.5f; r.preDelayMs = 75.0f;
+    r.diffusion = 0.9f; r.modulation = 0.4f; r.pattern = Space::Pattern::sparse; r.reflections = 6;
+    r.firstMs = 45.0f; r.spacingMs = 26.0f; r.reflectionDecay = 0.8f; r.reflectionLevel = 0.22f; r.width = 1.3f;
+    r.lowCutHz = 45.0f; r.highCutHz = 6500.0f;
+    auto& c = p.colour;   // far away in a big space: softened highs, little direct sound
+    c.highPassHz = 45.0f; c.lowPassHz = 7500.0f; c.shelfHz = 2500.0f; c.shelfDb = -6.0f;
+    c.peak2Hz = 220.0f; c.peak2Q = 0.8f; c.peak2Db = 2.0f;
+    c.width = 1.3f; c.dryDb = -6.5f;
+    auto& f = c.far;      // the PA in another wing: 300 Hz - 4 kHz, a small speaker pushed a little
+    f.highPassHz = 320.0f; f.lowPassHz = 3900.0f; f.steep = true; f.resonanceHz = 1600.0f; f.resonanceQ = 1.4f; f.resonanceDb = 5.0f;
+    f.grit = 0.35f; f.gainDb = -4.0f;
     p.wetDb = 4.5f;
-    p.ambienceTrim = 0.6f;
+    p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeSchool() {
     Profile p { "ABANDONED SCHOOL", "B CORRIDOR, NEAR ROOM 14", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // a narrow hallway: short, dark, tight flutter
-    r.rt60Low = 1.5f; r.rt60High = 0.6f; r.crossoverHz = 900.0f; r.size = 0.55f; r.preDelayMs = 6.0f;
-    r.diffusion = 0.35f; r.modulation = 0.1f; r.pattern = Space::Pattern::flutter; r.reflections = 14;
-    r.firstMs = 3.0f; r.spacingMs = 6.5f; r.reflectionDecay = 0.82f; r.reflectionLevel = 0.55f; r.width = 0.05f;
-    r.lowCutHz = 200.0f; r.highCutHz = 4000.0f;
-    auto& c = p.colour;   // nostalgic: detuned, worn tape, boxy, narrow
-    c.highPassHz = 420.0f; c.lowPassHz = 3000.0f; c.peakHz = 1050.0f; c.peakQ = 1.0f; c.peakDb = 8.0f;
-    c.wowHz = 0.55f; c.wowCents = 9.0f; c.flutterHz = 6.5f; c.flutterCents = 4.5f;
-    c.chorusHz = 0.23f; c.chorusCents = 12.0f; c.chorusMix = 0.45f;
-    c.drive = 0.6f; c.width = 0.0f; c.dryDb = 0.0f;
-    auto& e = p.echo;     // the opposite wall, close: a short dark slap
-    e.leftMs = 41.0f; e.rightMs = 42.0f; e.feedback = 0.32f; e.level = 0.42f; e.lowPassHz = 2500.0f; e.highPassHz = 250.0f; e.pingPong = false;
+    auto& r = p.room;   // a hallway of lockers and hard floors: metallic early reflections, boxy
+    r.rt60Low = 1.4f; r.rt60High = 1.2f; r.crossoverHz = 1400.0f; r.size = 0.65f; r.preDelayMs = 7.0f;
+    r.diffusion = 0.3f; r.modulation = 0.05f; r.pattern = Space::Pattern::flutter; r.reflections = 16;
+    r.firstMs = 2.5f; r.spacingMs = 4.6f; r.reflectionDecay = 0.84f; r.reflectionLevel = 0.6f; r.width = 0.25f;
+    r.lowCutHz = 150.0f; r.highCutHz = 7000.0f;
+    auto& c = p.colour;   // boxy mids, a faint ring of sheet metal
+    c.highPassHz = 140.0f; c.lowPassHz = 7500.0f; c.peakHz = 720.0f; c.peakQ = 1.2f; c.peakDb = 7.0f;
+    c.peak2Hz = 2900.0f; c.peak2Q = 2.0f; c.peak2Db = 5.0f;
+    c.combHz = 1160.0f; c.comb2Hz = 1630.0f; c.combFeedback = 0.65f; c.combMix = 0.3f; c.combDamp = 0.2f;
+    c.width = 0.2f; c.dryDb = -1.5f;
+    auto& e = p.echo;     // the opposite wall, close: a short slap
+    e.leftMs = 34.0f; e.rightMs = 37.0f; e.feedback = 0.3f; e.level = 0.35f; e.lowPassHz = 5000.0f; e.highPassHz = 300.0f; e.pingPong = false;
     p.wetDb = -1.0f;
+    p.ambienceTrim = 2.24f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeGarage() {
     Profile p { "UNDERGROUND PARKING GARAGE", "LEVEL P3, ROW F", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // concrete: strong, dense early reflections, heavy lows, dull highs
-    r.rt60Low = 4.2f; r.rt60High = 1.3f; r.crossoverHz = 600.0f; r.size = 1.6f; r.preDelayMs = 10.0f;
+    auto& r = p.room;   // concrete: strong hard early reflections, boomy low-mids, dark highs
+    r.rt60Low = 3.4f; r.rt60High = 1.9f; r.crossoverHz = 800.0f; r.size = 1.6f; r.preDelayMs = 9.0f;
     r.diffusion = 0.3f; r.modulation = 0.0f; r.pattern = Space::Pattern::dense; r.reflections = 16;
-    r.firstMs = 4.0f; r.spacingMs = 5.0f; r.reflectionDecay = 0.88f; r.reflectionLevel = 0.85f; r.width = 0.4f;
-    r.lowCutHz = 30.0f; r.highCutHz = 3000.0f;
-    auto& c = p.colour;   // heavy low-mid boom, a concrete box resonance, dull top, close and narrow
-    c.highPassHz = 32.0f; c.lowPassHz = 2400.0f; c.lowPassQ = 0.8f; c.steep = true;
-    c.peakHz = 165.0f; c.peakQ = 0.8f; c.peakDb = 10.0f; c.peak2Hz = 330.0f; c.peak2Q = 1.5f; c.peak2Db = 4.0f;
-    c.combHz = 118.0f; c.comb2Hz = 157.0f; c.combFeedback = 0.6f; c.combMix = 0.25f; c.combDamp = 0.6f;
-    c.width = 0.55f; c.dryDb = -10.0f;
-    auto& e = p.echo;     // the far wall of the bay
-    e.leftMs = 101.0f; e.rightMs = 107.0f; e.feedback = 0.25f; e.level = 0.3f; e.lowPassHz = 1400.0f; e.highPassHz = 70.0f; e.pingPong = false;
-    p.wetDb = -1.0f;
-    p.ambienceTrim = 0.4f;
+    r.firstMs = 4.0f; r.spacingMs = 5.0f; r.reflectionDecay = 0.88f; r.reflectionLevel = 0.85f; r.width = 0.7f;
+    r.lowCutHz = 35.0f; r.highCutHz = 3800.0f;
+    auto& c = p.colour;   // low-mid boom, a dull top
+    c.highPassHz = 35.0f; c.lowPassHz = 4200.0f; c.lowPassQ = 0.8f; c.steep = true;
+    c.peakHz = 180.0f; c.peakQ = 0.9f; c.peakDb = 7.0f; c.peak2Hz = 360.0f; c.peak2Q = 1.4f; c.peak2Db = 3.0f;
+    c.width = 0.7f; c.dryDb = -6.0f;
+    auto& e = p.echo;     // slap-back off the pillars and the far wall
+    e.leftMs = 63.0f; e.rightMs = 78.0f; e.feedback = 0.25f; e.level = 0.42f; e.lowPassHz = 2200.0f; e.highPassHz = 90.0f; e.pingPong = false;
+    p.wetDb = -0.5f;
+    p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makePool() {
     Profile p { "ABANDONED INDOOR POOL", "MAIN HALL, DEEP END", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // tiles and water: long and bright
-    r.rt60Low = 4.6f; r.rt60High = 4.4f; r.crossoverHz = 3000.0f; r.size = 1.9f; r.preDelayMs = 32.0f;
-    r.diffusion = 0.7f; r.modulation = 0.35f; r.pattern = Space::Pattern::sparse; r.reflections = 9;
-    r.firstMs = 18.0f; r.spacingMs = 12.0f; r.reflectionDecay = 0.85f; r.reflectionLevel = 0.6f; r.width = 1.4f;
-    r.lowCutHz = 110.0f; r.highCutHz = 15000.0f;
-    auto& c = p.colour;   // bright, glassy, spacious
-    c.highPassHz = 220.0f; c.shelfHz = 3500.0f; c.shelfDb = 12.0f; c.peakHz = 3200.0f; c.peakQ = 1.0f; c.peakDb = 3.0f;
-    c.width = 1.6f; c.dryDb = -4.0f;
-    auto& e = p.echo;     // distinct echoes off the far tiled wall
-    e.leftMs = 173.0f; e.rightMs = 291.0f; e.feedback = 0.5f; e.level = 0.55f; e.lowPassHz = 9000.0f; e.highPassHz = 250.0f;
+    auto& r = p.room;   // still water and tile: very bright, long, diffuse; distinct reflections; the surface alive
+    r.rt60Low = 3.8f; r.rt60High = 4.4f; r.crossoverHz = 2500.0f; r.size = 1.9f; r.preDelayMs = 28.0f;
+    r.diffusion = 0.75f; r.modulation = 0.3f; r.pattern = Space::Pattern::flutter; r.reflections = 12;
+    r.firstMs = 14.0f; r.spacingMs = 15.0f; r.reflectionDecay = 0.84f; r.reflectionLevel = 0.6f; r.width = 1.5f;
+    r.lowCutHz = 110.0f; r.highCutHz = 15000.0f; r.surface = 1.0f;
+    auto& c = p.colour;   // bright, glassy
+    c.highPassHz = 150.0f; c.shelfHz = 3500.0f; c.shelfDb = 7.0f; c.peakHz = 3200.0f; c.peakQ = 1.0f; c.peakDb = 2.0f;
+    c.width = 1.5f; c.dryDb = -4.0f;
+    auto& e = p.echo;     // the far tiled wall, distinct
+    e.leftMs = 151.0f; e.rightMs = 233.0f; e.feedback = 0.42f; e.level = 0.45f; e.lowPassHz = 9500.0f; e.highPassHz = 250.0f;
     p.wetDb = 2.0f;
+    p.ambienceTrim = 2.51f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeHotel() {
     Profile p { "EMPTY HOTEL", "FOURTH FLOOR, ROOM 412", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // carpet, curtains, soft furniture: short and very dark
-    r.rt60Low = 1.1f; r.rt60High = 0.3f; r.crossoverHz = 500.0f; r.size = 0.7f; r.preDelayMs = 14.0f;
-    r.diffusion = 0.8f; r.modulation = 0.2f; r.pattern = Space::Pattern::sparse; r.reflections = 5;
-    r.firstMs = 9.0f; r.spacingMs = 9.0f; r.reflectionDecay = 0.6f; r.reflectionLevel = 0.25f; r.width = 0.8f;
-    r.lowCutHz = 60.0f; r.highCutHz = 1800.0f;
-    auto& c = p.colour;   // heard through a wall from the next room: muffled, warm, worn tape
-    c.highPassHz = 70.0f; c.lowPassHz = 700.0f; c.lowPassQ = 0.6f; c.steep = true;
-    c.peak2Hz = 240.0f; c.peak2Q = 0.9f; c.peak2Db = 4.0f;
-    c.wowHz = 0.4f; c.wowCents = 6.0f; c.flutterHz = 7.5f; c.flutterCents = 2.5f;
-    c.drive = 0.45f; c.width = 0.75f; c.dryDb = 1.0f;
+    auto& r = p.room;   // carpet and soft furnishings: short, warm, muffled
+    r.rt60Low = 0.9f; r.rt60High = 0.4f; r.crossoverHz = 900.0f; r.size = 0.7f; r.preDelayMs = 8.0f;
+    r.diffusion = 0.8f; r.modulation = 0.1f; r.pattern = Space::Pattern::sparse; r.reflections = 5;
+    r.firstMs = 6.0f; r.spacingMs = 8.0f; r.reflectionDecay = 0.6f; r.reflectionLevel = 0.25f; r.width = 0.8f;
+    r.lowCutHz = 60.0f; r.highCutHz = 3500.0f;
+    auto& c = p.colour;   // close and warm, the highs rolled off
+    c.highPassHz = 60.0f; c.lowPassHz = 2600.0f; c.lowPassQ = 0.6f;
+    c.peak2Hz = 240.0f; c.peak2Q = 0.9f; c.peak2Db = 2.5f;
+    c.width = 0.5f; c.dryDb = 1.0f;
+    auto& f = c.far;      // through the wall from the next room
+    f.highPassHz = 70.0f; f.lowPassHz = 480.0f; f.steep = true; f.resonanceHz = 165.0f; f.resonanceQ = 1.6f; f.resonanceDb = 6.0f; f.gainDb = -5.0f;
     p.wetDb = -3.0f;
-    p.ambienceTrim = 0.9f;
+    p.ambienceTrim = 2.82f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeSubway() {
     Profile p { "DESERTED SUBWAY STATION", "PLATFORM 2, LAST TRAIN GONE", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a tiled platform opening into tunnels: reflections run away down the tube
-    r.rt60Low = 4.5f; r.rt60High = 2.2f; r.crossoverHz = 1000.0f; r.size = 2.0f; r.preDelayMs = 25.0f;
-    r.diffusion = 0.5f; r.modulation = 0.25f; r.pattern = Space::Pattern::tunnel; r.reflections = 14;
+    r.rt60Low = 3.6f; r.rt60High = 2.6f; r.crossoverHz = 1200.0f; r.size = 2.0f; r.preDelayMs = 22.0f;
+    r.diffusion = 0.5f; r.modulation = 0.2f; r.pattern = Space::Pattern::tunnel; r.reflections = 14;
     r.firstMs = 12.0f; r.spacingMs = 18.0f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.6f; r.width = 0.6f;
-    r.lowCutHz = 35.0f; r.highCutHz = 6000.0f;
-    auto& c = p.colour;   // a bass resonance, metallic ringing, pitch that sometimes sags
-    c.highPassHz = 40.0f; c.lowPassHz = 7500.0f; c.peakHz = 72.0f; c.peakQ = 1.3f; c.peakDb = 11.0f;
-    c.peak2Hz = 2600.0f; c.peak2Q = 1.2f; c.peak2Db = 6.0f;
-    c.combHz = 412.0f; c.comb2Hz = 587.0f; c.combFeedback = 0.86f; c.combMix = 0.4f; c.combDamp = 0.12f;
-    c.driftCents = 16.0f; c.wowHz = 0.09f; c.wowCents = 6.0f;
-    c.width = 0.4f; c.dryDb = -4.0f;
-    auto& e = p.echo;     // the long tunnel echo, metallic, wavering
-    e.leftMs = 520.0f; e.rightMs = 610.0f; e.feedback = 0.52f; e.level = 0.75f; e.lowPassHz = 3200.0f; e.highPassHz = 380.0f; e.pingPong = false;
-    e.modHz = 0.21f; e.modMs = 1.2f;
+    r.lowCutHz = 40.0f; r.highCutHz = 7000.0f;
+    auto& c = p.colour;   // metallic coloration from the tiles and rails
+    c.highPassHz = 50.0f; c.lowPassHz = 5000.0f; c.peakHz = 95.0f; c.peakQ = 1.2f; c.peakDb = 7.0f;
+    c.peak2Hz = 2600.0f; c.peak2Q = 1.4f; c.peak2Db = 5.0f;
+    c.combHz = 412.0f; c.comb2Hz = 587.0f; c.combFeedback = 0.65f; c.combMix = 0.22f; c.combDamp = 0.15f;
+    c.width = 0.35f; c.dryDb = -5.0f;
+    auto& e = p.echo;     // the long echo down the tunnel, one way
+    e.leftMs = 430.0f; e.rightMs = 520.0f; e.feedback = 0.45f; e.level = 0.55f; e.lowPassHz = 3500.0f; e.highPassHz = 350.0f; e.pingPong = false;
     p.wetDb = 1.0f;
-    p.ambienceTrim = 0.8f;
+    p.ambienceTrim = 2.24f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeSupermarket() {
     Profile p { "EMPTY SUPERMARKET", "AISLE 7, FROZEN FOODS", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // a low ceiling grid over hard floors: regular, artificial reflections
-    r.rt60Low = 1.0f; r.rt60High = 0.8f; r.crossoverHz = 2500.0f; r.size = 0.9f; r.preDelayMs = 8.0f;
-    r.diffusion = 0.25f; r.modulation = 0.0f; r.pattern = Space::Pattern::grid; r.reflections = 12;
-    r.firstMs = 9.0f; r.spacingMs = 17.0f; r.reflectionDecay = 0.9f; r.reflectionLevel = 0.55f; r.width = 1.0f;
-    r.lowCutHz = 300.0f; r.highCutHz = 9000.0f;
-    auto& c = p.colour;   // thin and nostalgic, a mild chorus, humming with the electrics
-    c.highPassHz = 480.0f; c.lowPassHz = 5200.0f; c.peakHz = 1700.0f; c.peakQ = 1.2f; c.peakDb = 4.0f;
-    c.chorusHz = 0.62f; c.chorusCents = 6.0f; c.chorusMix = 0.4f; c.wowHz = 0.3f; c.wowCents = 3.0f;
-    c.tremoloHz = 100.0f; c.tremoloDepth = 0.35f;
-    c.width = 1.05f; c.dryDb = 2.5f;
+    auto& r = p.room;   // a large reflective commercial interior, glossy floors: RT60 2 s, slightly bright
+    r.rt60Low = 2.5f; r.rt60High = 2.9f; r.crossoverHz = 2500.0f; r.size = 1.6f; r.preDelayMs = 14.0f;
+    r.diffusion = 0.5f; r.modulation = 0.05f; r.pattern = Space::Pattern::grid; r.reflections = 12;
+    r.firstMs = 9.0f; r.spacingMs = 17.0f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.45f; r.width = 1.5f;
+    r.lowCutHz = 120.0f; r.highCutHz = 11000.0f;
+    auto& c = p.colour;   // a little thin and bright under the tubes
+    c.highPassHz = 160.0f; c.lowPassHz = 12000.0f; c.peakHz = 1700.0f; c.peakQ = 1.2f; c.peakDb = 3.0f;
+    c.shelfHz = 5000.0f; c.shelfDb = 5.0f;
+    c.width = 1.6f; c.dryDb = -0.5f;
     auto& e = p.echo;     // shelving and cold cases: a bright, short repeat
-    e.leftMs = 63.0f; e.rightMs = 71.0f; e.feedback = 0.2f; e.level = 0.2f; e.lowPassHz = 6000.0f; e.highPassHz = 600.0f;
+    e.leftMs = 63.0f; e.rightMs = 71.0f; e.feedback = 0.2f; e.level = 0.2f; e.lowPassHz = 7000.0f; e.highPassHz = 600.0f;
     p.wetDb = -1.0f;
-    p.ambienceTrim = 1.0f;
+    p.ambienceTrim = 1.41f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeOffice() {
     Profile p { "ENDLESS OFFICE", "OPEN PLAN, FLOOR 31 (OF 31?)", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // the same bay of ceiling tiles forever: repeating reflections, no edges
-    r.rt60Low = 3.4f; r.rt60High = 3.0f; r.crossoverHz = 2000.0f; r.size = 1.5f; r.preDelayMs = 40.0f;
-    r.diffusion = 1.0f; r.modulation = 0.9f; r.pattern = Space::Pattern::grid; r.reflections = 16;
-    r.firstMs = 20.0f; r.spacingMs = 23.0f; r.reflectionDecay = 0.97f; r.reflectionLevel = 0.3f; r.width = 1.6f;
-    r.lowCutHz = 220.0f; r.highCutHz = 4500.0f;
-    auto& c = p.colour;   // soft, distant, synthetic: moving spectral notches and a slow wash
-    c.highPassHz = 300.0f; c.lowPassHz = 3800.0f; c.peak2Hz = 750.0f; c.peak2Q = 0.6f; c.peak2Db = -10.0f;
-    c.shelfHz = 3000.0f; c.shelfDb = 2.0f;
-    c.combHz = 640.0f; c.combMix = 0.9f; c.notch = true; c.combSweepHz = 0.07f; c.combSweep = 0.5f;
-    c.chorusHz = 0.21f; c.chorusCents = 10.0f; c.chorusMix = 0.55f;
-    c.width = 1.8f; c.dryDb = 3.0f;
-    auto& e = p.echo;     // a modulated, smeared delay
-    e.leftMs = 330.0f; e.rightMs = 445.0f; e.feedback = 0.5f; e.level = 0.45f; e.lowPassHz = 2400.0f; e.highPassHz = 300.0f;
-    e.modHz = 0.33f; e.modMs = 5.0f; e.diffuse = 0.6f;
-    p.wetDb = 3.5f;
-    p.ambienceTrim = 0.9f;
+    auto& r = p.room;   // carpet, ceiling tiles, partitions: dry, short, damped, slightly boxy
+    r.rt60Low = 0.5f; r.rt60High = 0.35f; r.crossoverHz = 1500.0f; r.size = 0.8f; r.preDelayMs = 6.0f;
+    r.diffusion = 0.7f; r.modulation = 0.0f; r.pattern = Space::Pattern::grid; r.reflections = 8;
+    r.firstMs = 7.0f; r.spacingMs = 11.0f; r.reflectionDecay = 0.65f; r.reflectionLevel = 0.3f; r.width = 1.0f;
+    r.lowCutHz = 120.0f; r.highCutHz = 4200.0f;
+    auto& c = p.colour;   // close, damped highs, a little boxy
+    c.highPassHz = 90.0f; c.lowPassHz = 5000.0f; c.peakHz = 480.0f; c.peakQ = 1.3f; c.peakDb = 5.0f;
+    c.width = 1.4f; c.dryDb = 0.5f;
+    p.wetDb = -2.0f;
+    p.ambienceTrim = 1.26f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 Profile makeImpossible() {
     Profile p { "IMPOSSIBLE ROOM", "THE ROOM THAT WAS NOT THERE YESTERDAY", {}, {}, {}, 0, 1 };
-    auto& r = p.room;   // reflections that grow instead of fade, a tail that rises in pitch and never ends
-    r.rt60Low = 11.0f; r.rt60High = 8.0f; r.crossoverHz = 1500.0f; r.size = 2.3f; r.preDelayMs = 45.0f;
-    r.diffusion = 0.9f; r.modulation = 1.0f; r.pattern = Space::Pattern::sparse; r.reflections = 12;
-    r.firstMs = 30.0f; r.spacingMs = 26.0f; r.reflectionDecay = 1.14f; r.reflectionLevel = 0.12f; r.width = 1.6f;
+    auto& r = p.room;   // a small room's reflections with a cathedral's tail - one that swells after the note
+    r.rt60Low = 9.0f; r.rt60High = 7.5f; r.crossoverHz = 1500.0f; r.size = 2.3f; r.preDelayMs = 4.0f;
+    r.diffusion = 0.85f; r.modulation = 0.6f; r.pattern = Space::Pattern::flutter; r.reflections = 10;
+    r.firstMs = 2.0f; r.spacingMs = 3.2f; r.reflectionDecay = 0.8f; r.reflectionLevel = 0.35f; r.width = 1.9f;
     r.lowCutHz = 40.0f; r.highCutHz = 12000.0f;
-    auto& c = p.colour;   // dissonant: every partial shifted off the harmonic series; the image will not stay still
-    c.highPassHz = 30.0f; c.lowPassHz = 12000.0f; c.peakHz = 1480.0f; c.peakQ = 6.0f; c.peakDb = 6.0f;
-    c.peak2Hz = 90.0f; c.peak2Q = 0.9f; c.peak2Db = 9.0f; c.shelfHz = 5000.0f; c.shelfDb = 4.0f;
-    c.shiftHz = -17.0f; c.shiftMix = 0.45f;
-    c.combHz = 233.0f; c.comb2Hz = 329.6f; c.combFeedback = 0.75f; c.combMix = 0.2f; c.combDamp = 0.3f;
-    c.combSweepHz = 0.05f; c.combSweep = 0.15f;
-    c.driftCents = 8.0f; c.wanderPan = 0.85f;
-    c.width = 1.4f; c.dryDb = -6.5f;
-    auto& e = p.echo;     // each echo comes back a tritone higher
-    e.leftMs = 410.0f; e.rightMs = 590.0f; e.feedback = 0.55f; e.level = 0.45f; e.lowPassHz = 3500.0f; e.highPassHz = 200.0f;
-    e.shiftSemis = 6.0f; e.modHz = 0.13f; e.modMs = 2.0f;
-    p.wetDb = -1.0f;
-    p.shimmerSemis = 12.0f; p.shimmerFeedback = 0.3f;
-    p.ambienceTrim = 1.0f;
+    auto& c = p.colour;   // near and clear, barely wrong: a faint shifted copy, an image that will not stay still
+    c.highPassHz = 30.0f; c.lowPassHz = 14000.0f; c.peakHz = 1480.0f; c.peakQ = 4.0f; c.peakDb = 3.0f;
+    c.shiftHz = -9.0f; c.shiftMix = 0.25f;
+    c.wanderPan = 0.7f;
+    c.width = 0.5f; c.dryDb = 2.0f;
+    auto& e = p.echo;     // reflections that come back subtly higher
+    e.leftMs = 290.0f; e.rightMs = 410.0f; e.feedback = 0.4f; e.level = 0.3f; e.lowPassHz = 5000.0f; e.highPassHz = 200.0f;
+    e.shiftSemis = 0.4f;
+    p.wetDb = 1.0f;
+    p.shimmerSemis = 12.0f;   // (only Unreal feeds the shimmer: the tail climbing an octave)
+    p.bloomSeconds = 1.4f;
+    p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
 }
 const std::array<Profile, placeCount> profiles { makeHospital(), makeMall(), makeSchool(), makeGarage(), makePool(),
@@ -313,11 +306,24 @@ void Colour::configure(const Profile::Colour& colour, unsigned seed) {
     combD2 = delayFor(c.comb2Hz > 0.0f ? c.comb2Hz : c.combHz);
     combLpL.setHz(float(sr) * 0.5f * (1.0f - std::clamp(c.combDamp, 0.0f, 0.95f)) * 0.25f + 200.0f, sr);
     combLpR.c = combLpL.c;
+    const auto& f = c.far;
+    farHpL.highPass(f.highPassHz, 0.707, sr);
+    farLpL.lowPass(std::min(double(f.lowPassHz), 0.45 * sr), 0.75, sr);
+    if (f.steep) farLp2L.lowPass(std::min(double(f.lowPassHz), 0.45 * sr), 0.65, sr);
+    else farLp2L.identity();
+    farPeakL.peak(f.resonanceHz, f.resonanceQ, f.resonanceDb, sr);
+    const auto copy = [](Biquad& to, const Biquad& from) { to.b0 = from.b0; to.b1 = from.b1; to.b2 = from.b2; to.a1 = from.a1; to.a2 = from.a2; };
+    copy(farHpR, farHpL);
+    copy(farLpR, farLpL);
+    copy(farLp2R, farLp2L);
+    copy(farPeakR, farPeakL);
+    farGain = dbGain(f.gainDb);
     reset();
 }
 
 void Colour::reset() {
-    for (auto* b : { &hpL, &hpR, &peakL, &peakR, &peak2L, &peak2R, &shelfL, &shelfR, &lpL, &lpR, &lp2L, &lp2R }) b->clear();
+    for (auto* b : { &hpL, &hpR, &peakL, &peakR, &peak2L, &peak2R, &shelfL, &shelfR, &lpL, &lpR, &lp2L, &lp2R,
+                     &farHpL, &farHpR, &farLpL, &farLpR, &farLp2L, &farLp2R, &farPeakL, &farPeakR }) b->clear();
     std::fill(lineL.begin(), lineL.end(), 0.0f);
     std::fill(lineR.begin(), lineR.end(), 0.0f);
     std::fill(combL.begin(), combL.end(), 0.0f);
@@ -377,6 +383,8 @@ void Colour::process(float* left, float* right, int n) {
             live.wanderPan += k * (liveTarget.wanderPan - live.wanderPan);
             live.wowCents += k * (liveTarget.wowCents - live.wowCents);
             live.lowOctaves += k * (liveTarget.lowOctaves - live.lowOctaves);
+            live.far += k * (liveTarget.far - live.far);
+            if (liveTarget.far < 1.0e-4f && live.far < 1.0e-3f) live.far = 0;
             driftNow = drift.tick(rng, 0.3f, float(32.0 / sr));
             panNow = pan.tick(rng, 0.25f, float(32.0 / sr));
             clock = 32;
@@ -386,7 +394,7 @@ void Colour::process(float* left, float* right, int n) {
         if (std::abs(amountTarget - amount) < 1.0e-3f) amount = amountTarget;
         const float a = amount;
         float l = left[i], r = right[i];
-        if (a <= 0.0f && filtersAt <= 0.0f) {   // untouched: Milestone 1's sound
+        if (a <= 0.0f && filtersAt <= 0.0f && live.far <= 0.0f) {   // untouched: Milestone 1's sound
             lineL[std::size_t(write)] = l;
             lineR[std::size_t(write)] = r;
             if (++write >= size) write = 0;
@@ -488,8 +496,22 @@ void Colour::process(float* left, float* right, int n) {
             l *= gl;
             r *= gr;
         }
-        left[i] = l * nearness;
-        right[i] = r * nearness;
+        l *= nearness;
+        r *= nearness;
+        if (live.far > 0.001f) {   // Far Away: heard through a wall, or over a loudspeaker somewhere else
+            float fl = farPeakL.tick(farLp2L.tick(farLpL.tick(farHpL.tick(l))));
+            float fr = farPeakR.tick(farLp2R.tick(farLpR.tick(farHpR.tick(r))));
+            if (c.far.grit > 0.0f) {   // a small speaker driven a little too hard: tinny, slightly broken
+                const float g = 1.0f + 30.0f * c.far.grit;
+                fl = (softClip(fl * g + 0.15f * c.far.grit) - softClip(0.15f * c.far.grit)) / g * (1.0f + 2.0f * c.far.grit);
+                fr = (softClip(fr * g + 0.15f * c.far.grit) - softClip(0.15f * c.far.grit)) / g * (1.0f + 2.0f * c.far.grit);
+            }
+            const float m = live.far;
+            l += m * (fl * farGain - l);
+            r += m * (fr * farGain - r);
+        }
+        left[i] = l;
+        right[i] = r;
     }
 }
 
@@ -628,6 +650,10 @@ void EnvironmentChain::configure(Place place, int characterIndex, unsigned seed,
     shimmer.setSemitones(p->shimmerSemis != 0.0f ? p->shimmerSemis : 12.0f);
     shimmer.reset();
     shimmerIn = 0;
+    bloomFast = bloomSlow = 0;
+    bloomFastAttack = float(1.0 - std::exp(-1.0 / (0.002 * sr)));
+    bloomAttack = float(1.0 - std::exp(-1.0 / (std::max(0.05f, p->bloomSeconds) * 0.5 * sr)));
+    bloomRelease = float(1.0 - std::exp(-1.0 / (0.5 * sr)));
     wetGain = dbGain(p->wetDb);
     quietFor = 0;
     killing = false;
@@ -652,8 +678,9 @@ void EnvironmentChain::setLive(const Live& l) {
     wetLiveTarget = std::pow(10.0f, (4.0f * scale + 1.5f * evo.spatial()) / 20.0f);
     echo.setBoost(0.8f * u * f.echo, 0.3f * u * f.echo, u * f.echoShift);
     shimmerExtra = u * f.shimmer;
-    // Activity: more or fewer events; the bed breathes more.
-    ambience.setActivity(std::pow(2.0f, (l.macros.activity - 0.5f) * 3.0f * r.activity));
+    // Activity (Direction Update 2): 0 = only the bed; the default (25 %) = the place's own rare
+    // events; 100 % = up to four times as often (still sparse).
+    ambience.setActivity(activityRate(l.macros.activity, r.activity));
     ambienceLive = l.ambienceGain;
 }
 
@@ -668,7 +695,7 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         ebufR[std::size_t(i)] = echoInR[i] * live;
     }
     const auto& ch = character(int(current), characterNow);
-    const float activity = std::pow(2.0f, (liveSettings.macros.activity - 0.5f) * 2.0f * macroResponse(int(current)).activity);
+    const float activity = std::pow(2.0f, (liveSettings.macros.activity - 0.25f) * 2.0f * macroResponse(int(current)).activity);
     for (int i = 0; i < n; ++i) {
         if (--controlClock <= 0) {   // the place evolves (64-sample control rate)
             controlClock = 64;
@@ -682,7 +709,15 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         if (killing) outFade = std::max(0.0f, outFade - killStep);
         const float ag = ambienceGain[i] * ambienceFade * ambienceLive * (1.0f + 0.2f * evo.spectral());
         const auto amb = ambience.tick();
-        const Stereo send { sbufL[std::size_t(i)], sbufR[std::size_t(i)] };
+        Stereo send { sbufL[std::size_t(i)], sbufR[std::size_t(i)] };
+        if (p->bloomSeconds > 0.0f) {   // the room hears the note late and grows into it
+            const float level = std::abs(send.l) + std::abs(send.r);
+            bloomFast += (level > bloomFast ? bloomFastAttack : bloomRelease) * (level - bloomFast);
+            bloomSlow += (level > bloomSlow ? bloomAttack : bloomRelease) * (level - bloomSlow);
+            const float g = 0.15f + 0.85f * std::min(1.4f, bloomSlow / (bloomFast + 1.0e-6f));
+            send.l *= g;
+            send.r *= g;
+        }
         const Stereo echoed = echo.tick({ ebufL[std::size_t(i)], ebufR[std::size_t(i)] }, 1.0f);
         const Stereo wet = room.tick({ send.l + 0.5f * echoed.l + amb.send.l * ag + shimmerIn, send.r + 0.5f * echoed.r + amb.send.r * ag + shimmerIn });
         if (p->shimmerFeedback + shimmerExtra > 0.0f)   // the tail, shifted up, fed back in: it climbs as it fades

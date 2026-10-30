@@ -3,3 +3,5 @@
 /.deps/
 *.wav
 .DS_Store
+*.flac
+__pycache__/

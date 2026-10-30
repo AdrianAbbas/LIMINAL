@@ -173,7 +173,23 @@ Stereo Space::tick(Stereo in) {
     const float a = 0.35f * (out[0] - out[2] + out[4] - out[6]);
     const float b = 0.35f * (out[1] - out[3] + out[5] - out[7]);
     const float mid = 0.5f * (a + b), side = 0.5f * (a - b) * shape.width;
-    float l = (mid + side) * shape.lateLevel + erL, r = (mid - side) * shape.lateLevel + erR;
+    float gl = shape.lateLevel, gr = shape.lateLevel;
+    if (shape.surface > 0.0f) {   // three slow, unrelated movements: never a pattern, never audible as motion
+        constexpr float rates[] { 0.13f, 0.21f, 0.34f };
+        float m = 0, n = 0;
+        for (int k = 0; k < 3; ++k) {
+            auto& ph = surfacePhase[std::size_t(k)];
+            ph += rates[k] / float(sr);
+            if (ph >= 1.0f) ph -= 1.0f;
+            m += sinCycle(ph) / float(k + 1);
+            float q = ph + 0.37f * float(k + 1);
+            q -= std::floor(q);
+            n += sinCycle(q) / float(k + 1);
+        }
+        gl *= 1.0f + 0.07f * shape.surface * m;
+        gr *= 1.0f + 0.07f * shape.surface * n;
+    }
+    float l = (mid + side) * gl + erL, r = (mid - side) * gr + erR;
     l = highCutL.lp(lowCutL.hp(l));
     r = highCutR.lp(lowCutR.hp(r));
     return { l, r };

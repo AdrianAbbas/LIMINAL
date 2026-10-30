@@ -127,6 +127,8 @@ private:
     std::vector<float> echoLineL, echoLineR;
     int echoWrite = 0;
     float echoDelay = 1, echoDelayTarget = 1, echoDelayCoef = 0.0005f;
+    float echoFrom = 1, echoBlend = 1, echoBlendStep = 0.0005f;   // a big jump in time: two heads cross-fade
+    float driftFrom = 0, driftBlend = 1, driftBlendStep = 0.0005f;   // the same for a big change of drift depth
     OnePole echoToneL, echoToneR, echoLowL, echoLowR;
 };
 

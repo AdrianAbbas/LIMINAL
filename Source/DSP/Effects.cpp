@@ -25,8 +25,8 @@ PlaceEffects basePlace(Place p) {
         e.drift = 0.4f; e.echo = 0.3f; e.echoMs = 650; e.echoFeedback = 0.5f; e.grain = 0.1f; e.reverbBias = 0.4f; break;
     case Place::supermarket:  // mild chorus, thin nostalgic tape
         e.drift = 0.15f; e.tape = 0.3f; e.chorus = 0.45f; e.highOctaves = 0.6f; e.reverbBias = -0.6f; break;
-    case Place::office:       // soft synthetic wash, a modulated delay, smeared
-        e.chorus = 0.35f; e.echo = 0.25f; e.echoMs = 500; e.echoFeedback = 0.55f; e.grain = 0.2f; e.grainSize = 0.6f; e.lowOctaves = 0.7f; e.reverbBias = 0.4f; break;
+    case Place::office:       // dry and close under the tubes (Direction Update 2: no wash, no delay)
+        e.drift = 0.05f; e.lowOctaves = 0.5f; e.reverbBias = -0.3f; break;
     case Place::impossible:   // unstable pitch, spectral smearing, fragments
         e.drift = 0.6f; e.chorus = 0.2f; e.grain = 0.5f; e.grainSize = 0.5f; e.echo = 0.2f; e.echoMs = 777; e.echoFeedback = 0.6f; e.reverbBias = 0.8f; break;
     }
@@ -97,6 +97,8 @@ void EffectRack::prepare(double sampleRate, int instrumentIndex) {
     colourFadeStep = float(1.0 / (0.06 * sr));
     followerRelease = float(1.0 - std::exp(-1.0 / (0.3 * sr)));
     echoDelayCoef = float(1.0 - std::exp(-1.0 / (0.1 * sr)));
+    echoBlendStep = float(1.0 / (0.08 * sr));
+    driftBlendStep = float(1.0 / (0.04 * sr));
     hissTone.setHz(3500.0f, sr);
     hissToneR.setHz(3500.0f, sr);
     placeKnown = false;
@@ -129,7 +131,9 @@ void EffectRack::reset() {
     for (auto& c : colours) c.reset();
     colourFade = 1;
     now = target;
-    echoDelay = echoDelayTarget;
+    echoDelay = echoFrom = echoDelayTarget;
+    echoBlend = 1;
+    driftBlend = 1;
 }
 
 void EffectRack::setPlace(Place p, int ch) {
@@ -211,7 +215,15 @@ float EffectRack::readLine(const std::vector<float>& line, int write, float dela
 
 void EffectRack::control() {
     const auto glide = [&](float& v, float t) { v += smoothCoef * (t - v); if (std::abs(t - v) < 1.0e-4f) v = t; };
-    glide(now.drift, target.drift);
+    // The drift's depth sets its delay: a big change (a new place) would bend the pitch if it
+    // glided, so it cross-fades from the old depth to the new one instead; small ones glide.
+    if (driftBlend >= 1.0f && std::abs(target.drift - now.drift) > 0.05f) {
+        driftFrom = now.drift;
+        now.drift = target.drift;
+        driftBlend = 0;
+    } else {
+        glide(now.drift, target.drift);
+    }
     glide(now.tape, target.tape);
     glide(now.chorus, target.chorus);
     glide(now.grain, target.grain);
@@ -278,7 +290,7 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
     const float fs = float(sr);
     switch (m) {
     case drift: {
-        if (now.drift <= 1.0e-4f) {   // keep the line fed so turning it up is seamless
+        if (now.drift <= 1.0e-4f && driftBlend >= 1.0f) {   // keep the line fed so turning it up is seamless
             driftLineL[std::size_t(driftWrite)] = l;
             driftLineR[std::size_t(driftWrite)] = r;
             if (++driftWrite >= int(driftLineL.size())) driftWrite = 0;
@@ -290,6 +302,13 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
         driftLineR[std::size_t(driftWrite)] = r;
         l = readLine(driftLineL, driftWrite, depth * (1.0f + driftNowL) + 1.0f);
         r = readLine(driftLineR, driftWrite, depth * (1.0f + driftNowR) + 1.0f);
+        if (driftBlend < 1.0f) {
+            driftBlend = std::min(1.0f, driftBlend + driftBlendStep);
+            const float before = swingSamples(40.0f * driftFrom, hz, sr);
+            const float in = sinCycle(0.25f * driftBlend), out = sinCycle(0.25f * (1.0f - driftBlend));
+            l = l * in + readLine(driftLineL, driftWrite, before * (1.0f + driftNowL) + 1.0f) * out;
+            r = r * in + readLine(driftLineR, driftWrite, before * (1.0f + driftNowR) + 1.0f) * out;
+        }
         if (++driftWrite >= int(driftLineL.size())) driftWrite = 0;
         return;
     }
@@ -415,9 +434,22 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
         return;
     }
     case echo: {
+        // Small changes glide; a jump (a new place, a new sync value) cross-fades from the old
+        // read point to the new one, so the head never races through the line (a warble).
+        if (echoBlend >= 1.0f && std::abs(echoDelayTarget - echoDelay) > 0.01f * float(sr)) {
+            echoFrom = echoDelay;
+            echoDelay = echoDelayTarget;
+            echoBlend = 0;
+        }
         echoDelay += echoDelayCoef * (echoDelayTarget - echoDelay);
-        const float yl = readLine(echoLineL, echoWrite, echoDelay);
-        const float yr = readLine(echoLineR, echoWrite, echoDelay);
+        float yl = readLine(echoLineL, echoWrite, echoDelay);
+        float yr = readLine(echoLineR, echoWrite, echoDelay);
+        if (echoBlend < 1.0f) {
+            echoBlend = std::min(1.0f, echoBlend + echoBlendStep);
+            const float in = sinCycle(0.25f * echoBlend), out = sinCycle(0.25f * (1.0f - echoBlend));
+            yl = yl * in + readLine(echoLineL, echoWrite, echoFrom) * out;
+            yr = yr * in + readLine(echoLineR, echoWrite, echoFrom) * out;
+        }
         const float fl = echoLowL.hp(echoToneL.lp(yl)), fr = echoLowR.hp(echoToneR.lp(yr));
         const float fb = now.echoFeedback;
         const float in = now.echo;

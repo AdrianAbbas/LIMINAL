@@ -198,13 +198,13 @@ void testSmoke(Suite& s) {
     const double bedRms = rms(bed.first, bed.second, std::size_t(rig.rate));
     s.check(finite(bed), "default output finite and within +/-1");
     s.check(toDb(bedRms) > -55.0 && toDb(bedRms) < -32.0, "ambience plays without MIDI, as a quiet bed (-55..-32 dBFS)", db(bedRms));
-    {   // The AU harness gates on > -45 dBFS in 1-1.5 s windows: keep every 1 s window clear of it.
+    {   // The AU harness gates on > -60 dBFS in 1-1.5 s windows (quiet beds, Direction Update 2): keep every 1 s window clear of it.
         Rig quiet;
         const auto minute = quiet.render(40.0);
         double lowest = 1;
         for (std::size_t at = std::size_t(quiet.rate); at + std::size_t(quiet.rate) <= minute.first.size(); at += std::size_t(quiet.rate))
             lowest = std::min(lowest, rms(minute.first, minute.second, at, at + std::size_t(quiet.rate)));
-        s.check(toDb(lowest) > -44.0, "every 1 s of the default ambience stays above -44 dBFS (harness gate -45)", db(lowest));
+        s.check(toDb(lowest) > -55.0, "every 1 s of the default ambience stays above -55 dBFS (harness gate -60)", db(lowest));
     }
     const auto note = rig.render(1.0, { { rig.time + 0.01, on(60, 100) }, { rig.time + 0.9, off(60) } });
     s.check(rms(note) > bedRms * 4.0, "a MIDI note is clearly audible over the ambience", db(rms(note)) + " vs " + db(bedRms));
@@ -742,9 +742,32 @@ int renderPhrase(const juce::String& path) {
     return 0;
 }
 
-// The same phrase (piano with a quiet choir) through all ten places in order, ambience on,
-// 12 s per place, then place changes while a chord rings (hospital -> pool -> garage ->
-// impossible room). Listening aid; CI uploads it.
+// Writes a stereo buffer as 24-bit WAV or FLAC (by the file's extension), 48 kHz.
+bool writeAudio(const Signal& out, const juce::File& file) {
+    juce::AudioBuffer<float> buffer(2, int(out.first.size()));
+    for (std::size_t i = 0; i < out.first.size(); ++i) {
+        buffer.setSample(0, int(i), out.first[i]);
+        buffer.setSample(1, int(i), out.second[i]);
+    }
+    file.deleteFile();
+    std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream>(file);
+    const auto options = juce::AudioFormatWriterOptions {}.withSampleRate(48000.0).withNumChannels(2).withBitsPerSample(24);
+    std::unique_ptr<juce::AudioFormatWriter> writer;
+    if (file.hasFileExtension("flac")) writer = juce::FlacAudioFormat().createWriterFor(stream, options);
+    else writer = juce::WavAudioFormat().createWriterFor(stream, options);
+    if (writer == nullptr) return false;
+    writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
+    std::cout << "wrote " << file.getFullPathName() << "\n";
+    return true;
+}
+
+// The listening render (Direction Update 2), in two files:
+//   <path>: the same phrase (piano with a quiet choir) through all ten rooms in order, ambience
+//     on at its defaults, 12 s per room; then place changes while a chord rings (hospital ->
+//     pool -> garage -> impossible room).
+//   <path minus extension>-beds.flac: 60 s of each room's bed alone (no instruments, default
+//     Activity), in the same order, a second of silence between rooms.
+// Listening aid; CI uploads both.
 int renderPlaces(const juce::String& path) {
     Signal out;
     for (int place = 0; place < dsp::placeCount; ++place) {
@@ -777,20 +800,20 @@ int renderPlaces(const juce::String& path) {
             out.second.insert(out.second.end(), part->second.begin(), part->second.end());
         }
     }
-    juce::AudioBuffer<float> buffer(2, int(out.first.size()));
-    for (std::size_t i = 0; i < out.first.size(); ++i) {
-        buffer.setSample(0, int(i), out.first[i]);
-        buffer.setSample(1, int(i), out.second[i]);
+    const juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+    if (!writeAudio(out, file)) return 1;
+    Signal beds;
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        auto rig = rigIn(place);
+        rig->render(2.5);   // the bed fades in over about two seconds when a place starts
+        const auto part = rig->render(60.0);
+        std::cout << "  " << placeNames[place] << " bed: " << num(toDb(rms(part))) << " dBFS RMS, " << rig->p->meters.events.load() << " events\n";
+        beds.first.insert(beds.first.end(), part.first.begin(), part.first.end());
+        beds.second.insert(beds.second.end(), part.second.begin(), part.second.end());
+        beds.first.insert(beds.first.end(), 48000, 0.0f);
+        beds.second.insert(beds.second.end(), 48000, 0.0f);
     }
-    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(path);
-    file.deleteFile();
-    std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream>(file);
-    auto writer = juce::WavAudioFormat().createWriterFor(
-        stream, juce::AudioFormatWriterOptions {}.withSampleRate(48000.0).withNumChannels(2).withBitsPerSample(24));
-    if (writer == nullptr) return 1;
-    writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
-    std::cout << "wrote " << file.getFullPathName() << "\n";
-    return 0;
+    return writeAudio(beds, file.getSiblingFile(file.getFileNameWithoutExtension() + "-beds.flac")) ? 0 : 1;
 }
 
 } // namespace

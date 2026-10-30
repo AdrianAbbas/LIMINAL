@@ -54,6 +54,16 @@ struct Profile {
         float width = 1;                              // stereo width of the instruments
         float wanderPan = 0;                          // 0..1: the image drifts unpredictably side to side
         float dryDb = 0;                              // how present (near) the instruments are
+        // Far Away (Direction Update 2): the instruments heard from somewhere else in the
+        // building. Mall: over the PA in another wing (band-limited, tinny). Hotel: through
+        // the wall from the next room. Elsewhere: from another room.
+        struct Far {
+            float highPassHz = 60, lowPassHz = 650;
+            bool steep = true;
+            float resonanceHz = 170, resonanceQ = 1.2f, resonanceDb = 5;   // the wall's (or speaker's) own resonance
+            float grit = 0;                                                 // 0..1: a small, distorting loudspeaker
+            float gainDb = -6;
+        } far;
     } colour;
     struct Echo {
         float leftMs = 250, rightMs = 370, feedback = 0, level = 0, lowPassHz = 4000, highPassHz = 150;
@@ -65,9 +75,16 @@ struct Profile {
     float wetDb = 0;        // room level (at a given Space)
     float ambienceTrim = 1; // the bed's overall level
     float shimmerSemis = 0, shimmerFeedback = 0;   // pitch-shifted room output fed back into the room
+    float bloomSeconds = 0;   // the impossible room: the tail swells after the note (seconds to grow), 0 = off
 };
 
 const Profile& profile(Place);
+// The Activity macro as the ambience's event rate (Direction Update 2): 0 = only the bed; the
+// default (25 %) = the place's own rare events (x1); 100 % = up to four times as often.
+inline float activityRate(float macro, float response = 1.0f) {
+    const float a = std::clamp(macro, 0.0f, 1.0f);
+    return a <= 0.25f ? a / 0.25f : std::min(4.0f, std::pow(4.0f, (a - 0.25f) / 0.75f * response));
+}
 // The place as a Character changes it (Milestone 5).
 Profile profileFor(Place, int character);
 
@@ -110,7 +127,7 @@ public:
     void snapAmount() { amount = amountTarget; updateFilters(); }
     void process(float* left, float* right, int n);
     // Live changes on top of the profile (Unreal, evolution), scaled by the amount like the rest.
-    struct Live { float shiftMix = 0, wanderPan = 0, wowCents = 0, lowOctaves = 0; };
+    struct Live { float shiftMix = 0, wanderPan = 0, wowCents = 0, lowOctaves = 0, far = 0; };
     void setLive(const Live& l) { liveTarget = l; }
 
 private:
@@ -121,6 +138,8 @@ private:
     Profile::Colour c;
     float amount = 0, amountTarget = 0, amountCoef = 0.001f, filtersAt = -1;
     Biquad hpL, hpR, peakL, peakR, peak2L, peak2R, shelfL, shelfR, lpL, lpR, lp2L, lp2R;
+    Biquad farHpL, farHpR, farLpL, farLpR, farLp2L, farLp2R, farPeakL, farPeakR;
+    float farGain = 0.5f;
     std::vector<float> lineL, lineR;
     int write = 0, clock = 0;
     float wowPhase = 0, flutterPhase = 0, chorusPhase = 0, tremoloPhase = 0, sweepPhase = 0, shiftPhase = 0;
@@ -181,6 +200,8 @@ public:
     void resetEvolution(unsigned seed) { evolutionSeedNow = seed; resetEvolution(); }
     const Evolution& evolution() const { return evo; }
     int ambienceEvents() const { return ambience.spawned(); }
+    float lamp() const { return ambience.lamp(); }          // the failing tube (1 = steady), shared with the picture
+    int flickers() const { return ambience.flickers(); }
     // Adds into out (echo + room + ambience). `send` feeds the room, `echoIn` the place's
     // echo; this chain fades its inputs in and out for cross-fades between places.
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
@@ -211,6 +232,7 @@ private:
     Ambience ambience;
     PitchShift shimmer;
     float shimmerIn = 0, shimmerExtra = 0;
+    float bloomFast = 0, bloomSlow = 0, bloomAttack = 0, bloomFastAttack = 0, bloomRelease = 0;
     float wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
     float live = 1, liveTarget = 1, liveCoef = 0.001f, ambienceFade = 1, ambienceCoef = 0.0001f;
     int quietFor = 0, quietLimit = 48000;

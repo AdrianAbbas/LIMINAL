@@ -143,6 +143,9 @@ inline constexpr const char* sceneOn = "scene_on";                 // play the m
 inline constexpr const char* sceneMorph = "scene_morph";           // 0 = A, 1 = B
 // Milestone 6: quality, and per instrument MIDI details ("<instrument>_key_low", ...).
 inline constexpr const char* quality = "quality";   // Eco / Standard / High
+// Direction Update 2: the instruments heard from elsewhere (mall: the PA in another wing; hotel:
+// through the wall; elsewhere: another room).
+inline constexpr const char* farAway = "far_away";
 namespace midi {
 inline constexpr const char* keyLow = "key_low";
 inline constexpr const char* keyHigh = "key_high";

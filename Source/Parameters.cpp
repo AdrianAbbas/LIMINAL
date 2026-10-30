@@ -184,7 +184,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { evolutionSeed, 1 }, "Evolution Seed", 1, 9999, 1));
     layout.add(amount(presence, "Presence", 0.5f));
     layout.add(amount(scale, "Scale", 0.5f));
-    layout.add(amount(activity, "Activity", 0.5f));
+    layout.add(amount(activity, "Activity", 0.25f));   // Direction Update 2: low by default (rare events)
     layout.add(amount(unreal, "Unreal", 0.0f));
     layout.add(toggle(sceneOn, "Scene Morph On", false));
     layout.add(amount(sceneMorph, "Scene Morph", 0.0f));
@@ -205,6 +205,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
         pct(midi::velocityVolume, "Velocity to Volume", 1.0f);
         pct(midi::velocityFilter, "Velocity to Filter", 0.0f);
     }
+    layout.add(amount(farAway, "Far Away", 0.0f));
     return layout;
 }
 

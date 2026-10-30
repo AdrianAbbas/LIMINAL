@@ -28,6 +28,7 @@ public:
         float width = 1.0f;           // tail stereo width
         float lowCutHz = 40.0f, highCutHz = 12000.0f;
         float lateLevel = 1.0f;       // the tail's level relative to the reflections
+        float surface = 0.0f;         // 0..1: light on water - a slow, gentle shimmer in the tail's level and image
     };
     static constexpr float maxSize = 2.5f, maxPreDelayMs = 150.0f, maxReflectionMs = 400.0f;
 
@@ -63,6 +64,7 @@ private:
     OnePole lowCutL, lowCutR, highCutL, highCutR;
     float lowCutHz = 40.0f, highCutHz = 12000.0f;
     float decayScale = 1.0f, modNow = 0;
+    std::array<float, 3> surfacePhase {};
     bool lean = false;
     void updateDecay();
 };

@@ -24,177 +24,180 @@ void Ambience::prepare(double sampleRate) {
 void Ambience::configure(Place p, unsigned s, const Character* ch) {
     place = p;
     seed = s;
-    // Defaults: everything off, then each place switches on its own generators.
-    airLevel = ductLevel = lapLevel = rumbleLevel = humLevel = buzzLevel = motorLevel = subLevel = clackLevel = 0;
-    whineLevel = clusterLevel = 0;
-    motorCycles = false;
+    // Defaults: everything off, then each place switches on its own bed and events.
+    airLevel = humLevel = buzzLevel = gritLevel = clockLevel = trickleLevel = whineLevel = 0;
     humWeights = {};
-    motorWeights = {};
-    double mains = 60.0;
-    float airHz = 1400.0f, ductHz = 340.0f, ductQ = 8.0f, rumbleHz = 120.0f;
+    beatDepth = 0.15f;
+    for (auto& d : drones) d = Drone {};
+    humDrifts = dropouts = false;
+    float airHz = 400.0f;
     bedSend = 0.3f;
+    minGapSeconds = 20.0f;
+    meanGapSeconds = 45.0f;
     scheduleCount = 0;
-    const auto add = [&](Kind k, float mean, float minimum, float level, float send) {
-        if (scheduleCount < int(schedules.size())) schedules[std::size_t(scheduleCount++)] = { k, mean, minimum, level, send, 0 };
+    const auto add = [&](Kind k, float weight, float level) {
+        if (scheduleCount < int(schedules.size())) schedules[std::size_t(scheduleCount++)] = { k, weight, level };
+    };
+    const auto drone = [&](int i, float hz, float level, std::array<float, 4> w, float amHz = 0, float amDepth = 0) {
+        auto& d = drones[std::size_t(i)];
+        d.hz = hz;
+        d.level = level;
+        d.weights = w;
+        d.amHz = amHz;
+        d.amDepth = amDepth;
+        return &d;
     };
     switch (p) {
-    case Place::hospital:   // cold air handling, 60 Hz lights, distant monitors
-        airLevel = 0.06f; airHz = 1500.0f;
-        humLevel = 0.0045f; humWeights = { 1.0f, 0.5f, 0.25f, 0.1f };
-        buzzLevel = 0.0024f;
+    case Place::hospital:   // mains hum and ballasts; HVAC far below; a machine's tone somewhere, sometimes
+        airLevel = 0.008f; airHz = 1800.0f;
+        humLevel = 0.0042f; humWeights = { 1.0f, 0.55f, 0.32f, 0.2f, 0.12f, 0.07f };
+        buzzLevel = 0.0034f; gritLevel = 0.0011f;
+        if (auto* d = drone(0, 1420.0f, 0.00045f, { 1, 0, 0, 0 })) { d->gate = Drone::Gate::sometimes; d->onSeconds = 70; d->offSeconds = 50; d->fadeSeconds = 4; }
         bedSend = 0.35f;
-        add(Kind::beep, 9.0f, 2.5f, 1.0f, 0.8f);
-        add(Kind::rattle, 22.0f, 6.0f, 1.0f, 0.5f);
-        add(Kind::metal, 30.0f, 8.0f, 1.0f, 0.75f);
+        minGapSeconds = 20.0f; meanGapSeconds = 50.0f;
+        add(Kind::monitor, 1.0f, 1.0f);
+        add(Kind::ballastTick, 1.0f, 1.0f);
+        add(Kind::doorClick, 0.8f, 1.0f);
+        add(Kind::flicker, 0.7f, 1.0f);
         break;
-    case Place::mall:       // a huge hall: low roar, far ventilation, the escalator
-        mains = 60.0;
-        airLevel = 0.045f; airHz = 700.0f;
-        rumbleLevel = 0.05f; rumbleHz = 220.0f;
-        motorHz = 47.0f; motorLevel = 0.006f; motorWeights = { 1.0f, 0.6f, 0.35f, 0.2f }; motorAmRate = 0.9f; motorAmDepth = 0.35f;
-        clackLevel = 0.012f; clackInterval = 0.55f;
+    case Place::mall:       // big-building HVAC drone, the escalator's motor, a fountain trickling far off
+        airLevel = 0.012f; airHz = 260.0f;
+        humLevel = 0.0012f; humWeights = { 1.0f, 0.4f, 0.2f };
+        drone(0, 38.0f, 0.0045f, { 1.0f, 0.5f, 0.2f, 0.08f }, 0.11f, 0.12f);          // the air handlers
+        drone(1, 74.0f, 0.0020f, { 1.0f, 0.45f, 0.3f, 0.15f }, 1.65f, 0.18f);         // escalator: steady, with its steps' periodicity
+        trickleLevel = 0.0016f;
         bedSend = 0.7f;
-        add(Kind::groan, 14.0f, 5.0f, 1.0f, 0.9f);
-        add(Kind::metal, 16.0f, 5.0f, 1.0f, 0.6f);
-        add(Kind::thud, 24.0f, 8.0f, 1.0f, 0.8f);
+        minGapSeconds = 25.0f; meanGapSeconds = 60.0f;
+        add(Kind::paChime, 1.0f, 1.0f);
+        add(Kind::shutter, 0.8f, 1.0f);
         break;
-    case Place::school:     // old ballasts, ducts that whistle, pipes and creaks
-        mains = 50.0;
-        airLevel = 0.03f; airHz = 900.0f;
-        ductLevel = 0.03f; ductHz = 340.0f; ductQ = 10.0f;
-        humLevel = 0.006f; humWeights = { 1.0f, 0.8f, 0.6f, 0.3f, 0.2f };
-        buzzLevel = 0.0035f;
+    case Place::school:     // tubes humming, a wall clock ticking once a second, a radiator
+        airLevel = 0.005f; airHz = 700.0f;
+        humLevel = 0.0034f; humWeights = { 1.0f, 0.7f, 0.45f, 0.25f, 0.15f, 0.1f };
+        buzzLevel = 0.0026f; gritLevel = 0.0008f;
+        drone(0, 96.0f, 0.0014f, { 1.0f, 0.3f, 0.12f, 0.0f }, 0.07f, 0.1f);           // radiator hum
+        clockLevel = 0.012f;
         bedSend = 0.25f;
-        add(Kind::creak, 7.0f, 2.0f, 1.0f, 0.4f);
-        add(Kind::pipe, 19.0f, 7.0f, 1.0f, 0.5f);
-        add(Kind::ticks, 9.0f, 3.0f, 1.0f, 0.35f);
-        add(Kind::thud, 40.0f, 12.0f, 0.6f, 0.7f);
+        minGapSeconds = 20.0f; meanGapSeconds = 50.0f;
+        add(Kind::radiatorPing, 1.0f, 1.0f);
+        add(Kind::locker, 0.8f, 1.0f);
+        add(Kind::bell, 0.25f, 1.0f);
+        add(Kind::flicker, 0.4f, 1.0f);
         break;
-    case Place::garage:     // concrete: deep ventilation, sub vibration, cars far off
-        mains = 50.0;
-        airLevel = 0.035f; airHz = 400.0f;
-        rumbleLevel = 0.12f; rumbleHz = 110.0f;
-        motorHz = 26.0f; motorLevel = 0.006f; motorWeights = { 1.0f, 0.7f, 0.45f, 0.3f }; motorAmRate = 2.1f; motorAmDepth = 0.5f;
-        subHz = 38.0f; subLevel = 0.008f;
-        humLevel = 0.002f; humWeights = { 1.0f, 0.3f, 0.5f };
+    case Place::garage:     // a ventilation fan's low rumble, lamp buzz, electrical hum
+        airLevel = 0.010f; airHz = 160.0f;
+        humLevel = 0.0016f; humWeights = { 1.0f, 0.3f, 0.5f, 0.1f };
+        buzzLevel = 0.0020f; gritLevel = 0.0010f;
+        drone(0, 43.0f, 0.0060f, { 1.0f, 0.55f, 0.25f, 0.1f }, 0.9f, 0.08f);          // the fan (blade rate wobble)
         bedSend = 0.45f;
-        add(Kind::car, 26.0f, 9.0f, 0.55f, 0.6f);
-        add(Kind::thud, 16.0f, 5.0f, 0.6f, 0.7f);
-        add(Kind::metal, 21.0f, 6.0f, 0.8f, 0.65f);
-        add(Kind::rattle, 35.0f, 12.0f, 0.7f, 0.6f);
+        minGapSeconds = 25.0f; meanGapSeconds = 65.0f;
+        add(Kind::carDoor, 1.0f, 1.0f);
+        add(Kind::barrier, 0.6f, 1.0f);
+        add(Kind::drip, 1.0f, 1.0f);
+        add(Kind::flicker, 0.4f, 1.0f);
         break;
-    case Place::pool:       // tiles and water: drips, lapping, a low pump
-        mains = 50.0;
-        airLevel = 0.06f; airHz = 500.0f;
-        lapLevel = 0.2f;
-        motorHz = 50.0f; motorLevel = 0.003f; motorWeights = { 1.0f, 0.4f, 0.2f }; motorAmRate = 0.15f; motorAmDepth = 0.2f;
+    case Place::pool:       // almost silent: a filtration pump far off, distant ventilation. The water is still.
+        airLevel = 0.005f; airHz = 220.0f;
+        drone(0, 58.0f, 0.0018f, { 1.0f, 0.35f, 0.15f, 0.05f }, 0.05f, 0.05f);        // pump
         bedSend = 0.55f;
-        add(Kind::drip, 1.8f, 0.2f, 1.6f, 0.6f);
-        add(Kind::plop, 9.0f, 2.0f, 1.4f, 0.7f);
-        add(Kind::metal, 18.0f, 6.0f, 0.7f, 0.8f);
+        minGapSeconds = 30.0f; meanGapSeconds = 55.0f;   // a drip every 30-90 s
+        add(Kind::drip, 1.0f, 1.0f);
+        add(Kind::ripple, 0.12f, 1.0f);
         break;
-    case Place::hotel:      // carpeted quiet: low air, the lift in its shaft, voices through the wall
-        mains = 60.0;
-        airLevel = 0.06f; airHz = 1000.0f;
-        humLevel = 0.006f; humWeights = { 0.2f, 1.0f, 0.4f };
+    case Place::hotel:      // very quiet room tone; an ice machine or HVAC far down the hall; carpet
+        airLevel = 0.005f; airHz = 300.0f;
+        humLevel = 0.0008f; humWeights = { 0.3f, 1.0f, 0.4f };
+        drone(0, 118.0f, 0.0011f, { 1.0f, 0.5f, 0.2f, 0.1f }, 0.03f, 0.1f);          // the ice machine
         bedSend = 0.2f;
-        add(Kind::elevator, 16.0f, 6.0f, 1.0f, 0.25f);
-        add(Kind::murmur, 11.0f, 4.0f, 1.0f, 0.2f);
-        add(Kind::thud, 14.0f, 4.0f, 0.7f, 0.3f);
-        add(Kind::creak, 12.0f, 3.0f, 0.45f, 0.3f);
+        minGapSeconds = 25.0f; meanGapSeconds = 65.0f;
+        add(Kind::liftChime, 1.0f, 1.0f);
+        add(Kind::doorClose, 1.0f, 1.0f);
         break;
-    case Place::subway:     // tunnel air, the substation's rectifier hum, rails singing far off
-        mains = 60.0;
-        airLevel = 0.03f; airHz = 650.0f;
-        rumbleLevel = 0.07f; rumbleHz = 85.0f;
-        subHz = 31.0f; subLevel = 0.009f;
-        humLevel = 0.0028f; humWeights = { 1.0f, 0.25f, 0.1f, 0.05f, 0.0f, 0.5f, 0.0f, 0.2f };
+    case Place::subway:     // tunnel airflow, the substation's transformer, rails humming far off
+        airLevel = 0.014f; airHz = 180.0f;
+        humLevel = 0.0034f; humWeights = { 0.4f, 1.0f, 0.3f, 0.45f, 0.1f, 0.2f };      // transformer: 120 Hz family
+        buzzLevel = 0.0014f; gritLevel = 0.0006f;
+        drone(0, 212.0f, 0.0005f, { 1.0f, 0.4f, 0.0f, 0.0f }, 0.04f, 0.3f);          // the rails, singing faintly
         bedSend = 0.5f;
-        add(Kind::rail, 20.0f, 7.0f, 1.0f, 0.8f);
-        add(Kind::gust, 13.0f, 4.0f, 1.0f, 0.6f);
-        add(Kind::metal, 12.0f, 4.0f, 1.0f, 0.55f);
-        add(Kind::ticks, 9.0f, 2.5f, 1.0f, 0.4f);
+        minGapSeconds = 25.0f; meanGapSeconds = 60.0f;
+        add(Kind::trainRumble, 0.6f, 1.0f);
+        add(Kind::railTick, 1.0f, 1.0f);
+        add(Kind::flicker, 0.4f, 1.0f);
         break;
-    case Place::supermarket:   // refrigeration cycling, fluorescent hum, a till that beeps at no one
-        mains = 60.0;
-        airLevel = 0.025f; airHz = 1300.0f;
-        ductLevel = 0.012f; ductHz = 1150.0f; ductQ = 14.0f;   // a cold-case fan's tone
-        humLevel = 0.007f; humWeights = { 1.0f, 0.6f, 0.3f, 0.15f };
-        buzzLevel = 0.003f;
-        motorHz = 49.0f; motorLevel = 0.007f; motorWeights = { 1.0f, 0.8f, 0.5f, 0.3f }; motorAmRate = 0.3f; motorAmDepth = 0.15f;
-        motorCycles = true;
+    case Place::supermarket:   // refrigeration that cycles itself, the tubes, the cold cases
+        airLevel = 0.006f; airHz = 900.0f;
+        humLevel = 0.0030f; humWeights = { 1.0f, 0.6f, 0.3f, 0.15f, 0.1f, 0.05f };
+        buzzLevel = 0.0030f; gritLevel = 0.0010f;
+        if (auto* d = drone(0, 49.0f, 0.0050f, { 1.0f, 0.8f, 0.45f, 0.25f }, 0.3f, 0.06f)) {   // the compressor
+            d->gate = Drone::Gate::cycles; d->onSeconds = 150; d->offSeconds = 90; d->fadeSeconds = 2.5f;
+        }
         bedSend = 0.35f;
-        add(Kind::beep, 14.0f, 4.0f, 1.0f, 0.5f);
-        add(Kind::rattle, 15.0f, 5.0f, 1.0f, 0.4f);
-        add(Kind::ticks, 10.0f, 3.0f, 1.0f, 0.35f);
-        add(Kind::clunk, 45.0f, 15.0f, 0.8f, 0.5f);
+        minGapSeconds = 20.0f; meanGapSeconds = 55.0f;
+        add(Kind::freezerSeal, 1.0f, 1.0f);
+        add(Kind::cart, 0.7f, 1.0f);
+        add(Kind::flicker, 0.5f, 1.0f);
         break;
-    case Place::office:     // HVAC, transformers, coil whine, drives seeking in machines nobody uses
-        mains = 60.0;
-        airLevel = 0.06f; airHz = 850.0f;
-        ductLevel = 0.01f; ductHz = 210.0f; ductQ = 4.0f;
-        humLevel = 0.0045f; humWeights = { 0.0f, 1.0f, 0.0f, 0.5f, 0.0f, 0.3f };
-        buzzLevel = 0.0018f;
-        whineHz = 9400.0f; whineLevel = 0.0009f;
-        motorHz = 63.0f; motorLevel = 0.002f; motorWeights = { 0.5f, 1.0f, 0.3f }; motorAmRate = 0.07f; motorAmDepth = 0.1f;
+    case Place::office:     // the fluorescent hum-buzz is the room: slightly too loud. No white noise.
+        airLevel = 0.004f; airHz = 350.0f;
+        humLevel = 0.0044f; humWeights = { 0.6f, 1.0f, 0.35f, 0.5f, 0.15f, 0.25f };
+        buzzLevel = 0.0078f; gritLevel = 0.0022f;
+        whineHz = 11800.0f; whineLevel = 0.0003f;
         bedSend = 0.4f;
-        add(Kind::seek, 6.0f, 1.5f, 1.0f, 0.4f);
-        add(Kind::chirp, 9.0f, 3.0f, 1.0f, 0.5f);
-        add(Kind::ticks, 17.0f, 5.0f, 0.7f, 0.5f);
-        add(Kind::thud, 30.0f, 10.0f, 0.5f, 0.6f);
+        minGapSeconds = 35.0f; meanGapSeconds = 80.0f;   // almost nothing happens
+        add(Kind::flicker, 1.0f, 1.0f);
+        add(Kind::ballastTick, 0.3f, 0.8f);
         break;
-    case Place::impossible:   // a room tone that will not settle, things that arrive backwards
-        mains = 50.0;
-        airLevel = 0.08f; airHz = 380.0f;
-        clusterLevel = 0.011f;
+    case Place::impossible:   // too quiet; a hum whose pitch drifts as no hum can; total silences
+        airLevel = 0.0025f; airHz = 300.0f;
+        humLevel = 0.0018f; humWeights = { 1.0f, 0.3f, 0.5f, 0.0f, 0.2f };
+        humDrifts = dropouts = true;
         bedSend = 0.5f;
-        add(Kind::swell, 8.0f, 3.0f, 1.0f, 0.7f);
-        add(Kind::phantom, 11.0f, 4.0f, 1.0f, 0.8f);
-        add(Kind::ticks, 14.0f, 3.0f, 0.6f, 0.7f);
-        add(Kind::thud, 22.0f, 7.0f, 0.6f, 0.8f);
+        minGapSeconds = 30.0f; meanGapSeconds = 75.0f;
+        add(Kind::ghostNote, 1.0f, 1.0f);
+        add(Kind::wrongWall, 0.7f, 1.0f);
         break;
     }
-    if (ch != nullptr) {   // the Character: which events, how often, and the bed
+    characterRate = 1;
+    if (ch != nullptr) {   // the Character: which events and how often (never below the minimum gap), and the bed
         int kept = 0;
         for (int i = 0; i < scheduleCount; ++i) {
             auto sc = schedules[std::size_t(i)];
-            const float w = ch->eventWeight[std::size_t(std::min(i, 4))] * ch->eventRate;
-            if (w <= 0.0f) continue;
-            sc.meanSeconds /= w;
-            sc.minSeconds /= std::max(1.0f, std::sqrt(w));
+            sc.weight *= ch->eventWeight[std::size_t(std::min(i, 4))];
+            if (sc.kind == Kind::flicker) sc.weight *= 0.5f + 3.0f * ch->flicker;   // a flickering Character's tube fails more
+            if (sc.weight <= 0.0f) continue;
             schedules[std::size_t(kept++)] = sc;
         }
         scheduleCount = kept;
-        if (ch->extraKind >= 0) add(Kind(ch->extraKind), ch->extraMean / std::max(0.1f, ch->eventRate), ch->extraMean * 0.25f, 0.9f, 0.6f);
+        if (ch->extraKind >= 0) add(Kind(ch->extraKind), 0.6f, 0.9f);
+        characterRate = std::clamp(std::sqrt(ch->eventRate), 0.6f, 1.6f);
         airLevel *= ch->bed;
-        ductLevel *= ch->bed;
-        lapLevel *= ch->bed;
-        rumbleLevel *= ch->bed;
-        motorLevel *= ch->bed;
-        clusterLevel *= ch->bed;
-        airHz = std::clamp(airHz * ch->bedTone, 80.0f, 6000.0f);
+        for (auto& d : drones) d.level *= ch->bed;
+        trickleLevel *= ch->bed;
+        clockLevel *= ch->bed;
+        airHz = std::clamp(airHz * ch->bedTone, 80.0f, 4000.0f);
         humLevel *= ch->hum;
         buzzLevel *= ch->hum;
+        gritLevel *= ch->hum;
         whineLevel *= ch->hum;
     }
-    mainsStep = mains / sr;
-    airL.set(airHz, 0.6f, sr);
-    airR.set(airHz * 1.03f, 0.6f, sr);
-    ductL.set(ductHz, ductQ, sr);
-    ductR.set(ductHz * 2.03f, ductQ, sr);   // the second duct mode on the other side
-    lapL.set(520.0f, 1.2f, sr);
-    lapR.set(610.0f, 1.2f, sr);
-    rumbleL.setHz(rumbleHz, sr);
-    rumbleR.setHz(rumbleHz * 1.1f, sr);
-    breathCoef = float(1.0 - std::exp(-1.0 / (1.8 * sr)));
-    buzzCoef = float(1.0 - std::exp(-1.0 / (0.004 * sr)));
-    clackDecay = t60(0.04, sr);
-    clackTone.set(1800.0f, 3.0f, sr);
-    motorGateCoef = float(1.0 - std::exp(-1.0 / (0.6 * sr)));
-    {   // the impossible room's cluster: no two tones in a simple ratio
-        constexpr float ratios[] { 1.0f, 1.414f, 1.887f, 2.519f, 3.174f, 4.237f };
-        for (int k = 0; k < clusterTones; ++k) clusterHz[std::size_t(k)] = 97.0f * ratios[k];
-    }
+    weightSum = 0;
+    for (int i = 0; i < scheduleCount; ++i) weightSum += schedules[std::size_t(i)].weight;
+    mainsStep = 60.0 / sr;   // North American mains
+    constexpr float beats[humPartials] { 0.031f, 0.047f, 0.023f, 0.071f, 0.053f, 0.089f };   // slow beating per harmonic, Hz
+    for (int k = 0; k < humPartials; ++k) beatHz[std::size_t(k)] = beats[k];
+    airL1.setHz(airHz, sr);
+    airL2.setHz(airHz, sr);
+    airR1.setHz(airHz * 1.07f, sr);
+    airR2.setHz(airHz * 1.07f, sr);
+    gritL.set(4200.0f, 1.4f, sr);
+    gritR.set(4700.0f, 1.4f, sr);
+    clockTone.set(2300.0f, 6.0f, sr);
+    trickleA.set(1700.0f, 9.0f, sr);
+    trickleB.set(2900.0f, 9.0f, sr);
+    lampCoef = float(1.0 - std::exp(-1.0 / (0.003 * sr)));
+    silenceFall = float(1.0 - std::exp(-1.0 / (0.01 * sr)));
+    silenceRise = float(1.0 - std::exp(-1.0 / (0.15 * sr)));
+    for (auto& d : drones) d.gCoef = float(1.0 - std::exp(-1.0 / (std::max(0.05f, d.fadeSeconds) * 0.4f * float(sr))));
     reset();
 }
 
@@ -205,50 +208,65 @@ void Ambience::reset() {
     noiseR.state = rng.state ^ 0x7654321u;
     pinkL = {};
     pinkR = {};
-    for (auto* f : { &airL, &airR, &ductL, &ductR, &lapL, &lapR, &clackTone }) f->clear();
-    rumbleL.z = rumbleR.z = brownL = brownR = 0;
-    breath = breathTarget = 1;
-    breathCountdown = 0;
-    lap = lapTarget = 0.5f;
-    lapCountdown = 0;
+    airL1.z = airL2.z = airR1.z = airR2.z = 0;
+    for (auto* f : { &gritL, &gritR, &clockTone, &trickleA, &trickleB }) f->clear();
     mainsPhase = 0;
-    buzz = buzzTarget = 1;
-    buzzCountdown = int(sr * 3);
-    motorPhase = motorAmPhase = subPhase = 0;
-    subWander.start(rng);
-    clackCountdown = int(sr * 0.3);
-    clackEnv = 0;
-    // (Only the places that use them draw from the generator, so the others' event
-    // sequences stay exactly as they were.)
-    motorGate = motorGateTarget = 1;
-    cycleCountdown = motorCycles ? int(sr * (8.0 + 10.0 * random())) : 0;
-    whinePhase = 0;
-    for (int k = 0; k < clusterTones; ++k) {
-        clusterWeight[std::size_t(k)] = 0.5f;
-        if (clusterLevel <= 0.0f) continue;
-        clusterPhase[std::size_t(k)] = random();
-        clusterWander[std::size_t(k)].start(rng);
+    for (int k = 0; k < humPartials; ++k) beatPhase[std::size_t(k)] = random();
+    buzzWander.start(rng);
+    humWander.start(rng);
+    buzzFlutter = humDrift = restrike = 0;
+    lampNow = lampTarget = 1;
+    stutterFlicks = stutterCountdown = 0;
+    flickerCount = 0;
+    for (auto& d : drones) {
+        d.phase = random();
+        d.amPhase = random();
+        d.g = d.gTarget = 1;
+        d.countdown = 0;
+        if (d.gate != Drone::Gate::always)   // starts somewhere in its cycle
+            d.countdown = int(sr * double(d.onSeconds) * (0.4 + 0.6 * double(random())));
     }
+    clockEnv = trickleEnv = whinePhase = 0;
+    clockCountdown = int(sr * 0.5);
+    clockBeat = 0;
+    silenceGain = silenceTarget = 1;
+    silenceCountdown = int(sr * (25.0 + 30.0 * double(random())));   // never in the first 25 s
+    controlClock = 0;
     for (auto& e : events) e.active = false;
-    // First events come at a random point of their usual interval, not all at once.
-    for (int i = 0; i < scheduleCount; ++i) {
-        auto& s = schedules[std::size_t(i)];
-        s.countdown = float(sr) * (s.minSeconds + random() * s.meanSeconds);
-    }
+    sinceLast = 1e9;
+    // The first event comes somewhere in a normal gap (at least ten seconds in), not at once.
+    countdown = sr * (0.5 * double(minGapSeconds) + double(random()) * double(meanGapSeconds));
+}
+
+void Ambience::scheduleNext() {
+    // A minimum gap, then an exponential wait (a Poisson process): no rhythm, never busy.
+    const double wait = double(minGapSeconds) - double(meanGapSeconds - minGapSeconds) / double(characterRate)
+                                                  * std::log(std::max(1.0e-4, double(random())));
+    countdown = sr * std::min(wait, 6.0 * double(meanGapSeconds));
+    sinceLast = 0;
 }
 
 void Ambience::disturb() {
-    if (scheduleCount == 0) return;
-    Schedule s = schedules[std::size_t(int(random() * float(scheduleCount)) % scheduleCount)];
-    s.level *= 1.4f;
-    spawn(s);
+    // Evolution's disturbance brings the next event forward, never closer than 3/4 of the gap.
+    if (scheduleCount > 0 && sinceLast > 0.75 * double(minGapSeconds) * sr) countdown = 0;
 }
 
-Ambience::Event* Ambience::spawn(const Schedule& s, int delay) {
-    Event* slot = nullptr;
+void Ambience::startStutter(float depth) {
+    stutterFlicks = 2 + int(random() * 5.0f);
+    stutterDepth = std::clamp(depth, 0.3f, 1.0f);
+    stutterCountdown = 0;
+    ++flickerCount;
+}
+
+Ambience::Event* Ambience::spawn(Kind kind, float level, int delay, float pitch) {
+    if (kind == Kind::flicker) {   // the tube fails for a moment: no sound of its own, the buzz stutters
+        startStutter(0.6f + 0.4f * random() * level);
+        return nullptr;
+    }
     int busy = 0;
     for (auto& e : events) busy += e.active ? 1 : 0;
     if (busy >= eventCap) return nullptr;
+    Event* slot = nullptr;
     for (auto& e : events)
         if (!e.active) { slot = &e; break; }
     if (slot == nullptr) return nullptr;
@@ -256,228 +274,267 @@ Ambience::Event* Ambience::spawn(const Schedule& s, int delay) {
     ++spawnCount;
     e = Event {};
     e.active = true;
-    e.kind = s.kind;
-    e.age = 0;
-    e.send = s.send;
-    e.pan = bipolar() * 0.8f;
+    e.kind = kind;
+    e.pan = bipolar() * 0.7f;
     e.noise.state = rng.state ^ 0xDEADBEEFu;
     e.noise.uniform();
     const float fs = float(sr);
     const float limit = 0.45f * fs;
     const auto pg = panGains(e.pan);
-    switch (s.kind) {
-    case Kind::beep: {   // a distant monitor: one to three soft tones (a till scanner: one short high one)
-        constexpr float tones[] { 698.5f, 880.0f, 987.8f, 1046.5f, 1318.5f };
-        const bool till = place == Place::supermarket;
-        e.f = till ? 2850.0f + 150.0f * random() : tones[int(random() * 5.0f) % 5] * (1.0f + 0.004f * bipolar());
-        e.rate = fs * (till ? 0.07f + 0.03f * random() : 0.1f + 0.15f * random());          // tone length
-        e.gap = int(fs * (0.3f + 0.6f * random()));
-        e.repeats = till ? (random() < 0.2f ? 2 : 1) : 1 + int(random() * 3.0f);
+    // Most events are far away: little direct sound, mostly the room.
+    e.dry = 0.35f;
+    e.send = 0.8f;
+    const auto mode = [&](int k, float hz, float amp, float seconds) {
+        if (hz < limit) e.modes.set(k, amp, 0.0f, twoPi * hz / fs, t60(seconds, sr), 1.0f, pg.l, pg.r);
+    };
+    const auto click = [&](float amp, float seconds, float lowPassHz) {   // the contact noise of a strike
+        e.env = amp;
+        e.decay = t60(seconds, sr);
+        e.lp.setHz(lowPassHz, sr);
+    };
+    switch (kind) {
+    case Kind::monitor: {   // a patient monitor two corridors away: three soft beeps
+        const float f = 976.0f * (1.0f + 0.003f * bipolar());
+        e.amp = 0.010f * level;
+        e.f = f;
+        e.rate = fs * 0.16f;                // tone length
+        e.gap = int(fs * 0.28f);            // beep to beep
+        e.repeats = 3;
         e.length = e.repeats * (int(e.rate) + e.gap);
-        e.amp = 0.05f * s.level * (0.5f + random());
-        e.lp.setHz(till ? 5000.0f : 2600.0f, sr);
+        e.lp.setHz(2400.0f, sr);
+        e.dry = 0.25f; e.send = 0.85f;
         break;
     }
-    case Kind::rattle: {   // a loose vent cover in a gust of air
-        e.length = int(fs * (0.4f + 1.6f * random()));
-        e.rate = 12.0f + 25.0f * random();
-        e.f = place == Place::garage ? 250.0f + 200.0f * random() : place == Place::supermarket ? 1400.0f + 1500.0f * random() : 650.0f + 1100.0f * random();
-        e.bp1.set(e.f, 6.0f, sr);
-        e.bp2.set(e.f * 2.3f, 5.0f, sr);
-        e.amp = 0.14f * s.level * (0.5f + random());
-        break;
-    }
-    case Kind::metal: {   // something metal struck: free-bar modes 1 : 2.76 : 5.40 : 8.93
-        constexpr float ratios[] { 1.0f, 2.756f, 5.404f, 8.933f };
-        const float f0 = place == Place::garage ? 90.0f + 160.0f * random() : place == Place::pool ? 420.0f + 500.0f * random()
-                       : place == Place::subway ? 260.0f + 300.0f * random() : 180.0f + 520.0f * random();
-        const float ring = 0.4f + 2.0f * random();
-        e.amp = 0.05f * s.level * (0.4f + random());
-        for (int k = 0; k < 4; ++k) {
-            const float f = f0 * ratios[k] * (1.0f + 0.01f * bipolar());
-            const float a = f < limit ? e.amp * std::pow(0.55f, float(k)) : 0.0f;
-            e.modes.set(k, a, 0.0f, twoPi * f / fs, t60(ring / (1.0f + 0.6f * float(k)), sr), 1.0f, pg.l, pg.r);
-        }
+    case Kind::ballastTick: {   // a ballast or relay ticking once, above the ceiling
+        e.amp = 0.012f * level;
+        mode(0, 3100.0f + 900.0f * random(), e.amp, 0.04f);
+        mode(1, 5200.0f + 800.0f * random(), e.amp * 0.5f, 0.03f);
         e.modes.retune(1.0f, false);
-        e.env = e.amp * 2.0f;   // the strike's click
-        e.decay = t60(0.008, sr);
-        e.length = int(fs * (ring + 0.2f));
+        click(e.amp * 1.5f, 0.004f, 6000.0f);
+        e.length = int(fs * 0.12f);
+        e.dry = 0.5f; e.send = 0.5f;
         break;
     }
-    case Kind::thud: {   // a door, a joint in the floor: low, hollow
-        const float f0 = 55.0f + 60.0f * random();
-        constexpr float ratios[] { 1.0f, 1.59f, 2.14f, 2.65f };
-        e.amp = 0.15f * s.level * (0.5f + random());
-        for (int k = 0; k < 4; ++k) e.modes.set(k, e.amp * std::pow(0.6f, float(k)), 0.0f, twoPi * f0 * ratios[k] / fs, t60(0.35f - 0.05f * float(k), sr), 1.0f, pg.l, pg.r);
+    case Kind::doorClick: {   // a door's latch somewhere far down the corridor: two small clicks
+        e.amp = 0.014f * level;
+        mode(0, 820.0f + 300.0f * random(), e.amp, 0.06f);
+        mode(1, 2100.0f + 500.0f * random(), e.amp * 0.6f, 0.04f);
+        mode(2, 140.0f + 40.0f * random(), e.amp * 0.8f, 0.12f);
         e.modes.retune(1.0f, false);
-        e.env = e.amp * 1.5f;
-        e.decay = t60(0.03, sr);
-        e.lp.setHz(place == Place::hotel ? 200.0f : 500.0f, sr);   // in a hotel: a door in another room
-        e.length = int(fs * 0.6f);
-        // A car crossing an expansion joint: two thuds, front and back wheels.
-        if (delay == 0 && place == Place::garage && random() < 0.6f) {
-            const float pan = e.pan;
-            if (auto* back = spawn(s, int(fs * (0.12f + 0.15f * random())))) back->pan = pan;
-        }
+        click(e.amp, 0.005f, 3000.0f);
+        e.length = int(fs * 0.3f);
+        e.dry = 0.2f; e.send = 0.9f;
         break;
     }
-    case Kind::drip: {   // a drop into water: a rising sine "plink" (bubble resonance)
-        e.f = 700.0f + 1600.0f * random();
-        e.rate = 8.0f + 30.0f * random();   // pitch rise per second (relative)
-        e.decay = t60(0.04 + 0.05 * random(), sr);
-        e.amp = 0.08f * s.level * (0.3f + random());
-        e.env = e.amp;
-        e.length = int(fs * 0.25f);
-        e.pan = bipolar() * 0.9f;
-        // A leaking spot drips for a while at its own pace, then stops.
-        if (random() < 0.25f) { e.repeats = 2 + int(random() * 6.0f); e.gap = int(fs * (0.6f + 0.9f * random())); }
-        break;
-    }
-    case Kind::plop: {   // a bigger drop, lower and slower
-        e.f = 180.0f + 260.0f * random();
-        e.rate = 3.0f + 6.0f * random();
-        e.decay = t60(0.12 + 0.1 * random(), sr);
-        e.amp = 0.1f * s.level * (0.4f + random());
-        e.env = e.amp;
-        e.length = int(fs * 0.5f);
-        break;
-    }
-    case Kind::creak: {   // stick-slip friction through wood/metal resonances
-        e.length = int(fs * (0.4f + 1.5f * random()));
-        e.rate = 15.0f + 40.0f * random();
-        e.rate2 = e.rate * (0.5f + 1.5f * random());
-        e.f = 220.0f + 300.0f * random();
-        e.bp1.set(e.f, 9.0f, sr);
-        e.bp2.set(e.f * 2.6f, 7.0f, sr);
-        e.amp = 0.6f * s.level * (0.4f + random());
-        break;
-    }
-    case Kind::pipe: {   // water moving in old pipes, with a knock as it starts
-        e.length = int(fs * (2.0f + 4.0f * random()));
-        e.f = 260.0f + 340.0f * random();
-        e.bp1.set(e.f, 1.6f, sr);
-        e.rate = 4.0f + 8.0f * random();
-        e.amp = 0.2f * s.level * (0.5f + random());
-        const float knock = 120.0f + 80.0f * random();
-        e.modes.set(0, 0.03f * s.level, 0.0f, twoPi * knock / fs, t60(0.25, sr), 1.0f, pg.l, pg.r);
-        e.modes.set(1, 0.015f * s.level, 0.0f, twoPi * knock * 2.3f / fs, t60(0.15, sr), 1.0f, pg.l, pg.r);
+    case Kind::paChime: {   // the PA in another wing: a two- or three-note chime, band-limited
+        constexpr float notes[] { 783.99f, 659.26f, 523.25f };
+        const int count = random() < 0.5f ? 2 : 3;
+        e.amp = 0.012f * level;
+        const float f = pitch > 0.0f ? pitch : notes[0];
+        mode(0, f, e.amp, 1.6f);
+        mode(1, f * 2.0f, e.amp * 0.25f, 0.9f);
+        mode(2, f * 3.01f, e.amp * 0.08f, 0.5f);
         e.modes.retune(1.0f, false);
+        click(0.0f, 0.01f, 4000.0f);
+        e.lp.setHz(3800.0f, sr);
+        e.lp2.setHz(320.0f, sr);   // (high-pass by subtraction: the PA's small horns)
+        e.length = int(fs * 2.2f);
+        e.dry = 0.15f; e.send = 0.95f;
+        e.pan = -0.6f;
+        if (pitch <= 0.0f)
+            for (int k = 1; k < count; ++k)
+                if (auto* next = spawn(Kind::paChime, level, delay + int(fs * 0.55f * float(k)), notes[k])) next->pan = e.pan;
         break;
     }
-    case Kind::groan: {   // the building's steel moving: slow, low, resonant
-        e.length = int(fs * (2.0f + 3.5f * random()));
-        e.f = 85.0f + 140.0f * random();
-        e.rate = 0.15f + 0.3f * random();
-        e.bp1.set(e.f, 25.0f, sr);
-        e.bp2.set(e.f * 2.31f, 25.0f, sr);
-        e.lp.setHz(1200.0f, sr);
-        e.amp = 2.5f * s.level * (0.5f + random());
-        break;
-    }
-    case Kind::car: {   // a car somewhere on another level: engine and tyres, passing
-        e.length = int(fs * (5.0f + 5.0f * random()));
-        e.f = 32.0f + 22.0f * random();
-        e.pan = random() < 0.5f ? -0.9f : 0.9f;
-        e.lp.setHz(280.0f, sr);
-        e.amp = 0.08f * s.level * (0.5f + random());
-        break;
-    }
-    case Kind::ticks: {   // a radiator or ceiling tile ticking as it cools (subway: relays)
-        e.repeats = place == Place::subway ? 1 + int(random() * 3.0f) : 3 + int(random() * 8.0f);
-        e.f = place == Place::subway ? 900.0f + 600.0f * random() : 1800.0f + 2400.0f * random();
-        e.bp1.set(e.f, 4.0f, sr);
-        e.amp = 0.5f * s.level * (0.4f + random());
-        e.length = int(fs * 4.0f);
-        e.gap = 0;
-        e.decay = t60(0.01, sr);
-        break;
-    }
-    case Kind::elevator: {   // the lift: a relay clunk, the motor spinning up, running, slowing, a clunk
-        e.length = int(fs * (6.0f + 5.0f * random()));
-        e.f = 95.0f + 40.0f * random();
-        e.lp.setHz(650.0f, sr);
-        e.bp1.set(e.f * 7.0f, 6.0f, sr);   // the cable sheave's whine
-        e.amp = 0.03f * s.level * (0.6f + 0.6f * random());
-        e.pan = bipolar() * 0.5f;
-        Schedule clunk { Kind::clunk, 0, 0, s.level * 0.6f, s.send };
-        spawn(clunk, 0);
-        spawn(clunk, e.length - int(fs * 0.3f));
-        break;
-    }
-    case Kind::murmur: {   // voices or a television in another room: syllables without words
-        e.length = int(fs * (2.0f + 4.0f * random()));
-        e.f = 0.0f;
-        e.rate = 3.0f + 2.5f * random();   // syllables per second
-        e.bp1.set(350.0f, 3.0f, sr);
-        e.bp2.set(900.0f, 3.0f, sr);
-        e.lp.setHz(480.0f, sr);
-        e.amp = 0.35f * s.level * (0.5f + random());
-        break;
-    }
-    case Kind::rail: {   // rails singing as a train moves somewhere in the tunnels; a far rumble swells
-        e.length = int(fs * (6.0f + 6.0f * random()));
-        e.f = 900.0f + 700.0f * random();
-        e.rate = 0.3f + 0.5f * random();
-        e.pan = random() < 0.5f ? -0.9f : 0.9f;
-        e.lp.setHz(140.0f, sr);
-        e.amp = 0.012f * s.level * (0.5f + random());
-        break;
-    }
-    case Kind::gust: {   // air pushed through the tunnel: a long swell of wind
-        e.length = int(fs * (4.0f + 5.0f * random()));
-        e.f = 220.0f + 300.0f * random();
-        e.bp1.set(e.f, 0.7f, sr);
-        e.amp = 0.12f * s.level * (0.5f + random());
-        break;
-    }
-    case Kind::clunk: {   // a relay or compressor starting: a short low knock with a rattle
-        const float f0 = 110.0f + 90.0f * random();
-        constexpr float ratios[] { 1.0f, 1.71f, 2.43f, 3.9f };
-        e.amp = 0.09f * s.level * (0.6f + 0.6f * random());
-        for (int k = 0; k < 4; ++k) e.modes.set(k, e.amp * std::pow(0.55f, float(k)), 0.0f, twoPi * f0 * ratios[k] / fs, t60(0.18f - 0.03f * float(k), sr), 1.0f, pg.l, pg.r);
-        e.modes.retune(1.0f, false);
-        e.env = e.amp;
-        e.decay = t60(0.02, sr);
-        e.lp.setHz(place == Place::hotel ? 300.0f : 1500.0f, sr);
-        e.length = int(fs * 0.4f);
-        break;
-    }
-    case Kind::seek: {   // a hard drive seeking: a burst of tiny clicks
-        e.repeats = 3 + int(random() * 10.0f);
-        e.f = 2800.0f + 1800.0f * random();
-        e.bp1.set(e.f, 3.0f, sr);
-        e.amp = 0.35f * s.level * (0.4f + random());
-        e.length = int(fs * 2.0f);
-        e.gap = 0;
-        e.decay = t60(0.004, sr);
-        e.pan = bipolar() * 0.6f;
-        break;
-    }
-    case Kind::chirp: {   // a device somewhere answering nothing: short square blips
-        e.f = 1100.0f + 2900.0f * random();
-        e.rate = fs * (0.015f + 0.035f * random());
-        e.gap = int(fs * (0.04f + 0.12f * random()));
-        e.repeats = 1 + int(random() * 4.0f);
-        e.length = e.repeats * (int(e.rate) + e.gap);
-        e.amp = 0.012f * s.level * (0.5f + random());
-        e.lp.setHz(3500.0f, sr);
-        break;
-    }
-    case Kind::swell: {   // something arriving backwards: a band of noise growing, then gone
-        e.length = int(fs * (1.5f + 3.0f * random()));
-        e.f = 200.0f + 1800.0f * random();
+    case Kind::shutter: {   // a shop's shutter rattling far away: a short run of soft metal ticks
+        e.amp = 0.010f * level;
+        e.repeats = 12 + int(random() * 18.0f);
+        e.f = 1600.0f + 800.0f * random();
         e.bp1.set(e.f, 5.0f, sr);
-        e.amp = 0.15f * s.level * (0.5f + random());
+        e.rate = 0.035f + 0.02f * random();   // seconds between ticks
+        e.length = int(fs * (float(e.repeats) * e.rate + 0.3f));
+        e.decay = t60(0.015, sr);
+        e.dry = 0.15f; e.send = 0.95f;
         break;
     }
-    case Kind::phantom: {   // two tones nobody plays, beating, out of nowhere
-        constexpr float tones[] { 311.1f, 370.0f, 466.2f, 523.3f, 659.3f, 740.0f };
-        e.f = tones[int(random() * 6.0f) % 6] * (1.0f + 0.01f * bipolar());
-        e.rate = 0.6f + 2.0f * random();   // beating, Hz
-        e.length = int(fs * (3.0f + 4.0f * random()));
-        e.amp = 0.006f * s.level * (0.5f + random());
+    case Kind::radiatorPing: {   // a radiator pinging as it warms or cools
+        e.amp = 0.010f * level;
+        const float f = 1300.0f + 1100.0f * random();
+        mode(0, f, e.amp, 0.5f);
+        mode(1, f * 2.76f, e.amp * 0.3f, 0.25f);
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.003f, 5000.0f);
+        e.length = int(fs * 0.7f);
+        e.dry = 0.45f; e.send = 0.6f;
         break;
     }
+    case Kind::locker: {   // a locker settling: a low sheet-metal thunk
+        e.amp = 0.016f * level;
+        const float f = 160.0f + 60.0f * random();
+        constexpr float ratios[] { 1.0f, 1.83f, 2.71f, 4.1f };
+        for (int k = 0; k < 4; ++k) mode(k, f * ratios[k], e.amp * std::pow(0.6f, float(k)), 0.35f - 0.06f * float(k));
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.01f, 1500.0f);
+        e.length = int(fs * 0.5f);
+        e.dry = 0.3f; e.send = 0.8f;
+        break;
+    }
+    case Kind::bell: {   // the school bell, far away and muffled, a single stroke
+        e.amp = 0.012f * level;
+        const float f = 620.0f + 40.0f * random();
+        constexpr float ratios[] { 1.0f, 2.0f, 2.42f, 3.0f };
+        for (int k = 0; k < 4; ++k) mode(k, f * ratios[k], e.amp * std::pow(0.45f, float(k)), 2.5f - 0.5f * float(k));
+        e.modes.retune(1.0f, false);
+        click(0.0f, 0.01f, 900.0f);
+        e.lp.setHz(900.0f, sr);
+        e.lp2.setHz(900.0f, sr);
+        e.length = int(fs * 3.0f);
+        e.dry = 0.12f; e.send = 0.95f;
+        break;
+    }
+    case Kind::carDoor: {   // a car door on another level: a dull distant thunk
+        e.amp = 0.020f * level;
+        const float f = 62.0f + 20.0f * random();
+        constexpr float ratios[] { 1.0f, 1.59f, 2.14f, 2.9f };
+        for (int k = 0; k < 4; ++k) mode(k, f * ratios[k], e.amp * std::pow(0.6f, float(k)), 0.3f - 0.05f * float(k));
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.02f, 300.0f);
+        e.length = int(fs * 0.5f);
+        e.dry = 0.12f; e.send = 0.95f;
+        break;
+    }
+    case Kind::barrier: {   // the exit barrier coming down, very far away: one clank
+        e.amp = 0.012f * level;
+        const float f = 190.0f + 80.0f * random();
+        constexpr float ratios[] { 1.0f, 2.756f, 5.404f };
+        for (int k = 0; k < 3; ++k) mode(k, f * ratios[k], e.amp * std::pow(0.5f, float(k)), 0.9f / (1.0f + float(k)));
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.006f, 1200.0f);
+        e.length = int(fs * 1.0f);
+        e.dry = 0.12f; e.send = 0.95f;
+        break;
+    }
+    case Kind::drip: {
+        if (place == Place::pool) {   // a single drop into still water: a soft plink, then the tiles answer
+            e.f = 900.0f + 900.0f * random();
+            e.rate = 6.0f + 10.0f * random();   // the bubble's pitch rises as it shrinks
+            e.decay = t60(0.06 + 0.04 * random(), sr);
+            e.amp = 0.020f * level * (0.7f + 0.3f * random());
+            e.env = e.amp;
+            e.length = int(fs * 0.25f);
+            e.dry = 0.3f; e.send = 1.0f;
+        } else {                      // on concrete: a small wet tick
+            e.amp = 0.010f * level;
+            mode(0, 2400.0f + 900.0f * random(), e.amp, 0.05f);
+            e.modes.retune(1.0f, false);
+            click(e.amp * 0.8f, 0.003f, 5000.0f);
+            e.length = int(fs * 0.12f);
+            e.dry = 0.3f; e.send = 0.8f;
+        }
+        break;
+    }
+    case Kind::ripple: {   // very rarely, the water laps once against the edge: soft and low
+        e.amp = 0.004f * level;
+        e.bp1.set(320.0f + 80.0f * random(), 2.5f, sr);
+        e.length = int(fs * (0.5f + 0.3f * random()));
+        e.dry = 0.4f; e.send = 0.6f;
+        break;
+    }
+    case Kind::liftChime: {   // the lift arriving two floors down: one soft "ding"
+        e.amp = 0.010f * level;
+        const float f = pitch > 0.0f ? pitch : 1046.5f;
+        mode(0, f, e.amp, 1.4f);
+        mode(1, f * 2.0f, e.amp * 0.2f, 0.7f);
+        mode(2, f * 2.76f, e.amp * 0.06f, 0.4f);
+        e.modes.retune(1.0f, false);
+        click(0.0f, 0.01f, 1300.0f);
+        e.lp.setHz(1300.0f, sr);   // through the floors and the carpet
+        e.lp2.setHz(1300.0f, sr);
+        e.length = int(fs * 2.0f);
+        e.dry = 0.3f; e.send = 0.7f;
+        if (pitch <= 0.0f && random() < 0.4f)   // sometimes the lower note too (going down)
+            if (auto* next = spawn(Kind::liftChime, level, delay + int(fs * 0.5f), 830.6f)) next->pan = e.pan;
+        break;
+    }
+    case Kind::doorClose: {   // a door closing far down the hall
+        e.amp = 0.020f * level;
+        const float f = 70.0f + 25.0f * random();
+        constexpr float ratios[] { 1.0f, 1.62f, 2.3f, 3.1f };
+        for (int k = 0; k < 4; ++k) mode(k, f * ratios[k], e.amp * std::pow(0.55f, float(k)), 0.25f - 0.04f * float(k));
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.015f, 260.0f);
+        e.length = int(fs * 0.45f);
+        e.dry = 0.4f; e.send = 0.5f;
+        break;
+    }
+    case Kind::trainRumble: {   // a train somewhere in the tunnels that never arrives: low and slow, then gone
+        e.amp = 0.0045f * level;
+        e.f = 34.0f + 10.0f * random();
+        e.length = int(fs * (9.0f + 6.0f * random()));
+        e.lp.setHz(110.0f, sr);
+        e.pan = random() < 0.5f ? -0.8f : 0.8f;
+        e.dry = 0.5f; e.send = 0.6f;
+        break;
+    }
+    case Kind::railTick: {   // a rail ticking as it cools
+        e.amp = 0.009f * level;
+        const float f = 1700.0f + 900.0f * random();
+        mode(0, f, e.amp, 0.25f);
+        mode(1, f * 2.32f, e.amp * 0.4f, 0.15f);
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.003f, 6000.0f);
+        e.length = int(fs * 0.4f);
+        e.dry = 0.25f; e.send = 0.85f;
+        break;
+    }
+    case Kind::freezerSeal: {   // a freezer door's seal letting go: a soft, padded thunk
+        e.amp = 0.014f * level;
+        const float f = 95.0f + 30.0f * random();
+        constexpr float ratios[] { 1.0f, 1.7f, 2.6f };
+        for (int k = 0; k < 3; ++k) mode(k, f * ratios[k], e.amp * std::pow(0.5f, float(k)), 0.16f);
+        e.modes.retune(1.0f, false);
+        click(e.amp * 0.6f, 0.02f, 500.0f);
+        e.length = int(fs * 0.35f);
+        e.dry = 0.35f; e.send = 0.7f;
+        break;
+    }
+    case Kind::cart: {   // a trolley settling somewhere: two or three small clinks
+        e.amp = 0.008f * level;
+        e.repeats = 2 + int(random() * 2.0f);
+        e.f = 2200.0f + 1200.0f * random();
+        e.bp1.set(e.f, 8.0f, sr);
+        e.rate = 0.08f + 0.08f * random();
+        e.length = int(fs * (float(e.repeats) * e.rate + 0.3f));
+        e.decay = t60(0.03, sr);
+        e.dry = 0.25f; e.send = 0.8f;
+        break;
+    }
+    case Kind::ghostNote: {   // a reflection of a note nobody played: only in the room
+        constexpr float notes[] { 392.0f, 440.0f, 523.25f, 587.33f, 659.26f, 783.99f };
+        const float f = notes[int(random() * 6.0f) % 6] * (1.0f + 0.006f * bipolar());
+        e.amp = 0.010f * level;
+        mode(0, f, e.amp, 2.4f);
+        mode(1, f * 2.001f, e.amp * 0.3f, 1.4f);
+        mode(2, f * 3.0f, e.amp * 0.1f, 0.8f);
+        e.modes.retune(1.0f, false);
+        click(0.0f, 0.01f, 3000.0f);
+        e.length = int(fs * 3.0f);
+        e.dry = 0.0f; e.send = 1.0f;
+        break;
+    }
+    case Kind::wrongWall: {   // a knock from a direction where there is no wall: one side only, no room
+        e.amp = 0.016f * level;
+        const float f = 180.0f + 80.0f * random();
+        mode(0, f, e.amp, 0.15f);
+        mode(1, f * 2.3f, e.amp * 0.5f, 0.1f);
+        e.modes.retune(1.0f, false);
+        click(e.amp, 0.008f, 1400.0f);
+        e.length = int(fs * 0.3f);
+        e.pan = random() < 0.5f ? -1.0f : 1.0f;
+        e.dry = 1.0f; e.send = 0.0f;
+        break;
+    }
+    case Kind::flicker: break;
     }
     e.age = -delay;
     return &e;
@@ -492,387 +549,248 @@ Stereo Ambience::renderEvent(Event& e, float& sendOut) {
     Stereo st {};
     bool done = e.age >= e.length;
     switch (e.kind) {
-    case Kind::beep: {
+    case Kind::monitor: {
         const int cycle = int(e.rate) + e.gap;
         const int at = e.age % std::max(1, cycle);
         if (at < int(e.rate)) {
-            const float ramp = std::min({ 1.0f, float(at) / (0.004f * fs), (e.rate - float(at)) / (0.004f * fs) });
+            const float ramp = std::min({ 1.0f, float(at) / (0.006f * fs), (e.rate - float(at)) / (0.012f * fs) });
             e.phase += e.f / fs;
             if (e.phase >= 1.0f) e.phase -= 1.0f;
-            float p3 = 3.0f * e.phase;
-            p3 -= std::floor(p3);
-            mono = e.amp * ramp * (sinCycle(e.phase) + 0.15f * sinCycle(p3));
+            mono = e.amp * ramp * sinCycle(e.phase);
         }
         mono = e.lp.lp(mono);
         break;
     }
-    case Kind::rattle: {
-        e.phase += e.rate * (1.0f + 0.3f * e.noise.bipolar()) / fs;
-        if (e.phase >= 1.0f) { e.phase -= 1.0f; e.env = 0.6f + 0.4f * e.noise.uniform(); }
-        const float x = e.env * e.noise.bipolar();
-        e.env *= 0.995f;
-        e.bp1.tick(x);
-        e.bp2.tick(x);
-        const float s = std::sin(pi * t / float(e.length));
-        mono = e.amp * s * s * (e.bp1.band + 0.6f * e.bp2.band);
-        break;
-    }
-    case Kind::metal:
-    case Kind::thud:
-    case Kind::pipe: {
-        st = e.modes.tick();
-        if (e.kind != Kind::pipe && e.env > 1.0e-6f) {
-            const float n = e.noise.bipolar() * e.env;
-            mono = e.kind == Kind::thud ? e.lp.lp(n) : n - e.lp.lp(n);
-            e.env *= e.decay;
+    case Kind::shutter:
+    case Kind::cart: {
+        if (e.repeats > 0 && e.age >= e.step) {
+            e.x = e.amp * (0.5f + 0.5f * e.noise.uniform());
+            e.step = e.age + int(fs * e.rate * (0.7f + 0.6f * e.noise.uniform()));
+            --e.repeats;
         }
-        if (e.kind == Kind::pipe) {
-            e.phase += e.rate * (0.7f + 0.6f * e.noise.uniform()) / fs;
-            if (e.phase >= 1.0f) e.phase -= 1.0f;
-            e.bp1.tick(e.noise.bipolar());
-            const float s = std::sin(pi * t / float(e.length));
-            mono = e.amp * s * (0.55f + 0.45f * sinCycle(e.phase)) * e.bp1.band;
-        }
+        const float n = e.x * e.noise.bipolar();
+        e.x *= e.decay;
+        e.bp1.tick(n);
+        mono = e.bp1.band * 3.0f;
         break;
     }
     case Kind::drip:
-    case Kind::plop: {
-        const int local = e.repeats > 0 && e.gap > 0 ? e.age % e.gap : e.age;
-        if (local == 0 && e.age > 0) { e.env = e.amp * (0.7f + 0.3f * e.noise.uniform()); e.phase = 0; }
-        const float rise = 1.0f + e.rate * float(local) / fs;   // the bubble's pitch rises as it shrinks
-        e.phase += std::min(0.45f, e.f * rise / fs);
-        if (e.phase >= 1.0f) e.phase -= 1.0f;
-        mono = e.env * sinCycle(e.phase);
-        e.env *= e.decay;
-        if (e.repeats > 0 && e.gap > 0) done = e.age >= e.repeats * e.gap;
-        break;
-    }
-    case Kind::creak: {
-        const float rate = e.rate + (e.rate2 - e.rate) * t / float(e.length);
-        e.phase += rate * (1.0f + 0.25f * e.noise.bipolar()) / fs;
-        float x = 0;
-        if (e.phase >= 1.0f) { e.phase -= 1.0f; x = 1.0f; }
-        e.bp1.tick(x);
-        e.bp2.tick(x);
-        const float s = std::sin(pi * t / float(e.length));
-        mono = e.amp * s * (e.bp1.band + 0.5f * e.bp2.band);
-        break;
-    }
-    case Kind::groan: {
-        if ((e.age & 63) == 0) {
-            e.phase2 += 64.0f * e.rate / fs;
-            const float bendBy = 1.0f + 0.05f * std::sin(twoPi * e.phase2);
-            e.bp1.set(e.f * bendBy, 25.0f, sr);
-            e.bp2.set(e.f * 2.31f * bendBy, 25.0f, sr);
+        if (place == Place::pool) {
+            const float rise = 1.0f + e.rate * t / fs;
+            e.phase += std::min(0.45f, e.f * rise / fs);
+            if (e.phase >= 1.0f) e.phase -= 1.0f;
+            mono = e.env * sinCycle(e.phase);
+            e.env *= e.decay;
+            break;
         }
-        const float x = e.noise.bipolar();
-        e.bp1.tick(x);
-        e.bp2.tick(x);
-        const float s = std::sin(pi * t / float(e.length));
-        mono = e.lp.lp(e.amp * s * s * e.bp1.k * (e.bp1.band + 0.7f * e.bp2.band));
-        break;
-    }
-    case Kind::car: {
-        const float u = t / float(e.length);
-        const float position = (e.pan < 0 ? -0.9f : 0.9f) * (1.0f - 2.0f * u);
-        const auto g = panGains(position);
-        const float doppler = 1.0f + 0.035f * (0.5f - u);
-        e.phase += e.f * doppler / fs;
-        if (e.phase >= 1.0f) e.phase -= 1.0f;
-        float p2 = 2.0f * e.phase, p3 = 3.0f * e.phase;
-        p2 -= std::floor(p2);
-        p3 -= std::floor(p3);
-        e.x = 0.995f * e.x + 0.05f * e.noise.bipolar();   // tyres: brown noise
-        const float s = std::sin(pi * u);
-        const float sound = e.amp * s * s * (sinCycle(e.phase) + 0.6f * sinCycle(p2) + 0.4f * sinCycle(p3) + 6.0f * e.lp.lp(e.x));
-        sendOut += sound * e.send;
-        e.age++;
-        if (e.age >= e.length) e.active = false;
-        return { sound * g.l, sound * g.r };
-    }
-    case Kind::elevator: {
-        const float u = t / float(e.length);
-        const float ramp = std::clamp(std::min(u, 1.0f - u) * 6.0f, 0.0f, 1.0f);   // spin up, run, slow down
-        e.phase += e.f * (0.8f + 0.2f * ramp) / fs;
-        if (e.phase >= 1.0f) e.phase -= 1.0f;
-        float p2 = 2.0f * e.phase, p3 = 3.0f * e.phase;
-        p2 -= std::floor(p2);
-        p3 -= std::floor(p3);
-        e.bp1.tick(e.noise.bipolar());
-        mono = e.lp.lp(e.amp * ramp * (sinCycle(e.phase) + 0.5f * sinCycle(p2) + 0.3f * sinCycle(p3)) + e.amp * 2.0f * ramp * e.bp1.band);
-        break;
-    }
-    case Kind::murmur: {
-        e.phase += e.rate * (0.7f + 0.6f * e.noise.uniform()) / fs;
-        if (e.phase >= 1.0f) {   // the next syllable: a new vowel
-            e.phase -= 1.0f;
-            e.bp1.set(280.0f + 300.0f * e.noise.uniform(), 3.0f, sr);
-            e.bp2.set(800.0f + 900.0f * e.noise.uniform(), 3.0f, sr);
-            e.env = 0.3f + 0.7f * e.noise.uniform();
-        }
-        const float x = e.noise.bipolar();
-        e.bp1.tick(x);
-        e.bp2.tick(x);
-        const float syllable = e.env * sinCycle(0.5f * e.phase);
-        const float s = std::sin(pi * t / float(e.length));
-        mono = e.lp.lp(e.amp * s * syllable * (e.bp1.band + 0.5f * e.bp2.band));
-        break;
-    }
-    case Kind::rail: {
-        const float u = t / float(e.length);
-        const float s = std::sin(pi * u);
-        const float position = (e.pan < 0 ? -0.9f : 0.9f) * (1.0f - 1.6f * u);
-        const auto g = panGains(position);
-        e.phase2 += e.rate / fs;
-        if (e.phase2 >= 1.0f) e.phase2 -= 1.0f;
-        float sing = 0;
-        constexpr float ratios[] { 1.0f, 1.47f, 2.09f };
-        for (int k = 0; k < 3; ++k) {
-            float ph = e.phase * ratios[k];
-            ph -= std::floor(ph);
-            sing += sinCycle(ph) * (0.6f + 0.4f * sinCycle(std::fmod(e.phase2 + 0.33f * float(k), 1.0f))) / float(k + 1);
-        }
-        e.phase += e.f * (1.0f + 0.004f * sinCycle(e.phase2)) / fs;
-        if (e.phase >= 1000.0f) e.phase -= 1000.0f;
-        e.x = 0.996f * e.x + 0.04f * e.noise.bipolar();
-        const float sound = e.amp * s * s * (sing + 12.0f * e.lp.lp(e.x) * s);
-        sendOut += sound * e.send;
-        e.age++;
-        if (e.age >= e.length) e.active = false;
-        return { sound * g.l, sound * g.r };
-    }
-    case Kind::gust: {
-        const float u = t / float(e.length);
-        const float s = std::sin(pi * u);
-        if ((e.age & 63) == 0) e.bp1.set(e.f * (0.6f + 1.2f * s), 0.7f, sr);
-        e.bp1.tick(e.noise.bipolar());
-        const float position = 0.8f * (2.0f * u - 1.0f);
-        const auto g = panGains(position);
-        const float sound = e.amp * s * s * s * e.bp1.band;
-        sendOut += sound * e.send;
-        e.age++;
-        if (e.age >= e.length) e.active = false;
-        return { sound * g.l, sound * g.r };
-    }
-    case Kind::clunk: {
+        [[fallthrough]];
+    case Kind::ballastTick:
+    case Kind::doorClick:
+    case Kind::paChime:
+    case Kind::radiatorPing:
+    case Kind::locker:
+    case Kind::bell:
+    case Kind::carDoor:
+    case Kind::barrier:
+    case Kind::liftChime:
+    case Kind::doorClose:
+    case Kind::railTick:
+    case Kind::freezerSeal:
+    case Kind::ghostNote:
+    case Kind::wrongWall: {
         st = e.modes.tick();
-        if (e.env > 1.0e-6f) {
+        if (e.env > 1.0e-7f) {
             mono = e.lp.lp(e.noise.bipolar() * e.env);
             e.env *= e.decay;
         }
-        if (place == Place::hotel) { st.l *= 0.4f; st.r *= 0.4f; }
-        break;
-    }
-    case Kind::seek: {
-        if (e.gap <= 0 && e.repeats > 0) {
-            e.env = e.amp * (0.6f + 0.4f * e.noise.uniform());
-            e.gap = int(fs * (0.003f + 0.012f * e.noise.uniform()));
-            --e.repeats;
+        if (e.kind == Kind::bell || e.kind == Kind::liftChime) {   // through walls and floors
+            st.l = e.lp.lp(st.l);
+            st.r = e.lp2.lp(st.r);
         }
-        --e.gap;
-        const float x = e.env * e.noise.bipolar();
-        e.env *= e.decay;
-        e.bp1.tick(x);
-        mono = e.bp1.band;
-        done = done || (e.repeats <= 0 && e.gap <= 0);
-        break;
-    }
-    case Kind::chirp: {
-        const int cycle = int(e.rate) + e.gap;
-        const int at = e.age % std::max(1, cycle);
-        if (at < int(e.rate)) {
-            e.phase += e.f / fs;
-            if (e.phase >= 1.0f) e.phase -= 1.0f;
-            mono = e.amp * (e.phase < 0.5f ? 1.0f : -1.0f);
+        if (e.kind == Kind::paChime) {   // small horns: no lows
+            st.l -= e.lp2.lp(st.l);
+            st.r = st.l;
+            st.l *= pg.l * 1.4f;
+            st.r *= pg.r * 1.4f;
         }
-        mono = e.lp.lp(mono);
+        const float fade = std::clamp((float(e.length) - t) / (0.05f * fs), 0.0f, 1.0f);   // no cut at the end
+        st.l *= fade;
+        st.r *= fade;
         break;
     }
-    case Kind::swell: {
+    case Kind::ripple: {
         const float u = t / float(e.length);
-        const float fadeOut = std::clamp((float(e.length) - t) / (0.012f * fs), 0.0f, 1.0f);
+        const float s = sinCycle(0.5f * u);
         e.bp1.tick(e.noise.bipolar());
-        mono = e.amp * u * u * u * fadeOut * e.bp1.band;
+        mono = e.amp * s * s * e.bp1.band * 4.0f;
         break;
     }
-    case Kind::phantom: {
+    case Kind::trainRumble: {
         const float u = t / float(e.length);
-        const float s = std::sin(pi * u);
+        const float s = sinCycle(0.5f * u);
         e.phase += e.f / fs;
         if (e.phase >= 1.0f) e.phase -= 1.0f;
-        e.phase2 += (e.f + e.rate) / fs;
+        e.phase2 += e.f * 1.5f / fs;
         if (e.phase2 >= 1.0f) e.phase2 -= 1.0f;
-        st.l = e.amp * s * s * sinCycle(e.phase);
-        st.r = e.amp * s * s * sinCycle(e.phase2);
+        e.x = 0.995f * e.x + 0.05f * e.noise.bipolar();
+        mono = e.amp * s * s * (sinCycle(e.phase) + 0.4f * sinCycle(e.phase2) + 3.0f * e.lp.lp(e.x));
         break;
     }
-    case Kind::ticks: {
-        if (e.gap <= 0 && e.repeats > 0) {
-            e.env = e.amp * (0.5f + 0.5f * e.noise.uniform());
-            e.gap = int(fs * (0.05f + 0.4f * e.noise.uniform()));
-            --e.repeats;
-        }
-        --e.gap;
-        const float x = e.env * e.noise.bipolar();
-        e.env *= e.decay;
-        e.bp1.tick(x);
-        mono = e.bp1.band;
-        done = done || (e.repeats <= 0 && e.gap <= 0);
-        break;
-    }
+    case Kind::flicker: done = true; break;
     }
     st.l += mono * pg.l;
     st.r += mono * pg.r;
     sendOut += 0.5f * (st.l + st.r) * e.send;
     e.age++;
     if (done) e.active = false;
-    return st;
+    return { st.l * e.dry, st.r * e.dry };
 }
 
 Ambience::Out Ambience::tick() {
-    // The air breathes: a new target loudness every 2-6 s, approached slowly.
-    if (--breathCountdown <= 0) {
-        breathTarget = 0.75f + 0.5f * random();
-        breathCountdown = int(sr * (2.0 + 4.0 * random()));
-    }
-    breath += breathCoef * (breathTarget - breath);
-    const float wl = noiseL.bipolar(), wr = noiseR.bipolar();
-    const float pl = pinkL.next(wl), pr = pinkR.next(wr);
-    float l = 0, r = 0;
-    if (airLevel > 0.0f) {
-        airL.tick(pl);
-        airR.tick(pr);
-        l += airLevel * breath * airL.low;
-        r += airLevel * breath * airR.low;
-    }
-    if (ductLevel > 0.0f) {   // ducts resonate: a faint, unsteady whistle
-        ductL.tick(pl);
-        ductR.tick(pr);
-        l += ductLevel * breath * breath * ductL.band * ductL.k;
-        r += ductLevel * breath * breath * ductR.band * ductR.k;
-    }
-    if (rumbleLevel > 0.0f) {   // brown noise: deep and heavy
-        brownL = 0.998f * brownL + 0.02f * wl;
-        brownR = 0.998f * brownR + 0.02f * wr;
-        l += rumbleLevel * breath * rumbleL.lp(brownL);
-        r += rumbleLevel * breath * rumbleR.lp(brownR);
-    }
-    if (lapLevel > 0.0f) {   // water against the pool's edge, in slow irregular waves
-        if (--lapCountdown <= 0) {
-            lapTarget = 0.15f + 0.85f * random();
-            lapCountdown = int(sr * (0.8 + 1.8 * random()));
+    if (--controlClock <= 0) {   // slow things, on a 64-sample control clock
+        controlClock = 64;
+        const float dt = float(64.0 / sr);
+        buzzFlutter = buzzWander.tick(rng, 3.0f, dt);
+        if (humDrifts) humDrift = humWander.tick(rng, 0.03f, dt);
+        for (auto& d : drones) {
+            if (d.level <= 0.0f || d.gate == Drone::Gate::always) continue;
+            d.countdown -= 64;
+            if (d.countdown <= 0) {   // on for a while, off for a while
+                const bool starting = d.gTarget < 0.5f;
+                d.gTarget = starting ? 1.0f : 0.0f;
+                const float span = starting ? d.onSeconds : d.offSeconds;
+                d.countdown = int(sr * double(span) * (0.7 + 0.6 * double(random())));
+            }
         }
-        lap += float(1.0 / (0.5 * sr)) * (lapTarget - lap);
-        lapL.tick(wl);
-        lapR.tick(wr);
-        l += lapLevel * lap * lap * lapL.band;
-        r += lapLevel * lap * lap * lapR.band;
+        if (dropouts) {   // the impossible room: a few seconds of absolute silence, now and then
+            silenceCountdown -= 64;
+            if (silenceCountdown <= 0) {
+                const bool silent = silenceTarget > 0.5f;
+                silenceTarget = silent ? 0.0f : 1.0f;
+                silenceCountdown = int(sr * (silent ? 1.5 + 2.5 * double(random()) : 25.0 + 45.0 * double(random())));
+            }
+        }
     }
-    mainsPhase += mainsStep;
+    float l = 0, r = 0;
+    // Room tone: pink noise, two poles low, constant. Well under the hum.
+    const float wl = noiseL.bipolar(), wr = noiseR.bipolar();
+    if (airLevel > 0.0f) {
+        l += airLevel * airL2.lp(airL1.lp(pinkL.next(wl)));
+        r += airLevel * airR2.lp(airR1.lp(pinkR.next(wr)));
+    }
+    // Mains: 60 Hz and harmonics, each beating slowly against a near twin.
+    mainsPhase += mainsStep * (1.0 + 0.07 * double(humDrift));
     if (mainsPhase >= 1.0) mainsPhase -= 1.0;
     const float mp = float(mainsPhase);
     if (humLevel > 0.0f) {
-        float hum = 0;
-        for (std::size_t k = 0; k < humWeights.size(); ++k) {
-            if (humWeights[k] <= 0.0f) continue;
+        float hl = 0, hr = 0;
+        for (int k = 0; k < humPartials; ++k) {
+            const float w = humWeights[std::size_t(k)];
+            if (w <= 0.0f) continue;
+            float& bp = beatPhase[std::size_t(k)];
+            bp += beatHz[std::size_t(k)] / float(sr);
+            if (bp >= 1.0f) bp -= 1.0f;
             float p = mp * float(k + 1);
             p -= std::floor(p);
-            hum += humWeights[k] * sinCycle(p);
+            const float v = w * sinCycle(p);
+            const float b = beatDepth * sinCycle(bp);
+            hl += v * (1.0f + b);
+            hr += v * (1.0f - b);
         }
-        l += humLevel * hum;
-        r += humLevel * hum * 0.9f;
+        l += humLevel * hl;
+        r += humLevel * hr * 0.92f;
     }
-    if (buzzLevel > 0.0f) {   // a tired fluorescent tube: mostly steady, sometimes it stutters
-        if (--buzzCountdown <= 0) {
-            const bool stutter = buzzTarget >= 1.0f && random() < 0.35f;
-            buzzTarget = stutter ? 0.15f + 0.3f * random() : 1.0f;
-            buzzCountdown = stutter ? int(sr * (0.03 + 0.12 * random())) : int(sr * (1.5 + 6.0 * random()));
-        }
-        buzz += buzzCoef * (buzzTarget - buzz);
-        float b = 0;
-        constexpr float weights[] { 0.5f, 0.35f, 0.25f, 0.15f };
-        for (int k = 0; k < 4; ++k) {
-            float p = mp * float(2 + 4 * k);
-            p -= std::floor(p);
-            b += weights[k] * sinCycle(p);
-        }
-        l += buzzLevel * buzz * b * 1.1f;
-        r += buzzLevel * buzz * b * 0.8f;
+    // The failing tube: a few quick flicks, then steady again.
+    if (stutterFlicks > 0 && --stutterCountdown <= 0) {
+        const bool dark = lampTarget >= 1.0f;
+        lampTarget = dark ? 1.0f - stutterDepth * (0.6f + 0.4f * random()) : 1.0f;
+        stutterCountdown = int(sr * (dark ? 0.02 + 0.07 * double(random()) : 0.04 + 0.18 * double(random())));
+        if (!dark) { --stutterFlicks; restrike = 1.0f; }
     }
-    if (motorCycles) {   // the compressor's own schedule: on for a while, off for a while
-        if (--cycleCountdown <= 0) {
-            const bool starting = motorGateTarget < 0.5f;
-            motorGateTarget = starting ? 1.0f : 0.4f;
-            cycleCountdown = int(sr * (starting ? 14.0 + 20.0 * random() : 8.0 + 14.0 * random()));
-            Schedule clunk { Kind::clunk, 0, 0, starting ? 1.0f : 0.7f, 0.5f };
-            spawn(clunk);
-        }
-        motorGate += motorGateCoef * (motorGateTarget - motorGate);
+    lampNow += lampCoef * (lampTarget - lampNow);
+    if (buzzLevel > 0.0f) {
+        // Full-wave shape: 120 Hz with its harmonics; a tiny random flicker in level.
+        const float s = sinCycle(mp);
+        const float rect = std::abs(s) - 0.6366f;   // |sin| without its DC
+        float p2 = 2.0f * mp, p4 = 4.0f * mp;
+        p2 -= std::floor(p2);
+        p4 -= std::floor(p4);
+        const float tone = rect + 0.35f * sinCycle(p2) + 0.12f * sinCycle(p4);
+        // The arc re-ignites near each zero crossing: a burst of grit 120 times a second.
+        const float near = 1.0f - std::abs(s);
+        const float gate = near * near * near * near;
+        gritL.tick(wl * gate);
+        gritR.tick(wr * gate);
+        const float lit = lampNow * (1.0f + 0.03f * buzzFlutter);
+        const float sputter = 1.0f + 2.5f * restrike;
+        restrike *= 0.9995f;
+        l += buzzLevel * lit * tone + gritLevel * lit * sputter * gritL.band;
+        r += buzzLevel * lit * tone * 0.85f + gritLevel * lit * sputter * gritR.band;
     }
-    if (motorLevel > 0.0f) {   // a motor or fan: harmonics, beating slowly
-        motorPhase += motorHz / float(sr);
-        if (motorPhase >= 1.0f) motorPhase -= 1.0f;
-        motorAmPhase += motorAmRate / float(sr);
-        if (motorAmPhase >= 1.0f) motorAmPhase -= 1.0f;
+    for (auto& d : drones) {   // motors, pumps, fans, compressors: steady tones
+        if (d.level <= 0.0f) continue;
+        d.g += d.gCoef * (d.gTarget - d.g);
+        d.phase += d.hz / float(sr);
+        if (d.phase >= 1.0f) d.phase -= 1.0f;
+        d.amPhase += d.amHz / float(sr);
+        if (d.amPhase >= 1.0f) d.amPhase -= 1.0f;
         float m = 0;
-        for (std::size_t k = 0; k < motorWeights.size(); ++k) {
-            if (motorWeights[k] <= 0.0f) continue;
-            float p = motorPhase * float(k + 1);
+        for (int k = 0; k < 4; ++k) {
+            if (d.weights[std::size_t(k)] <= 0.0f) continue;
+            float p = d.phase * float(k + 1);
             p -= std::floor(p);
-            m += motorWeights[k] * sinCycle(p);
+            m += d.weights[std::size_t(k)] * sinCycle(p);
         }
-        m *= motorLevel * (motorCycles ? motorGate : 1.0f) * (1.0f - motorAmDepth * (0.5f + 0.5f * sinCycle(motorAmPhase)));
+        m *= d.level * d.g * (1.0f - d.amDepth * (0.5f + 0.5f * sinCycle(d.amPhase)));
         l += m;
-        r += m * 0.85f;
+        r += m * 0.9f;
     }
-    if (subLevel > 0.0f) {   // the structure itself vibrating
-        subPhase += subHz / float(sr);
-        if (subPhase >= 1.0f) subPhase -= 1.0f;
-        if ((breathCountdown & 63) == 0) subWobble = 0.5f + 0.5f * subWander.tick(rng, 0.2f, float(64.0 / sr));
-        const float s = subLevel * subWobble * sinCycle(subPhase);
-        l += s;
-        r += s;
-    }
-    if (clackLevel > 0.0f) {   // escalator steps passing the comb plate, far away
-        if (--clackCountdown <= 0) {
-            clackEnv = clackLevel * (0.6f + 0.4f * random());
-            clackCountdown = int(sr * clackInterval * (0.92f + 0.16f * random()));
+    if (clockLevel > 0.0f) {   // the wall clock: once a second, tick and tock slightly different
+        if (--clockCountdown <= 0) {
+            clockCountdown = int(sr);
+            clockEnv = clockLevel * ((clockBeat++ & 1) ? 0.8f : 1.0f);
+            clockTone.set((clockBeat & 1) ? 2300.0f : 2050.0f, 6.0f, sr);
         }
-        clackTone.tick(noiseL.bipolar() * clackEnv);
-        clackEnv *= clackDecay;
-        l += clackTone.band * 0.8f;
-        r += clackTone.band;
+        clockTone.tick(wl * clockEnv);
+        clockEnv *= 0.997f;
+        l += clockTone.band * 0.9f;
+        r += clockTone.band * 0.7f;
+    }
+    if (trickleLevel > 0.0f) {   // the fountain, far off: tiny drops, steady, never splashing
+        if (random() < float(35.0 / sr)) {
+            trickleEnv = trickleLevel * (0.4f + 0.6f * random());
+            trickleA.set(1300.0f + 1500.0f * random(), 9.0f, sr);
+            trickleB.set(2400.0f + 1500.0f * random(), 9.0f, sr);
+        }
+        const float x = trickleEnv * wl;
+        trickleEnv *= 0.995f;
+        trickleA.tick(x);
+        trickleB.tick(x);
+        l += trickleA.band;
+        r += trickleB.band;
     }
     if (whineLevel > 0.0f) {   // a coil whining, almost too high to notice
-        whinePhase += whineHz * (1.0f + 0.002f * subWobble) / float(sr);
+        whinePhase += whineHz / float(sr);
         if (whinePhase >= 1.0f) whinePhase -= 1.0f;
-        const float w = whineLevel * sinCycle(whinePhase);
+        const float w = whineLevel * sinCycle(whinePhase) * lampNow;
         l += w;
         r += 0.7f * w;
     }
-    if (clusterLevel > 0.0f) {   // tones drifting in and out of balance, never resolving
-        if ((breathCountdown & 63) == 0)
-            for (int k = 0; k < clusterTones; ++k) clusterWeight[std::size_t(k)] = 0.5f + 0.5f * clusterWander[std::size_t(k)].tick(rng, 0.12f, float(64.0 / sr));
-        float cl = 0, cr = 0;
-        for (int k = 0; k < clusterTones; ++k) {
-            auto& ph = clusterPhase[std::size_t(k)];
-            ph += clusterHz[std::size_t(k)] * (1.0f + 0.01f * clusterWeight[std::size_t(k)]) / float(sr);
-            if (ph >= 1.0f) ph -= 1.0f;
-            const float v = clusterWeight[std::size_t(k)] * clusterWeight[std::size_t(k)] * sinCycle(ph) / float(1 + k / 2);
-            if (k & 1) cr += v; else cl += v;
-        }
-        l += clusterLevel * (cl + 0.3f * cr);
-        r += clusterLevel * (cr + 0.3f * cl);
-    }
     float send = 0.5f * (l + r) * bedSend;
-    // Incidental events.
-    for (int i = 0; i < scheduleCount; ++i) {
-        auto& s = schedules[std::size_t(i)];
-        s.countdown -= activity;
-        if (s.countdown <= 0.0f) {
-            spawn(s);
-            // Exponential gaps (a Poisson process) above a minimum: no fixed rhythm.
-            s.countdown = float(sr) * (s.minSeconds - s.meanSeconds * std::log(std::max(1.0e-4f, random())));
+    // Rare events, one scheduler for the place.
+    sinceLast += double(activity);
+    if (activity > 0.0f && scheduleCount > 0) {
+        countdown -= double(activity);
+        if (countdown <= 0.0) {
+            float pick = random() * weightSum;
+            int which = 0;
+            for (; which < scheduleCount - 1; ++which) {
+                pick -= schedules[std::size_t(which)].weight;
+                if (pick <= 0.0f) break;
+            }
+            const auto& sc = schedules[std::size_t(which)];
+            spawn(sc.kind, sc.level);
+            scheduleNext();
         }
     }
     float eventSend = 0;
@@ -883,6 +801,12 @@ Ambience::Out Ambience::tick() {
             r += o.r;
         }
     send += eventSend;
+    if (dropouts) {   // falls away in 30 ms, comes back over half a second
+        silenceGain += (silenceTarget < silenceGain ? silenceFall : silenceRise) * (silenceTarget - silenceGain);
+        l *= silenceGain;
+        r *= silenceGain;
+        send *= silenceGain;
+    }
     return { { l * trim, r * trim }, { send * trim, send * trim } };
 }
 

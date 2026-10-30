@@ -1,7 +1,8 @@
 # LIMINAL — Development log
 
-Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
-`LIMINAL_DIRECTION_UPDATE_1.md`. Resume from the checklist below.
+Read `LIMINAL_CLAUDE_BRIEF.md` first, then `LIMINAL_DIRECTION_UPDATE_1.md`, then
+`LIMINAL_DIRECTION_UPDATE_2.md` (it overrides the other two where they conflict). Resume from
+the checklist below.
 
 ## Progress checklist
 
@@ -29,6 +30,10 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Part 1: ten procedural scenes (`UI/SceneArt`), graded per Character; resizable editor (MainView scaled, 85–150 %, 960x720); main view: film strip of places, Character chips, instrument objects, four ring knobs, page tabs; lights that answer notes/events/Character flicker/mouse; Unreal tape-slip; PLACE view shows room/materials/processing (350 checks pass)
   - [x] Part 2: snapshots of every place (and Characters, window sizes) in `docs/snapshots/`, editor tests for art/animation cost, DEVLOG section, push without `[skip ci]`
 - [x] Final handoff: per milestone, what to listen for and look at in GarageBand (end of this file)
+- [ ] **Direction Update 2 — real liminal spaces (sound + visuals)** (2026-10-30)
+  - [x] Part 1 — audio: risers/whooshes/noise waves removed; all ten beds, acoustics and rare events rebuilt to Sections 1–2; default Activity 25 % (rare); Far Away (mall PA / hotel wall); listening render (phrase through ten rooms + 60 s of each bed) — pushed `[skip ci]`
+  - [ ] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — push without `[skip ci]`, then **stop for the developer's approval of the look**
+  - [ ] Part 3 (after approval) — the other seven places and the Character variants
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
 
@@ -794,6 +799,71 @@ never freezes).
   the photograph pipeline is ready for the developer's own pictures.
 - A place change re-renders the scene on the message thread (~0.1–0.2 s here).
 - The mall's balcony rails cross the near edge of the picture at a steep angle.
+
+---
+
+## Direction Update 2, Part 1 — the sound of still places (2026-10-30)
+
+The developer's feedback: far too much activity (risers, whooshes, waves of white noise); a
+liminal space is **still**. The pool should be an instrument reflecting off still water and
+tile, the office a fluorescent hum, not white noise. Details per place: `docs/ENVIRONMENTS.md`.
+
+### What changed
+
+| | |
+|---|---|
+| `DSP/Ambience` | **Rewritten.** Bed = 60 Hz mains hum with harmonics (each beating slowly against a near twin), a fluorescent ballast buzz (120 Hz family from a full-wave shape + the arc's grit at every zero crossing, a tiny random flicker), steady machine tones per place (fans, pumps, escalator, compressor that cycles on/off, ice machine, transformer, rails, a far machine tone that comes and goes), the school's wall clock, the mall's distant fountain trickle, a coil whine; a constant, heavily low-passed room tone well below the hum. **Removed:** the breathing air, water lapping, brown-noise rumble swells, gusts, reversed swells, groans, passing cars, voices, drive seeks and chirps. **Events:** rare and distant (mostly room), from one scheduler per place: a minimum gap (20–35 s) + an exponential wait (mean 50–80 s); new kinds per Section 2 (monitor beeps, ballast tick, door latch, PA chime, shutter, radiator ping, locker, bell, car door, barrier, drip into water, ripple, lift chime, door closing, a train that never arrives, rail tick, freezer seal, trolley, ghost note, a knock from no wall). A **stutter** of the failing tube is an event too: the buzz drops out for a few flicks and `lamp()` follows it exactly. Impossible room: a hum that drifts in pitch, total silences now and then. |
+| `DSP/Environment` | Ten profiles rebuilt to Section 2's acoustics (RT60s, flutter between parallel walls, metallic locker reflections, concrete density, tunnel, carpet). The non-physical processing that 2b used to push places apart (frequency shift, moving notches, steep filters, tremolo, chorus washes, tape drive) is gone from the real places. Impossible room: a small room's reflections with a 9 s tail that **swells after the note** (the room input follows a slow/fast envelope ratio), echoes +0.4 semitone. **Far Away** stage in the place's processing: mall = PA in another wing (320 Hz–3.9 kHz, speaker resonance, slight distortion), hotel = through the wall (480 Hz steep low-pass, 165 Hz wall resonance), elsewhere = another room. `activityRate()`: Activity 0 = only the bed, 25 % (new default) = x1, 100 % = up to x4. Bed levels per place (`ambienceTrim`). |
+| `DSP/Space` | `surface`: the pool's tail shimmers like light on water (three slow unrelated movements, about ±0.6 dB, in level and image). |
+| `DSP/Effects` | Two click fixes found by the switching test: a big change of the **drift** depth or of the **echo** time (a new place) now cross-fades between the old and new delay instead of gliding (the glide made the read head race: a warble/click, 0.19 step at the impossible room → hospital change). Office defaults: no wash, no delay (dry under the tubes). |
+| `DSP/Characters` | Extra event kinds remapped to the new ones (no swells/voices); a few Characters' beds made distinct (bed, tone, hum) so every Character still changes the place's sound. |
+| Parameters (appended) | `far_away` ("Far Away", 0–100 %, default 0). `macro_activity` default 50 % → **25 %**. |
+| Processor | Publishes `meters.lamp` (the failing tube's lowest brightness since the editor last looked), `meters.flickers`, `meters.velocity` (for Part 2's lights). |
+| AU harness | "Audible" gates lowered from -45 to **-60 dBFS** (`bedFloorDb`): the pool and hotel beds sit near -50 dBFS on purpose. Same in the processor tests that mirror the harness. |
+| Tests | `environments`: the bed alone must be quiet (-60..-38 dBFS), **still** (level moves < 2.5 dB, 5th–95th percentile of 250 ms frames; supermarket compressor and impossible silences exempt) and **tonal** (over half the energy in narrow spectral peaks: noise below the hum); events counted by the engine over 3 minutes: default 1–9 and never two within 20 s, 100 % more but ≤ 40, 0 % none. `characters`: Activity counts the engine's events. |
+| Listening render | `--render-places` writes `u2-rooms.wav` (the same piano + quiet choir phrase through all ten rooms, 12 s each, then place changes under a chord) and `u2-rooms-beds.flac` (60 s of each room's bed alone at default Activity, a second of silence between). CI step renamed; both land in the Linux artifact. |
+
+### Tested (Linux, this container) — 386 checks pass, 0 fail (full suite, on exactly this commit)
+
+- **Beds** (Activity 0, 30 s): hospital -42.4, mall -43.4, school -43.5, garage -47.5 (Character
+  "Vacant"), pool -50.5, hotel -50.9, subway -43.2, supermarket -43.0, office -39.5, impossible
+  -52.2 dBFS; a mezzo-forte phrase is -23 to -28 dBFS, so 13–16 dB above the beds (more in the
+  quiet places). Level movement 0.45–1.5 dB; tonal share 0.91–1.00.
+- **Events in 3 minutes at the default Activity:** 2–5 per place; the closest two 20.2 s apart
+  (supermarket); at 100 % 9–17; at 0 % none.
+- **Places:** every pair still clearly different (piano: closest hospital / supermarket 2.10,
+  character scale where 1 = clearly audible; every instrument over 1.0). Phrase levels within
+  6 dB. Switching 16 times while playing: no clicks (largest step 0.065 vs peak 0.34), no allocation.
+- Report-only CPU (x86, one core, 48 kHz): 16 notes + ambience + room ~17 %.
+- Listening render: 32 s to make; the beds file measures hospital -42.6, mall -43.1, school
+  -43.5, garage -47.5, pool -50.1, hotel -50.0, subway -43.5, supermarket -43.1, office -39.8,
+  impossible -52.1 dBFS over 60 s, 0–4 events each (a chime counts each of its notes).
+  Measured, **not listened to** (no audio output here).
+
+### Report-only misses (two attempts each, per the working rules)
+
+- **Place vs controls (2b):** for every instrument the closest pair of places is now *below* its
+  strongest control (piano: hospital / supermarket 2.10 vs Distance 4.64). Expected: Update 2
+  asks for the identity to live in the room, not in the non-physical processing that made the
+  2b numbers. Two rounds of tuning within the acoustic vocabulary (width, damping, boxiness,
+  tails); then report-only. (The piano's Distance control also measures larger now, 3.7 → 4.6,
+  because the hospital is no longer dark.)
+- **Unreal over 1.0 in every place:** the impossible room 0.998 (already strange at Unreal 0);
+  enforced at 0.8.
+
+### Decisions (recorded instead of asking)
+
+- **Far Away is one parameter with a per-place meaning** (PA / wall / another room) rather
+  than separate modes: one control, automatable, works with scenes. Default off.
+- **Supermarket muzak** (optional in Section 2): not built; Far Away on the supermarket gives
+  the "music from another room" effect with the player's own instruments.
+- **The train that never arrives** stays (Section 2 asks for it) although it rises and falls:
+  9–15 s, very low and quiet, tonal, at most once every couple of minutes.
+- **Default Activity 25 %** keeps the knob's lower quarter for "even less" (0 % = the bed only)
+  and three quarters for "more" (up to x4).
+- **Flicker sync:** the audio decides when the tube stutters; the editor reads the darkest lamp
+  value since its last frame, so a 20 ms flick is never missed at 30 fps.
+- `LIMINAL_DIRECTION_UPDATE_2.md` added to the repository root beside Update 1.
 
 ---
 

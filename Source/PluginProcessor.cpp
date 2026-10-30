@@ -87,6 +87,7 @@ LiminalProcessor::LiminalProcessor()
     soloParam = raw(params::solo);
     environmentChoice = raw(params::environment);
     environmentAmount = raw(params::environmentAmount);
+    farAway = raw(params::farAway);
     characterChoice = raw(params::character);
     evolutionRate = raw(params::evolution);
     evolutionFreeze = raw(params::evolutionFreeze);
@@ -234,6 +235,7 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
                 const float v = 0.75f + slot.velocityVolume->load() * (m.getFloatVelocity() - 0.75f);
                 in.noteOn(note, std::clamp(v, 0.01f, 1.0f));
                 meters.notes.fetch_add(1, std::memory_order_relaxed);
+                meters.velocity.store(m.getFloatVelocity(), std::memory_order_relaxed);
                 slot.rack.noteVelocity(m.getFloatVelocity());
             }
         } else if (!slot.running) {
@@ -331,7 +333,8 @@ void LiminalProcessor::controlTick() {
     effectLive.tape = u * flavour.tape;
     effectLive.grain = u * flavour.grain;
     effectLive.chorus = u * flavour.chorus;
-    effectLive.colour = { u * flavour.shiftMix, u * flavour.wanderPan, u * flavour.wowCents + 3.0f * std::abs(evo.harmonic()), 0.8f * evo.spectral() };
+    effectLive.colour = { u * flavour.shiftMix, u * flavour.wanderPan, u * flavour.wowCents + 3.0f * std::abs(evo.harmonic()), 0.8f * evo.spectral(),
+                          farAway->load() };
     for (auto& slot : slots) slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm, effectLive);
 }
 
@@ -509,6 +512,11 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     meters.place.store(int(environments.place()), std::memory_order_relaxed);
     meters.character.store(environments.current().characterIndex(), std::memory_order_relaxed);
     meters.events.store(environments.current().ambienceEvents(), std::memory_order_relaxed);
+    {   // the darkest the failing tube got since the editor last looked (it exchanges this with 1)
+        const float lamp = environments.current().lamp();
+        if (lamp < meters.lamp.load(std::memory_order_relaxed)) meters.lamp.store(lamp, std::memory_order_relaxed);
+        meters.flickers.store(environments.current().flickers(), std::memory_order_relaxed);
+    }
     meters.activity.store(environments.current().evolution().movement(), std::memory_order_relaxed);
 }
 
@@ -548,7 +556,7 @@ void LiminalProcessor::applyPreset(const presets::Preset& preset) {
     case Category::environment:
     case Category::character:
         resetIds({ params::environment, params::character, params::environmentAmount, params::presence, params::scale, params::activity, params::unreal,
-                   params::evolution, params::evolutionFreeze });
+                   params::evolution, params::evolutionFreeze, params::farAway });
         break;
     case Category::instrument: {
         juce::StringArray ids { params::solo };
