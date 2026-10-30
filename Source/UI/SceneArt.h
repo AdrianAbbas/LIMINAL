@@ -1,20 +1,39 @@
 #pragma once
-// Procedural 2.5D environment art (Milestone 0: one scene, a vacant hospital corridor).
-// The whole image is rendered once per editor size into a cached Image (never per frame):
-// perspective geometry, ceiling lights with halation, floor reflections, fog, a cold
-// colour grade, vignette and film grain. Milestone 4 builds every environment this way.
+// Procedural 2.5D environment art (Milestone 4): every place is its own architecture —
+// geometry in one-point perspective, materials, fog, its own artificial light — finished
+// like a photograph (the Character's colour grade and light level, halation around lights,
+// vignette, film grain). Rendered once per place / Character / size into a cached Image,
+// never per frame; the animation layer only draws small light glows on top.
+//
+// If the developer adds photographs (assets/scenes/<place>/background.png, Milestone 4
+// asset pipeline), `renderPlace` uses them instead of the drawing, with the same finish.
 #include <juce_graphics/juce_graphics.h>
 #include <vector>
 
 namespace liminal::ui {
 
-struct Scene {
-    juce::Image image;              // the full-bleed scene (physical pixels)
-    juce::Image frosted;            // blurred, darkened copy for the control strip
-    std::vector<juce::Rectangle<float>> lights;   // ceiling-light glows, logical coordinates
+struct Light {
+    juce::Rectangle<float> glow;   // the halo around the fixture (logical coordinates)
+    juce::Point<float> reflection; // where it shows on the floor (or -1, -1)
+    float size = 1;                // how big it looks (for the animation)
 };
 
-// Renders the corridor at `width` x `height` logical pixels times `scale` (Retina = 2).
-Scene renderCorridor(int width, int height, float scale, unsigned seed = 7);
+struct Scene {
+    juce::Image image;              // the full-bleed scene (physical pixels)
+    juce::Image frosted;            // blurred, darkened copy for panels and the strip
+    std::vector<Light> lights;      // light fixtures, near to far
+    juce::Colour lightColour { 0xffe8fff2 };   // the colour of this place's light
+    int place = 0, character = 0;
+};
+
+// `width` x `height` logical pixels times `scale` (Retina = 2). `quick` skips grain and
+// halation (thumbnails).
+Scene renderPlace(int place, int character, int width, int height, float scale, bool quick = false);
+
+// The old Milestone 0 name, kept for callers: the hospital.
+inline Scene renderCorridor(int width, int height, float scale, unsigned = 7) { return renderPlace(0, 0, width, height, scale); }
+
+// Where the developer's own photographs would go (see above).
+juce::File photographFolder();
 
 } // namespace liminal::ui

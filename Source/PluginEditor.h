@@ -28,6 +28,7 @@ public:
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
     void drawButtonText(juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
     juce::Font getComboBoxFont(juce::ComboBox&) override;
+    void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height, float position, float startAngle, float endAngle, juce::Slider&) override;
     juce::Font getPopupMenuFont() override;
 };
 
@@ -45,6 +46,77 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 };
 
+// Milestone 4 main view parts ===============================================================
+
+// The ten places as a strip of film frames (their own artwork in miniature): click to go.
+class PlaceStrip final : public juce::Component {
+public:
+    explicit PlaceStrip(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    bool refresh();
+    juce::Rectangle<int> frame(int place) const;
+    void choose(int place);
+
+private:
+    juce::AudioProcessorValueTreeState& state;
+    std::array<juce::Image, 10> thumbs;
+    float thumbScale = 0;
+    int selected = -1, hover = -1;
+};
+
+// The place's three Characters as words under the caption: click to choose.
+class CharacterStrip final : public juce::Component {
+public:
+    explicit CharacterStrip(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    bool refresh();
+    void choose(int character);
+
+private:
+    juce::Rectangle<float> chip(int character) const;
+    juce::AudioProcessorValueTreeState& state;
+    int place = -1, selected = -1, hover = -1;
+};
+
+// The six instruments as objects (a piano, a cassette, a glass, voices, a music box, a
+// waveform): lit when on, click to switch.
+class InstrumentShelf final : public juce::Component {
+public:
+    explicit InstrumentShelf(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    bool refresh();
+    void toggle(int instrument);
+
+private:
+    juce::Rectangle<float> slot(int instrument) const;
+    juce::AudioProcessorValueTreeState& state;
+    std::array<bool, 6> on {};
+    int hover = -1;
+};
+
+// A large ring knob with its name and value under it (the four macros).
+class MacroKnob final : public juce::Component {
+public:
+    MacroKnob(juce::AudioProcessorValueTreeState&, const char* id, juce::String label);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    juce::Slider slider;
+
+private:
+    juce::String label;
+    juce::RangedAudioParameter* parameter;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+};
+
 // A strip button that opens a drawer: an icon and a word in a frosted pill, brighter on
 // hover, filled while its drawer is open, with a pointing-hand cursor.
 class DrawerButton final : public juce::Button {
@@ -52,6 +124,7 @@ public:
     enum class Icon { instruments, environment, effects, perform, presets };
     DrawerButton(const juce::String& text, Icon);
     void paintButton(juce::Graphics&, bool highlighted, bool down) override;
+    bool compact = true;   // a page tab: the word alone (no icon, no chevron)
 
 private:
     Icon icon;
@@ -218,18 +291,18 @@ private:
     std::unique_ptr<exporter::Job> job;
     juce::String status;
     float shownProgress = -1;
-    static constexpr int visibleRows = 9;
+    static constexpr int visibleRows = 10;
 };
 
-class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Timer {
+class MainView final : public juce::Component, private juce::Timer {
 public:
-    explicit LiminalEditor(LiminalProcessor&);
-    ~LiminalEditor() override;
+    explicit MainView(LiminalProcessor&);
+    ~MainView() override;
     void paint(juce::Graphics&) override;
     void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 
-    static constexpr int defaultWidth = 920, defaultHeight = 620;
+    static constexpr int defaultWidth = 960, defaultHeight = 720;   // logical size; the editor scales it
     void showInstruments(bool show);
     InstrumentDrawer& instrumentDrawer() { return drawer; }
     ActiveInstruments& activeInstruments() { return active; }
@@ -251,12 +324,13 @@ public:
 private:
     void timerCallback() override;
     juce::Rectangle<int> recArea() const { return { 30, 26, 70, 22 }; }
+    juce::Rectangle<int> tabsArea() const { return { getWidth() - 470, 76, 452, 26 }; }
     bool syncPlace();
     juce::Rectangle<int> captionArea() const { return { 52, 48, 600, 20 }; }
     juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
     juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
-    juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(108); }
-    juce::Rectangle<int> drawerArea() const { return { getWidth() - 418, 78, 400, stripArea().getY() - 78 - 12 }; }
+    juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(156); }
+    juce::Rectangle<int> drawerArea() const { return { getWidth() - 418, 110, 400, stripArea().getY() - 110 - 10 }; }
 
     LiminalProcessor& processor;
     ViewfinderLook look;
@@ -265,6 +339,18 @@ private:
     juce::ToggleButton power;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttachment;
     LevelControl master, instrument, ambience, space;
+    PlaceStrip placeStrip;
+    CharacterStrip characterStrip;
+    InstrumentShelf shelf;
+    MacroKnob presenceKnob, scaleKnob, activityKnob, unrealKnob;
+    // Lights that answer the music and the place (Milestone 4).
+    std::array<float, 12> pulse {}, shownPulse {};
+    int notesSeen = 0, eventsSeen = 0;
+    double nextFlicker = 3, shimmerUntil = 0, nextShimmer = 6;
+    float shimmerY = 0, shimmerH = 0, shimmerShift = 0;
+    juce::Point<float> mouse { -1000, -1000 };
+    void mouseMove(const juce::MouseEvent&) override;
+    void paintLights(juce::Graphics&);
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };
@@ -294,6 +380,40 @@ private:
     double flickerNext = 5, flickerUntil = 0, flickerToggle = 0;
     juce::Random random { 1979 };
 
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainView)
+};
+
+// The plug-in window: the main view, scaled to the window (resizable, fixed aspect ratio,
+// 85-150 %; the size is remembered in the song).
+class LiminalEditor final : public juce::AudioProcessorEditor {
+public:
+    explicit LiminalEditor(LiminalProcessor&);
+    void resized() override;
+    static constexpr int defaultWidth = MainView::defaultWidth, defaultHeight = MainView::defaultHeight;
+    MainView& view() { return main; }
+    // For tests and callers: the view's parts.
+    void showInstruments(bool s) { main.showInstruments(s); }
+    void showEnvironment(bool s) { main.showEnvironment(s); }
+    void showEffects(bool s) { main.showEffects(s); }
+    void showPerform(bool s) { main.showPerform(s); }
+    void showPresets(bool s) { main.showPresets(s); }
+    InstrumentDrawer& instrumentDrawer() { return main.instrumentDrawer(); }
+    EnvironmentDrawer& environmentDrawer() { return main.environmentDrawer(); }
+    EffectsDrawer& effectsDrawer() { return main.effectsDrawer(); }
+    PerformDrawer& performDrawer() { return main.performDrawer(); }
+    PresetDrawer& presetDrawer() { return main.presetDrawer(); }
+    ActiveInstruments& activeInstruments() { return main.activeInstruments(); }
+    juce::Button& instrumentsToggle() { return main.instrumentsToggle(); }
+    juce::Button& environmentToggle() { return main.environmentToggle(); }
+    juce::Button& effectsToggle() { return main.effectsToggle(); }
+    juce::Button& performToggle() { return main.performToggle(); }
+    juce::Button& presetsToggle() { return main.presetsToggle(); }
+    const ui::FrameGovernor& governor() const { return main.governor(); }
+
+private:
+    LiminalProcessor& processor;
+    MainView main;
+    bool ready = false;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiminalEditor)
 };
 

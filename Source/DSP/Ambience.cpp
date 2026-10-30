@@ -253,6 +253,7 @@ Ambience::Event* Ambience::spawn(const Schedule& s, int delay) {
         if (!e.active) { slot = &e; break; }
     if (slot == nullptr) return nullptr;
     auto& e = *slot;
+    ++spawnCount;
     e = Event {};
     e.active = true;
     e.kind = s.kind;

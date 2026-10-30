@@ -233,6 +233,7 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
                 // Velocity to Volume: 1 = the instrument's own response, 0 = every note alike.
                 const float v = 0.75f + slot.velocityVolume->load() * (m.getFloatVelocity() - 0.75f);
                 in.noteOn(note, std::clamp(v, 0.01f, 1.0f));
+                meters.notes.fetch_add(1, std::memory_order_relaxed);
                 slot.rack.noteVelocity(m.getFloatVelocity());
             }
         } else if (!slot.running) {
@@ -507,6 +508,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     meters.voices.store(voices, std::memory_order_relaxed);
     meters.place.store(int(environments.place()), std::memory_order_relaxed);
     meters.character.store(environments.current().characterIndex(), std::memory_order_relaxed);
+    meters.events.store(environments.current().ambienceEvents(), std::memory_order_relaxed);
     meters.activity.store(environments.current().evolution().movement(), std::memory_order_relaxed);
 }
 
@@ -632,6 +634,7 @@ void LiminalProcessor::getStateInformation(juce::MemoryBlock& destData) {
     auto state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     xml->setAttribute("stateVersion", stateVersion);
+    xml->setAttribute("uiScale", double(uiScale.load()));
     auto* scenesXml = xml->createNewChildElement("SCENES");   // by parameter ID, so later versions can add parameters
     for (int w = 0; w < 2; ++w) {
         if (!stored[std::size_t(w)].load()) continue;
@@ -644,6 +647,7 @@ void LiminalProcessor::getStateInformation(juce::MemoryBlock& destData) {
 void LiminalProcessor::setStateInformation(const void* data, int sizeInBytes) {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml == nullptr || !xml->hasTagName(parameters.state.getType())) return;   // not ours: ignore
+    uiScale.store(float(std::clamp(xml->getDoubleAttribute("uiScale", 1.0), 0.85, 1.5)));
     for (int w = 0; w < 2; ++w) stored[std::size_t(w)].store(false);
     if (auto* scenesXml = xml->getChildByName("SCENES")) {
         for (int w = 0; w < 2; ++w) {

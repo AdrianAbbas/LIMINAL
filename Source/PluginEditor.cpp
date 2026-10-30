@@ -65,6 +65,26 @@ void ViewfinderLook::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool
 }
 
 juce::Font ViewfinderLook::getComboBoxFont(juce::ComboBox&) { return font(10.5f); }
+
+// The macro knobs: a thin ring with a brighter arc and a short tick, no box.
+void ViewfinderLook::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float position, float startAngle, float endAngle, juce::Slider& s) {
+    const auto area = juce::Rectangle<float>(float(x), float(y), float(width), float(height)).reduced(3.0f);
+    const float r = std::min(area.getWidth(), area.getHeight()) * 0.5f;
+    const auto c = area.getCentre();
+    const float angle = startAngle + position * (endAngle - startAngle);
+    juce::Path track, value;
+    track.addCentredArc(c.x, c.y, r, r, 0, startAngle, endAngle, true);
+    value.addCentredArc(c.x, c.y, r, r, 0, startAngle, angle, true);
+    g.setColour(ink.withAlpha(0.18f));
+    g.strokePath(track, juce::PathStrokeType(2.0f));
+    g.setColour(ink.withAlpha(s.isMouseOverOrDragging() ? 1.0f : 0.85f));
+    g.strokePath(value, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour(juce::Colour(0x2207100f));
+    g.fillEllipse(juce::Rectangle<float>(r * 1.4f, r * 1.4f).withCentre(c));
+    const juce::Point<float> tip(c.x + std::sin(angle) * r * 0.62f, c.y - std::cos(angle) * r * 0.62f);
+    g.setColour(ink.withAlpha(0.9f));
+    g.drawLine({ c.getPointOnCircumference(r * 0.25f, angle), tip }, 1.6f);
+}
 juce::Font ViewfinderLook::getPopupMenuFont() { return font(12.0f); }
 
 //==============================================================================
@@ -80,14 +100,19 @@ LevelControl::LevelControl(juce::AudioProcessorValueTreeState& state, const char
 
 void LevelControl::paint(juce::Graphics& g) {
     auto top = getLocalBounds().removeFromTop(16).toFloat();
-    g.setFont(font(10.5f));
+    const auto text = parameter->getCurrentValueAsText();
+    const auto unit = parameter->getLabel();
+    const auto value = text + (unit == "dB" && text != "-inf" ? " dB" : unit == "%" ? " %" : "");
+    // Label and value never overlap: both shrink together if the cell is narrow.
+    float size = 10.5f;
+    while (size > 7.0f && juce::GlyphArrangement::getStringWidth(font(size), label) + juce::GlyphArrangement::getStringWidth(font(size - 0.5f), value) + 6.0f > top.getWidth())
+        size -= 0.5f;
+    g.setFont(font(size));
     g.setColour(ink.withAlpha(0.6f));
     g.drawText(label, top, juce::Justification::centredLeft);
     g.setColour(ink.withAlpha(0.9f));
-    g.setFont(font(10.0f));
-    const auto text = parameter->getCurrentValueAsText();
-    const auto unit = parameter->getLabel();
-    g.drawText(text + (unit == "dB" && text != "-inf" ? " dB" : unit == "%" ? " %" : ""), top, juce::Justification::centredRight);
+    g.setFont(font(size - 0.5f));
+    g.drawText(value, top, juce::Justification::centredRight);
 }
 
 void LevelControl::resized() { slider.setBounds(getLocalBounds().withTrimmedTop(16).withTrimmedLeft(-2).withTrimmedRight(-2)); }
@@ -122,6 +147,286 @@ const char* tabNames[] { "PIANO", "SYNTH", "GLASS", "CHOIR", "BOX", "DRONE" };
 } // namespace
 
 //==============================================================================
+// Milestone 4 main view parts.
+PlaceStrip::PlaceStrip(juce::AudioProcessorValueTreeState& s) : state(s) { refresh(); }
+
+juce::Rectangle<int> PlaceStrip::frame(int place) const {
+    const int gap = 8, w = (getWidth() - gap * 9) / 10;
+    return { place * (w + gap), 0, w, getHeight() };
+}
+
+bool PlaceStrip::refresh() {
+    const int now = int(std::lround(state.getRawParameterValue(params::environment)->load()));
+    if (now == selected) return false;
+    selected = now;
+    repaint();
+    return true;
+}
+
+void PlaceStrip::choose(int place) {
+    auto* p = state.getParameter(params::environment);
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(p->convertTo0to1(float(place)));
+    p->endChangeGesture();
+    refresh();
+}
+
+void PlaceStrip::paint(juce::Graphics& g) {
+    const float scale = std::max(1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
+    if (std::abs(scale - thumbScale) > 0.01f) {   // the miniatures, drawn once per scale
+        thumbScale = scale;
+        for (auto& t : thumbs) t = {};
+    }
+    const char* shortNames[] { "HOSPITAL", "MALL", "SCHOOL", "GARAGE", "POOL", "HOTEL", "SUBWAY", "SUPERMARKET", "OFFICE", "IMPOSSIBLE" };
+    for (int i = 0; i < 10; ++i) {
+        const auto r = frame(i).toFloat();
+        auto& t = thumbs[std::size_t(i)];
+        if (!t.isValid()) t = ui::renderPlace(i, 0, int(r.getWidth()), int(r.getHeight()), scale, true).image;
+        const bool on = i == selected, over = i == hover;
+        g.setOpacity(on ? 1.0f : over ? 0.85f : 0.55f);
+        g.drawImage(t, r, juce::RectanglePlacement::stretchToFit);
+        g.setOpacity(1.0f);
+        g.setColour(ink.withAlpha(on ? 0.95f : over ? 0.5f : 0.22f));
+        g.drawRect(r, on ? 1.6f : 1.0f);
+        // Sprocket-like marks: this is film.
+        g.setColour(juce::Colours::black.withAlpha(0.45f));
+        g.fillRect(r.withHeight(11.0f).withY(r.getBottom() - 11.0f));
+        g.setColour(ink.withAlpha(on ? 1.0f : 0.7f));
+        g.setFont(font(7.5f, on));
+        g.drawFittedText(shortNames[i], r.withTrimmedTop(r.getHeight() - 11.0f).toNearestInt(), juce::Justification::centred, 1, 0.7f);
+        if (on) {
+            g.setColour(rec);
+            g.fillEllipse(r.getX() + 4.0f, r.getY() + 4.0f, 5.0f, 5.0f);
+        }
+    }
+}
+
+void PlaceStrip::mouseMove(const juce::MouseEvent& e) {
+    int h = -1;
+    for (int i = 0; i < 10; ++i)
+        if (frame(i).contains(e.getPosition())) h = i;
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover) {
+        hover = h;
+        repaint();
+    }
+}
+void PlaceStrip::mouseExit(const juce::MouseEvent&) {
+    hover = -1;
+    repaint();
+}
+void PlaceStrip::mouseUp(const juce::MouseEvent& e) {
+    if (!e.mouseWasClicked()) return;
+    for (int i = 0; i < 10; ++i)
+        if (frame(i).contains(e.getPosition())) choose(i);
+}
+
+CharacterStrip::CharacterStrip(juce::AudioProcessorValueTreeState& s) : state(s) { refresh(); }
+
+bool CharacterStrip::refresh() {
+    const int p = int(std::lround(state.getRawParameterValue(params::environment)->load()));
+    const int c = int(std::lround(state.getRawParameterValue(params::character)->load()));
+    if (p == place && c == selected) return false;
+    place = p;
+    selected = c;
+    repaint();
+    return true;
+}
+
+juce::Rectangle<float> CharacterStrip::chip(int character) const {
+    float x = 0;
+    const auto f = font(9.5f, true);
+    for (int c = 0; c < character; ++c) x += juce::GlyphArrangement::getStringWidth(f, dsp::character(std::max(0, place), c).name) + 26.0f;
+    return { x, 0, juce::GlyphArrangement::getStringWidth(f, dsp::character(std::max(0, place), character).name) + 14.0f, float(getHeight()) };
+}
+
+void CharacterStrip::choose(int character) {
+    auto* p = state.getParameter(params::character);
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(p->convertTo0to1(float(character)));
+    p->endChangeGesture();
+    refresh();
+}
+
+void CharacterStrip::paint(juce::Graphics& g) {
+    for (int c = 0; c < dsp::characterCount; ++c) {
+        const auto r = chip(c);
+        const bool on = c == selected;
+        if (on) {
+            g.setColour(ink.withAlpha(0.85f));
+            g.fillRoundedRectangle(r, 3.0f);
+        } else {
+            g.setColour(ink.withAlpha(hover == c ? 0.55f : 0.25f));
+            g.drawRoundedRectangle(r.reduced(0.5f), 3.0f, 1.0f);
+        }
+        g.setColour(on ? juce::Colour(0xff0b1412) : ink.withAlpha(hover == c ? 1.0f : 0.75f));
+        g.setFont(font(9.5f, true));
+        g.drawText(dsp::character(std::max(0, place), c).name, r, juce::Justification::centred);
+    }
+}
+void CharacterStrip::mouseMove(const juce::MouseEvent& e) {
+    int h = -1;
+    for (int c = 0; c < dsp::characterCount; ++c)
+        if (chip(c).contains(e.position)) h = c;
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover) {
+        hover = h;
+        repaint();
+    }
+}
+void CharacterStrip::mouseExit(const juce::MouseEvent&) {
+    hover = -1;
+    repaint();
+}
+void CharacterStrip::mouseUp(const juce::MouseEvent& e) {
+    if (!e.mouseWasClicked()) return;
+    for (int c = 0; c < dsp::characterCount; ++c)
+        if (chip(c).contains(e.position)) choose(c);
+}
+
+namespace {
+// The instruments as small line drawings, in a box of `r`.
+void drawInstrument(juce::Graphics& g, int which, juce::Rectangle<float> r) {
+    const float t = 1.3f;
+    switch (which) {
+    case 0: {   // an upright piano: body and keys
+        g.drawRect(r.reduced(r.getWidth() * 0.1f, r.getHeight() * 0.08f), t);
+        const auto keys = r.reduced(r.getWidth() * 0.16f, 0).withTrimmedTop(r.getHeight() * 0.55f).withHeight(r.getHeight() * 0.18f);
+        g.drawRect(keys, 1.0f);
+        for (int k = 1; k < 7; ++k) g.fillRect(keys.getX() + keys.getWidth() * float(k) / 7.0f, keys.getY(), 1.0f, keys.getHeight() * (k % 3 == 0 ? 1.0f : 0.6f));
+        break;
+    }
+    case 1: {   // a cassette
+        const auto body = r.reduced(r.getWidth() * 0.06f, r.getHeight() * 0.2f);
+        g.drawRoundedRectangle(body, 2.0f, t);
+        for (float fx : { 0.33f, 0.67f }) g.drawEllipse(juce::Rectangle<float>(body.getHeight() * 0.32f, body.getHeight() * 0.32f).withCentre({ body.getX() + body.getWidth() * fx, body.getCentreY() - 1 }), 1.0f);
+        g.drawRect(body.reduced(body.getWidth() * 0.22f, 0).withTrimmedTop(body.getHeight() * 0.72f), 1.0f);
+        break;
+    }
+    case 2: {   // a wine glass
+        juce::Path p;
+        const float cx = r.getCentreX(), top = r.getY() + r.getHeight() * 0.06f, bowl = r.getY() + r.getHeight() * 0.55f;
+        p.startNewSubPath(cx - r.getWidth() * 0.22f, top);
+        p.quadraticTo(cx - r.getWidth() * 0.24f, bowl, cx, bowl);
+        p.quadraticTo(cx + r.getWidth() * 0.24f, bowl, cx + r.getWidth() * 0.22f, top);
+        p.startNewSubPath(cx, bowl);
+        p.lineTo(cx, r.getBottom() - r.getHeight() * 0.1f);
+        p.startNewSubPath(cx - r.getWidth() * 0.15f, r.getBottom() - r.getHeight() * 0.1f);
+        p.lineTo(cx + r.getWidth() * 0.15f, r.getBottom() - r.getHeight() * 0.1f);
+        g.strokePath(p, juce::PathStrokeType(t));
+        break;
+    }
+    case 3: {   // three voices: open mouths in a row
+        for (int k = 0; k < 3; ++k) {
+            const auto head = juce::Rectangle<float>(r.getWidth() * 0.26f, r.getHeight() * 0.42f).withCentre({ r.getX() + r.getWidth() * (0.22f + 0.28f * float(k)), r.getCentreY() - (k == 1 ? 4.0f : 0.0f) });
+            g.drawEllipse(head, t);
+            g.fillEllipse(juce::Rectangle<float>(head.getWidth() * 0.3f, head.getHeight() * 0.32f).withCentre({ head.getCentreX(), head.getCentreY() + head.getHeight() * 0.15f }));
+        }
+        break;
+    }
+    case 4: {   // a music box with its crank
+        const auto box = r.reduced(r.getWidth() * 0.14f, r.getHeight() * 0.28f).translated(-r.getWidth() * 0.05f, r.getHeight() * 0.08f);
+        g.drawRect(box, t);
+        g.drawLine(box.getX(), box.getY() + box.getHeight() * 0.3f, box.getRight(), box.getY() + box.getHeight() * 0.3f, 1.0f);
+        g.drawLine(box.getRight(), box.getCentreY(), box.getRight() + r.getWidth() * 0.12f, box.getCentreY(), 1.0f);
+        g.drawLine(box.getRight() + r.getWidth() * 0.12f, box.getCentreY(), box.getRight() + r.getWidth() * 0.12f, box.getY(), 1.0f);
+        break;
+    }
+    default: {   // the drone: stacked slow waves
+        for (int k = 0; k < 3; ++k) {
+            juce::Path p;
+            const float y = r.getY() + r.getHeight() * (0.3f + 0.2f * float(k));
+            p.startNewSubPath(r.getX() + 2, y);
+            for (float x = 0; x <= 1.0f; x += 0.05f) p.lineTo(r.getX() + 2 + x * (r.getWidth() - 4), y + std::sin(x * 6.283f * (1.0f + 0.5f * float(k))) * r.getHeight() * 0.07f);
+            g.strokePath(p, juce::PathStrokeType(1.0f + 0.3f * float(2 - k)));
+        }
+    }
+    }
+}
+const char* shelfNames[] { "PIANO", "SYNTH", "GLASS", "CHOIR", "MUSIC BOX", "DRONE" };
+const char* shelfIds[] { params::pianoOn, params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn };
+} // namespace
+
+InstrumentShelf::InstrumentShelf(juce::AudioProcessorValueTreeState& s) : state(s) { refresh(); }
+
+juce::Rectangle<float> InstrumentShelf::slot(int i) const {
+    const float w = float(getWidth()) / 6.0f;
+    return { float(i) * w, 0, w, float(getHeight()) };
+}
+
+bool InstrumentShelf::refresh() {
+    std::array<bool, 6> now {};
+    for (int i = 0; i < 6; ++i) now[std::size_t(i)] = state.getRawParameterValue(shelfIds[i])->load() > 0.5f;
+    if (now == on) return false;
+    on = now;
+    repaint();
+    return true;
+}
+
+void InstrumentShelf::toggle(int i) {
+    auto* p = state.getParameter(shelfIds[i]);
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(on[std::size_t(i)] ? 0.0f : 1.0f);
+    p->endChangeGesture();
+    refresh();
+}
+
+void InstrumentShelf::paint(juce::Graphics& g) {
+    for (int i = 0; i < 6; ++i) {
+        const auto r = slot(i).reduced(4, 0);
+        const bool lit = on[std::size_t(i)];
+        if (lit) {   // a soft light on the object
+            g.setGradientFill(juce::ColourGradient(ink.withAlpha(0.18f), r.getCentre().translated(0, -6), ink.withAlpha(0.0f), r.getCentre().translated(r.getWidth() * 0.5f, -6), true));
+            g.fillEllipse(r.withSizeKeepingCentre(r.getWidth(), r.getHeight() * 0.9f).translated(0, -6));
+        }
+        g.setColour(ink.withAlpha(lit ? 0.95f : hover == i ? 0.6f : 0.32f));
+        drawInstrument(g, i, r.withTrimmedBottom(18).reduced(r.getWidth() * 0.18f, 4));
+        g.setFont(font(8.5f, lit));
+        g.drawFittedText(shelfNames[i], r.withTop(r.getBottom() - 16).toNearestInt(), juce::Justification::centred, 1, 0.7f);
+    }
+}
+void InstrumentShelf::mouseMove(const juce::MouseEvent& e) {
+    int h = -1;
+    for (int i = 0; i < 6; ++i)
+        if (slot(i).contains(e.position)) h = i;
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover) {
+        hover = h;
+        repaint();
+    }
+}
+void InstrumentShelf::mouseExit(const juce::MouseEvent&) {
+    hover = -1;
+    repaint();
+}
+void InstrumentShelf::mouseUp(const juce::MouseEvent& e) {
+    if (!e.mouseWasClicked()) return;
+    for (int i = 0; i < 6; ++i)
+        if (slot(i).contains(e.position)) toggle(i);
+}
+
+MacroKnob::MacroKnob(juce::AudioProcessorValueTreeState& state, const char* id, juce::String text)
+    : label(std::move(text)), parameter(state.getParameter(id)) {
+    slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    slider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+    slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
+    slider.onValueChange = [this] { repaint(); };
+    addAndMakeVisible(slider);
+    attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, id, slider);
+    slider.setDoubleClickReturnValue(true, double(parameter->convertFrom0to1(parameter->getDefaultValue())));
+}
+void MacroKnob::resized() { slider.setBounds(getLocalBounds().withTrimmedBottom(26)); }
+void MacroKnob::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().removeFromBottom(26);
+    g.setColour(ink.withAlpha(0.7f));
+    g.setFont(font(9.0f, true));
+    g.drawText(label, r.removeFromTop(13), juce::Justification::centred);
+    g.setColour(ink.withAlpha(0.5f));
+    g.setFont(font(9.0f));
+    g.drawText(parameter->getCurrentValueAsText() + " %", r, juce::Justification::centred);
+}
+
+//==============================================================================
 DrawerButton::DrawerButton(const juce::String& text, Icon i) : juce::Button(text), icon(i) {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
     setClickingTogglesState(false);
@@ -137,6 +442,11 @@ void DrawerButton::paintButton(juce::Graphics& g, bool highlighted, bool down) {
     g.drawRoundedRectangle(area, 4.0f, highlighted || open ? 1.4f : 1.0f);
     const juce::Colour fg = open ? juce::Colour(0xff0b1412) : ink.withAlpha(highlighted ? 1.0f : 0.82f);
     g.setColour(fg);
+    if (compact) {
+        g.setFont(font(10.5f, open));
+        g.drawFittedText(getButtonText(), getLocalBounds().translated(0, down ? 1 : 0), juce::Justification::centred, 1, 0.8f);
+        return;
+    }
     auto box = area.reduced(10.0f, 0.0f);
     auto glyph = box.removeFromLeft(16.0f).withSizeKeepingCentre(16.0f, 12.0f).translated(0, down ? 1.0f : 0.0f);
     if (icon == Icon::instruments) {   // three keys of a keyboard
@@ -497,10 +807,33 @@ void EnvironmentDrawer::paint(juce::Graphics& g) {
         g.drawFittedText(juce::String(ch.mood).toUpperCase() + "  -  SUITS " + ch.recommended,
                          characterBox(0).withWidth(getWidth() - 32).translated(0, 28).withHeight(13), juce::Justification::centredLeft, 1, 0.8f);
     }
+    {   // The room as the place and its Character make it: dimensions, materials, the processing.
+        const auto prof = dsp::profileFor(dsp::Place(place), std::clamp(selectedCharacter, 0, 2));
+        const char* materials[] { "VINYL FLOOR, PAINTED PLASTER, STEEL DOORS", "TERRAZZO, GLASS ROOF, SHUTTERS, STEEL", "LINOLEUM, METAL LOCKERS, PLASTER",
+                                  "BARE CONCRETE, STEEL BEAMS", "CERAMIC TILE, WATER, HIGH GLASS", "CARPET, WALLPAPER, WOOD DOORS",
+                                  "GLAZED TILE, STEEL RAILS, CONCRETE", "VINYL FLOOR, STEEL SHELVING, COLD GLASS", "CARPET TILES, CEILING TILES, FABRIC SCREENS",
+                                  "NONE THAT CAN BE NAMED" };
+        const char* patterns[] { "PARALLEL WALLS (FLUTTER)", "PACKED, IRREGULAR", "A FEW FAR SURFACES", "A TUNNEL", "A REPEATING GRID" };
+        const auto& r = prof.room;
+        const auto& c = prof.colour;
+        juce::StringArray lines;
+        lines.add("ROOM  -  RT60 " + juce::String(r.rt60Low, 1) + " S LOW / " + juce::String(r.rt60High, 1) + " S HIGH,  SIZE X" + juce::String(r.size, 1)
+                  + ",  REFLECTIONS: " + patterns[int(r.pattern)]);
+        lines.add(juce::String("MATERIALS  -  ") + materials[place]);
+        lines.add("ON THE INSTRUMENTS  -  " + juce::String(juce::roundToInt(c.highPassHz)) + " HZ TO " + juce::String(c.lowPassHz / 1000.0f, 1) + " KHZ"
+                  + (c.driftCents > 0 ? ",  DRIFT " + juce::String(juce::roundToInt(c.driftCents)) + " CENTS" : juce::String())
+                  + (c.shiftMix > 0 ? ",  SHIFTED PARTIALS" : juce::String()) + ",  WIDTH X" + juce::String(c.width, 1));
+        g.setColour(ink.withAlpha(0.5f));
+        g.setFont(font(8.5f));
+        int y = characterBox(0).getBottom() + 24;
+        for (const auto& l : lines) {
+            g.drawFittedText(l, juce::Rectangle<int>(16, y, getWidth() - 32, 12), juce::Justification::centredLeft, 1, 0.75f);
+            y += 14;
+        }
+    }
     g.setColour(ink.withAlpha(0.45f));
     g.setFont(font(9.5f));
-    g.drawFittedText("How strongly the place shapes every instrument (0 = untouched).",
-                     amount.getBounds().translated(0, -16).withHeight(14), juce::Justification::bottomLeft, 1, 1.0f);
+
 }
 
 void EnvironmentDrawer::resized() {
@@ -544,7 +877,7 @@ const std::vector<ModuleInfo>& modules() {
     static const std::vector<ModuleInfo> list {
         { "DRIFT", params::fx::driftOn, { { params::fx::drift, "AMT" }, { params::fx::driftRate, "RATE" } } },
         { "TAPE", params::fx::tapeOn, { { params::fx::tape, "AMT" }, { params::fx::tapeTone, "TONE" }, { params::fx::tapeHiss, "HISS" }, { params::fx::tapeDropouts, "DROP" } } },
-        { "REVERB", params::fx::reverbOn, { { params::fx::reverb, "ROOM" } } },
+        { "REVERB", params::fx::reverbOn, { { params::fx::reverb, "SEND" } } },
         { "ECHO", params::fx::echoOn, { { params::fx::echo, "AMT" }, { params::fx::echoTime, "MS" }, { params::fx::echoFeedback, "FDBK" }, { params::fx::echoTone, "TONE" } } },
         { "CHORUS", params::fx::chorusOn, { { params::fx::chorus, "AMT" }, { params::fx::chorusRate, "RATE" } } },
         { "FILTER", params::fx::filterOn, { { params::fx::filter, "AMT" }, { params::fx::filterLow, "LP" }, { params::fx::filterHigh, "HP" }, { params::fx::filterRes, "RES" } } },
@@ -602,8 +935,8 @@ void EffectsDrawer::focus(int instrument) {
         rows.push_back(std::move(row));
     }
     midi.clear();
-    for (const auto& [n, label] : { std::pair<const char*, const char*> { params::midi::keyLow, "LOW KEY" }, { params::midi::keyHigh, "HIGH KEY" },
-                                    { params::midi::velocityVolume, "VEL>VOL" }, { params::midi::velocityFilter, "VEL>FLT" } }) {
+    for (const auto& [n, label] : { std::pair<const char*, const char*> { params::midi::keyLow, "LOW" }, { params::midi::keyHigh, "HIGH" },
+                                    { params::midi::velocityVolume, "V>VOL" }, { params::midi::velocityFilter, "V>FLT" } }) {
         midi.push_back(std::make_unique<LevelControl>(state, params::midiId(current, n).toRawUTF8(), label));
         addAndMakeVisible(*midi.back());
     }
@@ -665,7 +998,7 @@ void EffectsDrawer::resized() {
     for (auto& tab : tabs) tab.setBounds(tabRow.removeFromLeft(tabWidth));
     area.removeFromTop(6);
     for (auto& row : rows) {
-        auto r = area.removeFromTop(34);
+        auto r = area.removeFromTop(37);
         auto left = r.removeFromLeft(96);
         row.on->setBounds(left.removeFromTop(19));
         if (row.choice != nullptr) row.choice->setBounds(left.withTrimmedTop(1).withHeight(17).withTrimmedRight(8));
@@ -996,12 +1329,15 @@ bool PresetDrawer::poll() {
 }
 
 //==============================================================================
-LiminalEditor::LiminalEditor(LiminalProcessor& p)
-    : AudioProcessorEditor(p), processor(p),
+MainView::MainView(LiminalProcessor& p)
+    : processor(p),
       master(p.parameters, params::master, "MASTER"),
       instrument(p.parameters, params::instrument, "INST"),
       ambience(p.parameters, params::ambience, "AMB"),
       space(p.parameters, params::space, "SPACE"),
+      placeStrip(p.parameters), characterStrip(p.parameters), shelf(p.parameters),
+      presenceKnob(p.parameters, params::presence, "PRESENCE"), scaleKnob(p.parameters, params::scale, "SCALE"),
+      activityKnob(p.parameters, params::activity, "ACTIVITY"), unrealKnob(p.parameters, params::unreal, "UNREAL"),
       active(p.parameters),
       drawer(p.parameters),
       places(p.parameters),
@@ -1013,6 +1349,8 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     powerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::power, power);
     addAndMakeVisible(power);
     for (auto* c : { &instrument, &ambience, &space, &master }) addAndMakeVisible(c);
+    for (auto* c : std::initializer_list<juce::Component*> { &placeStrip, &characterStrip, &shelf, &presenceKnob, &scaleKnob, &activityKnob, &unrealKnob })
+        addAndMakeVisible(c);
     instrumentsButton.onClick = [this] { showInstruments(!drawer.isVisible()); };
     addAndMakeVisible(instrumentsButton);
     environmentButton.onClick = [this] { showEnvironment(!places.isVisible()); };
@@ -1032,6 +1370,8 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     presetsPanel.onLoad = [this] {
         effects.focus(effects.focused());   // re-attach to what the preset set
         perform.refreshScenes();
+        shelf.refresh();
+        active.refresh();
         if (syncPlace()) repaint();
     };
     places.onChoose = [this] { if (syncPlace()) repaint(); };
@@ -1040,13 +1380,15 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     startTimerHz(30);
 }
 
-LiminalEditor::~LiminalEditor() {
+MainView::~MainView() {
     stopTimer();
     setLookAndFeel(nullptr);
 }
 
 // A new place: caption, button text and colour cast follow the Environment parameter.
-bool LiminalEditor::syncPlace() {
+bool MainView::syncPlace() {
+    placeStrip.refresh();
+    characterStrip.refresh();
     const int place = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
     const int ch = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::character)->load())), 0, dsp::characterCount - 1);
     if (place == placeShown && ch == characterShown) return false;
@@ -1055,13 +1397,13 @@ bool LiminalEditor::syncPlace() {
     // The Character's grade (Milestone 4 adds its light and flicker to the painted scene).
     const auto characterGrade = dsp::character(place, ch).grade;
     grade = juce::Colour(characterGrade != 0 ? characterGrade : placeInfo[place].grade);
-    environmentButton.setButtonText(juce::String("PLACE:  ") + placeInfo[place].shortName);
+    environmentButton.setButtonText("PLACE");
     effects.repaint();   // it shows what the place adds
     return true;
 }
 
 // One drawer at a time: opening one closes the others.
-void LiminalEditor::closeDrawersExcept(juce::Component* keep) {
+void MainView::closeDrawersExcept(juce::Component* keep) {
     const std::pair<juce::Component*, DrawerButton*> all[] { { &drawer, &instrumentsButton }, { &places, &environmentButton }, { &effects, &effectsButton },
                                                              { &perform, &performButton }, { &presetsPanel, &presetsButton } };
     for (const auto& [panel, button] : all)
@@ -1072,7 +1414,7 @@ void LiminalEditor::closeDrawersExcept(juce::Component* keep) {
         }
 }
 
-void LiminalEditor::showPresets(bool show) {
+void MainView::showPresets(bool show) {
     if (show) closeDrawersExcept(&presetsPanel);
     presetsPanel.setVisible(show);
     presetsButton.setToggleState(show, juce::dontSendNotification);
@@ -1080,7 +1422,7 @@ void LiminalEditor::showPresets(bool show) {
     repaint(presetsButton.getBounds());
 }
 
-void LiminalEditor::showPerform(bool show) {
+void MainView::showPerform(bool show) {
     if (show) {
         closeDrawersExcept(&perform);
         perform.refreshScenes();
@@ -1091,7 +1433,7 @@ void LiminalEditor::showPerform(bool show) {
     repaint(performButton.getBounds());
 }
 
-void LiminalEditor::showEffects(bool show) {
+void MainView::showEffects(bool show) {
     if (show) {
         closeDrawersExcept(&effects);
         effects.focus(drawer.focused());   // the instrument last looked at
@@ -1102,7 +1444,7 @@ void LiminalEditor::showEffects(bool show) {
     repaint(effectsButton.getBounds());
 }
 
-void LiminalEditor::showEnvironment(bool show) {
+void MainView::showEnvironment(bool show) {
     if (show) closeDrawersExcept(&places);
     places.setVisible(show);
     environmentButton.setToggleState(show, juce::dontSendNotification);
@@ -1110,7 +1452,7 @@ void LiminalEditor::showEnvironment(bool show) {
     repaint(environmentButton.getBounds());
 }
 
-void LiminalEditor::showInstruments(bool show) {
+void MainView::showInstruments(bool show) {
     if (show) closeDrawersExcept(&drawer);
     drawer.setVisible(show);
     instrumentsButton.setToggleState(show, juce::dontSendNotification);
@@ -1118,27 +1460,39 @@ void LiminalEditor::showInstruments(bool show) {
     repaint(instrumentsButton.getBounds());
 }
 
-void LiminalEditor::resized() {
-    auto strip = stripArea().reduced(32, 0);
+// The main view (Milestone 4): the scene fills the window; the viewfinder overlay names the
+// place and its Characters, and holds the page tabs; the strip below is a film strip of
+// the ten places, the instruments as objects, the four macros, and the outputs.
+void MainView::resized() {
     {
-        auto top = strip.removeFromTop(38).withTrimmedTop(8);
-        environmentButton.setBounds(top.removeFromRight(190).withSizeKeepingCentre(190, 26));
-        for (auto* b : { &effectsButton, &performButton, &presetsButton }) {
-            top.removeFromRight(6);
-            b->setBounds(top.removeFromRight(116).withSizeKeepingCentre(116, 26));
+        auto tabs = tabsArea();
+        const std::pair<DrawerButton*, int> buttons[] { { &presetsButton, 86 }, { &performButton, 88 }, { &effectsButton, 80 }, { &environmentButton, 70 }, { &instrumentsButton, 110 } };
+        for (const auto& [b, w] : buttons) {
+            b->setBounds(tabs.removeFromRight(w));
+            tabs.removeFromRight(4);
         }
-        active.setBounds(top.withTrimmedRight(16));
     }
-    strip = strip.withTrimmedBottom(16);
-    power.setBounds(strip.removeFromLeft(92).withSizeKeepingCentre(92, 28));
-    strip.removeFromLeft(4);
-    instrumentsButton.setBounds(strip.removeFromLeft(146).withSizeKeepingCentre(146, 30));
-    strip.removeFromLeft(18);
-    strip.removeFromRight(124);   // wordmark
-    const int each = strip.getWidth() / 4;
-    for (auto* c : { &instrument, &ambience, &space, &master }) {
-        c->setBounds(strip.removeFromLeft(each).withTrimmedRight(18).withSizeKeepingCentre(each - 18, 40));
-    }
+    characterStrip.setBounds(52, 88, 390, 20);
+    active.setBounds(44, 112, 400, 22);
+    auto strip = stripArea().reduced(32, 0);
+    strip.removeFromTop(10);
+    placeStrip.setBounds(strip.removeFromTop(52));
+    strip.removeFromTop(8);
+    auto row = strip.removeFromTop(76);
+    shelf.setBounds(row.removeFromLeft(300));
+    row.removeFromLeft(14);
+    for (auto* k : { &presenceKnob, &scaleKnob, &activityKnob, &unrealKnob }) k->setBounds(row.removeFromLeft(62).withSizeKeepingCentre(62, 76));
+    row.removeFromLeft(14);
+    power.setBounds(row.removeFromRight(84).withSizeKeepingCentre(84, 28));
+    row.removeFromRight(8);
+    const int half = (row.getWidth() - 12) / 2;
+    auto top = row.removeFromTop(38), bottom = row;
+    master.setBounds(top.removeFromLeft(half).withSizeKeepingCentre(half, 34));
+    top.removeFromLeft(12);
+    instrument.setBounds(top.withSizeKeepingCentre(top.getWidth(), 34));
+    ambience.setBounds(bottom.removeFromLeft(half).withSizeKeepingCentre(half, 34));
+    bottom.removeFromLeft(12);
+    space.setBounds(bottom.withSizeKeepingCentre(bottom.getWidth(), 34));
     drawer.setBounds(drawerArea());
     places.setBounds(drawerArea());
     effects.setBounds(drawerArea());
@@ -1148,22 +1502,51 @@ void LiminalEditor::resized() {
     sceneScale = 0;
 }
 
-void LiminalEditor::paint(juce::Graphics& g) {
+void MainView::mouseMove(const juce::MouseEvent& e) { mouse = e.position; }
+
+// The lights answering the music: each pulse brightens a fixture, its halo and its
+// reflection (drawn over the cached scene, only where something changed).
+void MainView::paintLights(juce::Graphics& g) {
+    const auto count = std::min<std::size_t>(shownPulse.size(), scene.lights.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        const float p = shownPulse[i];
+        const auto& light = scene.lights[i];
+        if (p > 0.005f) {
+            g.setGradientFill(juce::ColourGradient(scene.lightColour.withAlpha(std::min(0.5f, 0.32f * p)), light.glow.getCentre(), scene.lightColour.withAlpha(0.0f),
+                                                   light.glow.getCentre().translated(light.glow.getWidth() * 0.5f, 0), true));
+            g.fillEllipse(light.glow);
+            if (light.reflection.x >= 0) {
+                const auto r = juce::Rectangle<float>(light.glow.getWidth() * 0.4f, light.glow.getHeight() * 0.9f).withCentre(light.reflection);
+                g.setGradientFill(juce::ColourGradient(scene.lightColour.withAlpha(std::min(0.35f, 0.22f * p)), light.reflection, scene.lightColour.withAlpha(0.0f),
+                                                       light.reflection.translated(0, r.getHeight() * 0.5f), true));
+                g.fillEllipse(r);
+            }
+        } else if (p < -0.005f) {   // a failing tube: its glow dims
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0a0e0d).withAlpha(std::min(0.8f, -p)), light.glow.getCentre(), juce::Colour(0x000a0e0d),
+                                                   light.glow.getCentre().translated(light.glow.getWidth() * 0.5f, 0), true));
+            g.fillEllipse(light.glow);
+        }
+    }
+}
+
+void MainView::paint(juce::Graphics& g) {
     paintStarted = nowMs();
     const float scale = std::max(1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
-    if (!scene.image.isValid() || std::abs(scale - sceneScale) > 0.01f) {
-        scene = ui::renderCorridor(getWidth(), getHeight(), scale);
+    if (!scene.image.isValid() || std::abs(scale - sceneScale) > 0.01f || scene.place != placeShown || scene.character != characterShown) {
+        scene = ui::renderPlace(std::max(0, placeShown), std::max(0, characterShown), getWidth(), getHeight(), scale);
         sceneScale = scale;
     }
     const auto bounds = getLocalBounds().toFloat();
     g.drawImage(scene.image, bounds, juce::RectanglePlacement::stretchToFit);
 
-    // The failing light: its glow dims while it stutters.
-    if (flickerDim > 0.0f && scene.lights.size() > 1) {
-        const auto r = scene.lights[1];
-        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff10181a).withAlpha(0.75f * flickerDim), r.getCentre(),
-                                               juce::Colour(0x0010181a), r.getCentre().translated(r.getWidth() * 0.5f, 0), true));
-        g.fillEllipse(r);
+    paintLights(g);
+    if (clock < shimmerUntil) {   // Unreal: a band of the picture slips sideways, like worn tape
+        const auto band = juce::Rectangle<float>(0, shimmerY, bounds.getWidth(), shimmerH);
+        juce::Graphics::ScopedSaveState save(g);
+        g.reduceClipRegion(band.toNearestInt());
+        g.drawImage(scene.image, bounds.translated(shimmerShift, 0), juce::RectanglePlacement::stretchToFit);
+        g.setColour(ink.withAlpha(0.12f));
+        g.fillRect(band.withHeight(1.0f).translated(0, shimmerH * 0.6f));
     }
 
     if (drawer.isVisible() || places.isVisible() || effects.isVisible() || perform.isVisible() || presetsPanel.isVisible()) {   // frosted glass behind the drawer
@@ -1179,18 +1562,14 @@ void LiminalEditor::paint(juce::Graphics& g) {
         g.reduceClipRegion(strip);
         g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
     }
-    if (!grade.isTransparent()) {   // the place's colour cast (scene, drawers and strip alike)
-        g.setColour(grade);
-        g.fillAll();
-    }
     g.setColour(ink.withAlpha(0.18f));
     g.fillRect(strip.getX(), strip.getY(), strip.getWidth(), 1);
-    auto mark = strip.reduced(32, 0).withTrimmedBottom(16).withTrimmedTop(38).removeFromRight(124).toFloat();
-    g.setColour(ink.withAlpha(0.92f));
-    g.setFont(font(17.0f, true).withExtraKerningFactor(0.45f));
-    g.drawText("LIMINAL", mark, juce::Justification::centredRight);
     g.setColour(ink.withAlpha(0.08f));
-    g.fillRect(strip.getX() + 32, strip.getY() + 38, strip.getWidth() - 64, 1);
+    g.fillRect(strip.getX() + 32, placeStrip.getBottom() + 4, strip.getWidth() - 64, 1);
+    // The wordmark, quiet, at the top of the viewfinder.
+    g.setColour(ink.withAlpha(0.5f));
+    g.setFont(font(12.0f, true).withExtraKerningFactor(0.6f));
+    g.drawText("LIMINAL", juce::Rectangle<int>(getWidth() / 2 - 80, 26, 160, 20), juce::Justification::centred);
 
     // Viewfinder frame corners and centre mark.
     const auto frame = getLocalBounds().withTrimmedBottom(strip.getHeight()).reduced(18).toFloat();
@@ -1252,12 +1631,12 @@ void LiminalEditor::paint(juce::Graphics& g) {
     }
 }
 
-void LiminalEditor::paintOverChildren(juce::Graphics&) {
+void MainView::paintOverChildren(juce::Graphics&) {
     const double now = nowMs();
     frames.painted(now - paintStarted, now);
 }
 
-void LiminalEditor::timerCallback() {
+void MainView::timerCallback() {
     double elapsed = 0;
     const double now = nowMs();
     if (!frames.beginFrame(now, elapsed)) return;
@@ -1285,21 +1664,54 @@ void LiminalEditor::timerCallback() {
         ambienceSegments = amb;
         dirty.add(meterArea());
     }
-    float dim = 0.0f;
-    if (!reduced) {
-        if (clock >= flickerNext) {
-            flickerUntil = clock + 0.15 + 0.5 * random.nextDouble();
-            flickerNext = clock + 4.0 + 9.0 * random.nextDouble();
+    // The lights: notes make them swell, the place's own sounds make one flicker, the
+    // Character decides how unreliable the tubes are, the mouse warms the nearest one.
+    // Eco quality (or slow frames) keeps them still.
+    const bool eco = std::lround(processor.parameters.getRawParameterValue(params::quality)->load()) == 0;
+    const int notes = processor.meters.notes.load(), events = processor.meters.events.load();
+    const auto lightCount = std::min<std::size_t>(pulse.size(), scene.lights.size());
+    if (!reduced && !eco && lightCount > 0) {
+        if (notes != notesSeen)
+            for (std::size_t i = 0; i < lightCount; ++i) pulse[i] = std::max(pulse[i], 0.9f - 0.06f * float(i));
+        if (events != eventsSeen) pulse[std::size_t(random.nextInt(int(lightCount)))] = 0.7f;
+        const float flicker = dsp::character(std::max(0, placeShown), std::max(0, characterShown)).flicker;
+        if (clock >= nextFlicker) {
+            nextFlicker = clock + (1.0 + 8.0 * random.nextDouble()) / (0.3 + 1.5 * flicker);
+            pulse[std::size_t(random.nextInt(int(lightCount)))] = -0.85f;
         }
-        if (clock < flickerUntil) {
-            if (clock >= flickerToggle) flickerToggle = clock + 0.03 + 0.08 * random.nextDouble();
-            dim = std::fmod(flickerToggle * 37.0, 1.0) < 0.55 ? 0.85f : 0.1f;
+        for (std::size_t i = 0; i < lightCount; ++i) {
+            float target = pulse[i];
+            const auto& glow = scene.lights[i].glow;
+            if (glow.getWidth() < 400.0f && glow.contains(mouse)) target = std::max(target, 0.25f);
+            if (std::abs(target - shownPulse[i]) > 0.01f) {
+                shownPulse[i] = target;
+                dirty.add(glow.getSmallestIntegerContainer().expanded(2));
+                if (scene.lights[i].reflection.x >= 0)
+                    dirty.add(juce::Rectangle<float>(glow.getWidth() * 0.4f, glow.getHeight() * 0.9f).withCentre(scene.lights[i].reflection).getSmallestIntegerContainer().expanded(2));
+            }
+            pulse[i] *= pulse[i] < 0.0f ? 0.7f : 0.86f;   // a flicker is short; a swell fades
+            if (std::abs(pulse[i]) < 0.01f) pulse[i] = 0.0f;
         }
+        // Unreal: now and then the picture slips like worn tape.
+        const float u = processor.parameters.getRawParameterValue(params::unreal)->load();
+        if (u > 0.35f && clock >= nextShimmer) {
+            shimmerY = float(40 + random.nextInt(std::max(1, stripArea().getY() - 80)));
+            shimmerH = 6.0f + 18.0f * random.nextFloat();
+            shimmerShift = (random.nextBool() ? 1.0f : -1.0f) * (4.0f + 10.0f * u);
+            shimmerUntil = clock + 0.12 + 0.15 * random.nextDouble();
+            nextShimmer = clock + (2.0 + 6.0 * random.nextDouble()) / u;
+            dirty.add(juce::Rectangle<int>(0, int(shimmerY) - 1, getWidth(), int(shimmerH) + 2));
+        } else if (shimmerUntil > 0 && clock >= shimmerUntil) {
+            shimmerUntil = 0;
+            dirty.add(juce::Rectangle<int>(0, int(shimmerY) - 1, getWidth(), int(shimmerH) + 2));
+        }
+    } else if (std::any_of(shownPulse.begin(), shownPulse.end(), [](float v) { return v != 0.0f; })) {
+        shownPulse = {};
+        pulse = {};
+        dirty.add(getLocalBounds().withBottom(stripArea().getY()));
     }
-    if (dim != flickerDim) {
-        flickerDim = dim;
-        if (scene.lights.size() > 1) dirty.add(scene.lights[1].getSmallestIntegerContainer().expanded(2));
-    }
+    notesSeen = notes;
+    eventsSeen = events;
     {   // the evolution indicator: at most a few repaints a second of a tiny area
         const int lit = std::clamp(int(std::lround(processor.meters.activity.load() * 12.0f)), 0, 12);
         if (lit != activityLit) {
@@ -1309,6 +1721,9 @@ void LiminalEditor::timerCallback() {
     }
     if (presetsPanel.isVisible()) presetsPanel.poll();
     active.refresh();   // repaints itself when the instruments or the solo change
+    placeStrip.refresh();
+    characterStrip.refresh();
+    shelf.refresh();
     places.refresh();
     if (syncPlace()) repaint();
     if (dirty.isEmpty()) {
@@ -1316,6 +1731,25 @@ void LiminalEditor::timerCallback() {
         return;
     }
     for (const auto& r : dirty) repaint(r);
+}
+
+//==============================================================================
+LiminalEditor::LiminalEditor(LiminalProcessor& p) : AudioProcessorEditor(p), processor(p), main(p) {
+    const float scale = std::clamp(p.uiScale.load(), 0.85f, 1.5f);   // before the calls below resize us
+    addAndMakeVisible(main);
+    setResizable(true, true);
+    setResizeLimits(juce::roundToInt(defaultWidth * 0.85f), juce::roundToInt(defaultHeight * 0.85f), juce::roundToInt(defaultWidth * 1.5f), juce::roundToInt(defaultHeight * 1.5f));
+    getConstrainer()->setFixedAspectRatio(double(defaultWidth) / double(defaultHeight));
+    setSize(juce::roundToInt(defaultWidth * scale), juce::roundToInt(defaultHeight * scale));
+    ready = true;
+    resized();
+}
+
+void LiminalEditor::resized() {
+    const float scale = float(getWidth()) / float(defaultWidth);
+    main.setBounds(0, 0, defaultWidth, defaultHeight);
+    main.setTransform(juce::AffineTransform::scale(scale));
+    if (ready) processor.uiScale.store(scale);
 }
 
 } // namespace liminal

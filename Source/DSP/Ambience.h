@@ -25,6 +25,7 @@ public:
     void configure(Place, unsigned seed, const Character* = nullptr);   // also resets
     void setActivity(float rate) { activity = std::clamp(rate, 0.1f, 8.0f); }   // events x rate (Activity macro)
     void disturb();   // an evolution disturbance: one of the place's events, now, louder
+    int spawned() const { return spawnCount; }
     void setQuality(int q) { eventCap = q == 0 ? 5 : 12; }   // Eco: at most 5 events at once
     void reset();
     struct Out { Stereo dry, send; };
@@ -99,7 +100,7 @@ private:
     float bedSend = 0.3f;
 
     float activity = 1;
-    int eventCap = 12;
+    int eventCap = 12, spawnCount = 0;
     std::array<Schedule, 6> schedules {};
     int scheduleCount = 0;
     std::array<Event, 12> events {};

@@ -473,7 +473,8 @@ void testEditor(Suite& s, const juce::String& snapshot) {
         const auto image = editor->createComponentSnapshot(editor->getLocalBounds(), true, 2.0f);
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
         if (i == 0) {
-            s.check(editor->getWidth() == LiminalEditor::defaultWidth && editor->getHeight() == LiminalEditor::defaultHeight, "editor has its size");
+            s.check(editor->getWidth() == LiminalEditor::defaultWidth && editor->getHeight() == LiminalEditor::defaultHeight, "editor has its size",
+                    std::to_string(editor->getWidth()) + " x " + std::to_string(editor->getHeight()));
             s.check(image.getWidth() == 2 * LiminalEditor::defaultWidth, "editor renders at 2x (Retina)");
             // The scene is a picture, not a flat fill: sample brightness spread.
             float lo = 1, hi = 0;
@@ -484,7 +485,8 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                     hi = std::max(hi, b);
                 }
             s.check(hi - lo > 0.4f, "the editor shows a scene (brightness range > 0.4)", juce::String(hi - lo, 2).toStdString());
-            s.check(editor->getNumChildComponents() >= 5, "the editor has its controls");
+            auto* asLiminal = dynamic_cast<LiminalEditor*>(editor.get());
+            s.check(asLiminal != nullptr && asLiminal->view().getNumChildComponents() >= 5, "the editor has its controls (in its main view)");
             if (snapshot.isNotEmpty()) {
                 juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot);
                 file.getParentDirectory().createDirectory();
@@ -733,6 +735,19 @@ int main(int argc, char** argv) {
         else if (arg == "--only" && i + 1 < argc) only = juce::StringArray::fromTokens(argv[++i], ",", "");
         else if (arg == "--render" && i + 1 < argc) return renderPhrase(argv[++i]);
         else if (arg == "--render-places" && i + 1 < argc) return renderPlaces(argv[++i]);
+        else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
+            const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(argv[++i]);
+            folder.createDirectory();
+            for (int place = 0; place < dsp::placeCount; ++place)
+                for (int c = 0; c < dsp::characterCount; ++c) {
+                    const auto sc = ui::renderPlace(place, c, 920, 512, 1.0f);
+                    auto file = folder.getChildFile("scene-" + juce::String(place + 1).paddedLeft('0', 2) + "-" + juce::String(c + 1) + ".png");
+                    file.deleteFile();
+                    juce::FileOutputStream out(file);
+                    juce::PNGImageFormat().writeImageToStream(sc.image, out);
+                }
+            return 0;
+        }
     }
     const auto run = [&](const char* name) { return only.isEmpty() || only.contains(name); };
     Suite s;

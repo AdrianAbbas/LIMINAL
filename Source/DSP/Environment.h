@@ -180,6 +180,7 @@ public:
     void resetEvolution();
     void resetEvolution(unsigned seed) { evolutionSeedNow = seed; resetEvolution(); }
     const Evolution& evolution() const { return evo; }
+    int ambienceEvents() const { return ambience.spawned(); }
     // Adds into out (echo + room + ambience). `send` feeds the room, `echoIn` the place's
     // echo; this chain fades its inputs in and out for cross-fades between places.
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,

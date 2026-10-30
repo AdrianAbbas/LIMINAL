@@ -53,7 +53,8 @@ public:
         std::atomic<int> place { 0 };   // the environment being heard
         std::atomic<int> character { 0 };
         std::atomic<float> activity { 0 };   // evolution movement + events (0..1), for the interface
-        std::atomic<int> events { 0 };      // counts up on each ambience disturbance
+        std::atomic<int> events { 0 };      // the place's incidental sounds so far (the lights answer them)
+        std::atomic<int> notes { 0 };       // note-ons so far (the lights answer them)
     } meters;
 
     // Scenes A/B (Milestone 5). Storing is done on the message thread; the audio thread
@@ -61,6 +62,7 @@ public:
     void storeScene(int which);              // the current settings become scene A (0) or B (1)
     bool sceneStored(int which) const { return stored[std::size_t(which & 1)].load(); }
     void requestEvolutionReset() { evolutionResetRequest.store(true); }
+    std::atomic<float> uiScale { 1.0f };   // the editor's size (saved with the song)
 
     // Presets (Milestone 6). Message thread only.
     void applyPreset(const presets::Preset&);

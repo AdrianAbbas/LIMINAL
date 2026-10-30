@@ -26,6 +26,8 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Part 2: editor (Character choice in the PLACE drawer, PERFORM drawer: macros, evolution, scenes; activity indicator; Character grade), DEVLOG section, push without `[skip ci]`
 - [x] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (2026-10-30)
 - [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)
+  - [x] Part 1: ten procedural scenes (`UI/SceneArt`), graded per Character; resizable editor (MainView scaled, 85–150 %, 960x720); main view: film strip of places, Character chips, instrument objects, four ring knobs, page tabs; lights that answer notes/events/Character flicker/mouse; Unreal tape-slip; PLACE view shows room/materials/processing (350 checks pass)
+  - [ ] Part 2: snapshots of every place (and Characters, window sizes) in `docs/snapshots/`, editor tests for art/animation cost, DEVLOG section, push without `[skip ci]`
 - [ ] Final handoff: per milestone, what to listen for and look at in GarageBand
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
