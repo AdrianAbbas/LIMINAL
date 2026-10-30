@@ -6,12 +6,12 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 ## Progress checklist
 
 - [x] **0 — Audit, WORLDBUILDER-derived pipeline, skeleton** (2026-10-30) — confirmed by the developer in GarageBand: loads, plays, layout looks good
-- [ ] **1a — Forgotten Piano, Faded Synth, Glass Memories** (in progress, 2026-10-30)
+- [x] **1a — Forgotten Piano, Faded Synth, Glass Memories** (2026-10-30) — *waiting for the developer's GarageBand listening check*
   - [x] Research and `docs/INSTRUMENT_NOTES.md` (all three)
   - [x] Shared instrument layer (`DSP/Instrument.h`), Distance stage, processor routing, Forgotten Piano + tests
   - [x] Faded Synth + tests
   - [x] Glass Memories + tests, cross-instrument tests
-  - [ ] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
+  - [x] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
 - [ ] 1b — Empty Choir, Lost Music Box, Hollow Drone
 - [ ] 2a — Five environments
 - [ ] 2b — Five environments
@@ -168,3 +168,118 @@ notes from a keyboard or Musical Typing play the test instrument with a room
 tail; the sliders and Power work. If an older LIMINAL `.pkg` was ever installed,
 remove `/Library/Audio/Plug-Ins/Components/LIMINAL.component` first (the
 installer warns about it).
+
+---
+
+## Milestone 1a — Forgotten Piano, Faded Synth, Glass Memories (2026-10-30)
+
+The developer confirmed Milestone 0 in GarageBand (loads, plays, layout looks good) and
+asked for 1a: the three instruments per the spec, acoustics researched first, no forced
+pitch glides, each clearly distinct and musically useful completely dry.
+
+### What changed
+
+| | |
+|---|---|
+| `DSP/Instrument.h` | Shared layer: the MIDI interface every instrument implements; `VoicePool` (restrike fade, steal the quietest in 5 ms, sustain pedal, All Notes/Sound Off); `ModeBank` (decaying complex phasors, summed in 8 lanes so the compiler vectorises); `Wander` (slow random drift around zero); per-key hash for fixed key character. All modulation runs on an internal control clock, so output is identical for any host block size (tested). |
+| `DSP/ForgottenPiano` | Replaces the M0 `TestPiano`. Modal multi-string piano: up to 32 stiff-string partials, each a prompt mode + two beating aftersound modes (two-stage decay), hammer contact-time spectrum, strike-point comb, dampers (none from F6 up), sustain pedal with six sympathetic open strings, mechanical noises (key-bed thump, hammer knock, damper, pedal), Age / Detune / Softness / Mechanical Noise / Decay / Distance. 20 notes + 6 fading. |
+| `DSP/FadedSynth` | Two PolyBLEP saws + a PWM pulse, per-oscillator drift and shared wow, warm saturation into a 24 dB/oct ladder with key tracking and its envelope, RC envelopes, BBD-style stereo chorus. Detune / Warmth / Drift / Attack / Release / Width; **Glide is an option, off by default**. 12 notes + 4 fading. |
+| `DSP/GlassMemories` | Modal glass: (n,0) modes at 1 : 1.86 : 3.25 : 4.95 : 7.0 : 9.35 as beating doublets, raised-cosine strike (soft mallet to hard tick), rubbed-rim singing while held (Resonance), Fragility, Brightness, Detune (per-strike offset + wander, never a slide), Decay, Distance. 16 notes + 6 fading. |
+| `DSP/Distance.h` | Per-instrument distance before the room (piano, glass): quieter, darker (to 900 Hz), early reflections, more room send. |
+| Parameters | Appended (IDs stable, nothing renamed): per instrument On, Level and its six controls; `synth_glide`, `synth_glidetime`. Defaults: piano on, synth and glass off (so a new instance sounds like M0's piano slot). The global Instrument Level still scales all three. |
+| Processor | MIDI note-ons go to every instrument that is on; note-offs, pedal, bend and panic go to every instrument still sounding (no stuck notes when one is switched off mid-note). A switched-off instrument fades in 20 ms, then stops and costs nothing. |
+| Editor | An **INSTRUMENTS** button on the strip opens a frosted drawer: on/off and level per instrument, tabs PIANO / SYNTH / GLASS with each one's six controls (and Glide for the synth). The wordmark caption shows which are on. Snapshots: CI writes `editor-piano.png`, `editor-synth.png`, `editor-glass.png` next to `editor.png`. |
+| Tests | `Tests/InstrumentTests.h`: groups `piano`, `synth`, `glass`, `instruments` (in the CI shards). CI's listening render is now `m1a-instruments.wav`: each instrument plays the same phrase and chord in the corridor, then completely dry (78 s). |
+| Docs | `docs/INSTRUMENT_NOTES.md` (new): every model's numbers with their sources and how sure each is. README, INSTALL.txt, the installer's hint and the AU harness wording no longer say "test instrument". |
+
+### Tested (Linux, this container) — 130 checks pass, 0 fail
+
+Measured on the real `processBlock`, dry (no ambience, no room) unless said:
+
+- **Distinct dry** (C4, velocity 100): level 2 s into a held note vs 0.2 s — piano
+  -24.8 dB, synth -1.6 dB, glass -16.7 dB; energy at 1.86 x f0 vs the octave — piano
+  -86 dB, synth -68 dB, glass **+23 dB** (only the glass is inharmonic); centroid 482 /
+  355 / 329 Hz. Mezzo-forte phrase level -25.6 / -26.9 / -25.3 dBFS (within 1.6 dB).
+- **No glides**: every instrument's pitch at its start matches a second later (piano
+  fundamental within 3 cents at Age 0, synth 0.8 cents, glass within 2 cents); the
+  synth's legato next note starts on its pitch with Glide off and slides with it on.
+- **Piano**: A4 in tune at Age 0 / Detune 0 (within 6 cents: the stretched partials pull
+  the heard pitch sharp, as on a real piano); C6's 2nd partial 6.4 cents sharp, 4th 32;
+  two-stage decay 33 dB/s then 5.4 dB/s (C4); velocity 35→120 is 18.7 dB louder and the
+  centroid rises 522→685 Hz; C4's damper takes 56 dB off in half a second; C7 and the
+  pedal ring on as if held; every control audibly does what it says (Softness darker,
+  Mechanical Noise adds thump and damper sounds, Decay longer, Detune beats, Age puts
+  keys out of tune with each other 4.5→7.6 cents, Distance quieter and duller); A0–C8
+  all finite, neighbours within 2.9 dB.
+- **Synth**: in tune; sustains; releases; five-note chord unclipped (peak 0.30) and
+  full; velocity louder and brighter; Warmth halves the centroid; Detune beats; Drift
+  0.6→1.9 cents RMS wander; Attack, Release, Width (L/R correlation 0.99→0.47) work.
+- **Glass**: modes measured at 1.860, 3.250, 4.951 x the lowest; the 1.86 mode stands
+  over 15 dB above anything at the octave; long ring, damped on release, held by the
+  pedal; Brightness, Fragility (beating doublets), Resonance (sings on, swells in),
+  Decay, Detune (strikes land off pitch), Distance all work.
+- **Together**: all three through a 200-note storm with pedal and bends: finite,
+  unclipped; every voice ends (no stuck notes); switching an instrument off silences
+  it; identical output with 512- and 64-sample blocks for each; `processBlock` never
+  allocates with all three playing.
+- Report-only CPU (x86 container, one core, 48 kHz): 16 piano notes + ambience + room
+  ~10 %; 16 notes on **all three at once** ~21 %. Most of it is the piano's modes
+  (up to 76 per note).
+- Editor: drawer opens, each page renders; a full 2x repaint with it open ~9 ms
+  (software renderer). Looked at the snapshots by eye.
+- The listening render was **measured, not listened to** (no audio output here): 78 s,
+  peak -6.1 dBFS, each 13 s section between -29.7 and -26.7 dBFS RMS.
+
+### Not verified here
+
+Everything macOS (AU build, auval, the harness, GarageBand) — this final push runs CI
+for that. **Nobody has listened to these instruments yet.** The tests prove the acoustic
+facts and the behaviour, not that they sound beautiful; the developer's ears in
+GarageBand are the real test.
+
+### Decisions (recorded instead of asking)
+
+- **Glass mode ratios**: used 1 : 1.86 : 3.25 : 4.95 (struck-glass modal data) checked
+  against Rossing's glass-harmonica coincidences ((5,0) ≈ 5.0, (6,0) ≈ 7.0 x (2,0)), not
+  WORLDBUILDER's unverified 1 : 2.32 : 4.25 : 6.63.
+- **No glides anywhere** except the synth's optional Glide (off). Instability controls
+  wander around the pitch; per-key/per-strike offsets are fixed for the note.
+- **Distance is per instrument** (piano, glass) and sits before the shared room; the synth
+  has Width instead (its spec has no Distance). Milestone 3 may move it into the effects.
+- **Glass release**: key-up damps the ring to 40 % (a finger on the rim), the pedal holds
+  it — long tails without smearing fast melodies.
+- **The piano's "bad keys"**: with Age, a few keys (fixed per key) get a badly mistuned
+  unison with false beats, like a neglected piano. At default Age (35 %) about 7 % of keys.
+- **Drawer instead of the INSTRUMENTS page**: the spec's six cards with artwork need all
+  six instruments and the Milestone 4 visual design; 1a ships a working drawer so the
+  three can be tested in GarageBand now.
+- Network: most publisher and university pages (KTH, JASA, ChucK) are blocked here, so
+  several facts come from search summaries; `docs/INSTRUMENT_NOTES.md` marks each
+  number *(web)*, *(ref)* or *(estimate)*.
+
+### Known limitations
+
+- The piano has no longitudinal/phantom partials, no soundboard impulse response and
+  no hammer re-bounce; its bass may sound cleaner than a real upright. Milestone 8 can
+  layer the developer's recordings.
+- Glass below about C3 is a "large bowl" rather than a real glass (no real glass sounds
+  that low); it still works musically.
+- MIDI goes to every enabled instrument; per-instrument channel filtering / key ranges
+  are not done yet (spec: "if technically practical") — candidate for 1b.
+- CPU with all three playing dense chords (~21 % of one x86 core) is report-only; if the
+  MacBook Air struggles, the piano's partial count is the first thing to trim (the
+  Milestone 6 quality modes).
+
+### For the developer's GarageBand check
+
+Download **LIMINAL-macOS-Universal** from the Actions run of this commit, run
+`bash install-mac.sh`, open LIMINAL as before. Expected: the Forgotten Piano plays by
+default. Click **INSTRUMENTS** (bottom strip) to switch the Faded Synth and Glass
+Memories on (MIDI plays every instrument that is on), set their levels, and use the
+PIANO / SYNTH / GLASS tabs for their controls. Listen with **Space at 0 and Ambience at
+minimum** to hear them dry. The Linux job's artifact also has `m1a-instruments.wav`.
+
+### Next
+
+Milestone 1b: Empty Choir, Lost Music Box, Hollow Drone, the INSTRUMENTS page with six
+cards (artwork in Milestone 4), and adjustments from the developer's listening notes.

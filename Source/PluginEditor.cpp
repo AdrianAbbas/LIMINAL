@@ -40,9 +40,28 @@ void ViewfinderLook::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b, 
         g.setColour(juce::Colour(0x339effc4));
         g.fillEllipse(dot.expanded(4));
     }
-    g.setColour(ink.withAlpha(highlighted ? 1.0f : 0.8f));
+    g.setColour(ink.withAlpha(highlighted ? 1.0f : on ? 0.85f : 0.55f));
     g.setFont(font(11.0f));
-    g.drawText(on ? "POWER" : "POWER OFF", area.withTrimmedLeft(22), juce::Justification::centredLeft);
+    const auto text = b.getButtonText().isNotEmpty() ? b.getButtonText() : juce::String(on ? "POWER" : "POWER OFF");
+    g.drawText(text, area.withTrimmedLeft(22), juce::Justification::centredLeft);
+}
+
+// Text buttons are words on the glass: an underline when selected, nothing else.
+void ViewfinderLook::drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool highlighted, bool) {
+    const auto area = b.getLocalBounds().toFloat();
+    if (b.getToggleState()) {
+        g.setColour(ink.withAlpha(0.85f));
+        g.fillRect(area.getX() + 4, area.getBottom() - 3, area.getWidth() - 8, 1.5f);
+    } else if (highlighted) {
+        g.setColour(ink.withAlpha(0.25f));
+        g.fillRect(area.getX() + 4, area.getBottom() - 3, area.getWidth() - 8, 1.0f);
+    }
+}
+
+void ViewfinderLook::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool highlighted, bool) {
+    g.setColour(ink.withAlpha(b.getToggleState() || highlighted ? 0.95f : 0.6f));
+    g.setFont(font(11.0f));
+    g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred);
 }
 
 //==============================================================================
@@ -64,23 +83,128 @@ void LevelControl::paint(juce::Graphics& g) {
     g.setColour(ink.withAlpha(0.9f));
     g.setFont(font(10.0f));
     const auto text = parameter->getCurrentValueAsText();
-    g.drawText(text + (parameter->getLabel() == "dB" && text != "-inf" ? " dB" : ""), top, juce::Justification::centredRight);
+    const auto unit = parameter->getLabel();
+    g.drawText(text + (unit == "dB" && text != "-inf" ? " dB" : unit == "%" ? " %" : ""), top, juce::Justification::centredRight);
 }
 
 void LevelControl::resized() { slider.setBounds(getLocalBounds().withTrimmedTop(16).withTrimmedLeft(-2).withTrimmedRight(-2)); }
 
 //==============================================================================
+namespace {
+struct InstrumentInfo {
+    const char* name; const char* on; const char* level;
+    std::array<std::pair<const char*, const char*>, 6> controls;
+};
+const std::array<InstrumentInfo, InstrumentDrawer::count> instrumentInfo { {
+    { "FORGOTTEN PIANO", params::pianoOn, params::pianoLevel,
+      { { { params::pianoAge, "AGE" }, { params::pianoDetune, "DETUNE" }, { params::pianoSoftness, "SOFTNESS" },
+          { params::pianoNoise, "MECHANICAL NOISE" }, { params::pianoDecay, "DECAY" }, { params::pianoDistance, "DISTANCE" } } } },
+    { "FADED SYNTH", params::synthOn, params::synthLevel,
+      { { { params::synthDetune, "DETUNE" }, { params::synthWarmth, "WARMTH" }, { params::synthDrift, "DRIFT" },
+          { params::synthAttack, "ATTACK" }, { params::synthRelease, "RELEASE" }, { params::synthWidth, "WIDTH" } } } },
+    { "GLASS MEMORIES", params::glassOn, params::glassLevel,
+      { { { params::glassFragility, "FRAGILITY" }, { params::glassBrightness, "BRIGHTNESS" }, { params::glassResonance, "RESONANCE" },
+          { params::glassDetune, "DETUNE" }, { params::glassDecay, "DECAY" }, { params::glassDistance, "DISTANCE" } } } },
+} };
+const char* shortNames[] { "PIANO", "SYNTH", "GLASS" };
+} // namespace
+
+InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& state) {
+    for (int i = 0; i < count; ++i) {
+        auto& page = pages[std::size_t(i)];
+        const auto& info = instrumentInfo[std::size_t(i)];
+        page.on.setButtonText(info.name);
+        page.onAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(state, info.on, page.on);
+        addAndMakeVisible(page.on);
+        page.level = std::make_unique<LevelControl>(state, info.level, "LEVEL");
+        addAndMakeVisible(*page.level);
+        page.tab.setButtonText(shortNames[i]);
+        page.tab.setClickingTogglesState(false);
+        page.tab.onClick = [this, i] { focus(i); };
+        addAndMakeVisible(page.tab);
+        for (const auto& [id, label] : info.controls) {
+            page.controls.push_back(std::make_unique<LevelControl>(state, id, label));
+            addChildComponent(*page.controls.back());
+        }
+    }
+    auto& synth = pages[1];
+    synth.glide = std::make_unique<juce::ToggleButton>("GLIDE (OFF = NOTES START ON PITCH)");
+    synth.glideAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(state, params::synthGlide, *synth.glide);
+    addChildComponent(*synth.glide);
+    synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthGlideTime, "GLIDE TIME"));
+    addChildComponent(*synth.controls.back());
+    focus(0);
+}
+
+void InstrumentDrawer::focus(int index) {
+    current = std::clamp(index, 0, count - 1);
+    for (int i = 0; i < count; ++i) {
+        auto& page = pages[std::size_t(i)];
+        const bool shown = i == current;
+        page.tab.setToggleState(shown, juce::dontSendNotification);
+        for (auto& c : page.controls) c->setVisible(shown);
+        if (page.glide != nullptr) page.glide->setVisible(shown);
+    }
+    repaint();
+}
+
+void InstrumentDrawer::paint(juce::Graphics& g) {
+    // The frosted glass itself is painted by the editor (from its cached scene).
+    const auto area = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0x5507100f));
+    g.fillRect(area);
+    g.setColour(ink.withAlpha(0.18f));
+    g.drawRect(area, 1.0f);
+    g.setColour(ink.withAlpha(0.45f));
+    g.setFont(font(9.5f));
+    g.drawText("INSTRUMENTS  -  MIDI PLAYS EVERY ONE THAT IS ON", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    g.setColour(ink.withAlpha(0.12f));
+    g.fillRect(16.0f, 140.0f, area.getWidth() - 32.0f, 1.0f);
+}
+
+void InstrumentDrawer::resized() {
+    auto area = getLocalBounds().reduced(16, 10);
+    area.removeFromTop(18);
+    for (auto& page : pages) {
+        auto row = area.removeFromTop(36);
+        page.on.setBounds(row.removeFromLeft(170).withSizeKeepingCentre(170, 24));
+        page.level->setBounds(row.withSizeKeepingCentre(row.getWidth(), 34));
+    }
+    area.removeFromTop(8);
+    auto tabs = area.removeFromTop(26);
+    const int tabWidth = tabs.getWidth() / count;
+    for (auto& page : pages) page.tab.setBounds(tabs.removeFromLeft(tabWidth));
+    area.removeFromTop(8);
+    for (auto& page : pages) {
+        auto grid = area;
+        for (std::size_t k = 0; k < page.controls.size(); ++k) {
+            const int col = int(k % 2), rowIndex = int(k / 2);
+            const int w = (grid.getWidth() - 20) / 2;
+            int y = grid.getY() + rowIndex * 44;
+            if (k >= 6) y += 30;   // below the Glide switch
+            page.controls[k]->setBounds(grid.getX() + col * (w + 20), y, w, 38);
+        }
+        if (page.glide != nullptr) page.glide->setBounds(grid.getX(), grid.getY() + 3 * 44, grid.getWidth(), 24);
+    }
+}
+
+//==============================================================================
 LiminalEditor::LiminalEditor(LiminalProcessor& p)
     : AudioProcessorEditor(p), processor(p),
       master(p.parameters, params::master, "MASTER"),
-      instrument(p.parameters, params::instrument, "INSTRUMENT"),
+      instrument(p.parameters, params::instrument, "INST"),
       ambience(p.parameters, params::ambience, "AMBIENCE"),
-      space(p.parameters, params::space, "SPACE") {
+      space(p.parameters, params::space, "SPACE"),
+      drawer(p.parameters) {
     setLookAndFeel(&look);
     setOpaque(true);
     powerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::power, power);
     addAndMakeVisible(power);
     for (auto* c : { &instrument, &ambience, &space, &master }) addAndMakeVisible(c);
+    instrumentsButton.onClick = [this] { showInstruments(!drawer.isVisible()); };
+    addAndMakeVisible(instrumentsButton);
+    addChildComponent(drawer);
+    caption = instrumentCaption();
     setSize(defaultWidth, defaultHeight);
     startTimerHz(30);
 }
@@ -90,15 +214,31 @@ LiminalEditor::~LiminalEditor() {
     setLookAndFeel(nullptr);
 }
 
+void LiminalEditor::showInstruments(bool show) {
+    drawer.setVisible(show);
+    instrumentsButton.setToggleState(show, juce::dontSendNotification);
+    repaint(drawerArea());
+}
+
+juce::String LiminalEditor::instrumentCaption() const {
+    juce::StringArray on;
+    for (int i = 0; i < InstrumentDrawer::count; ++i)
+        if (processor.parameters.getRawParameterValue(instrumentInfo[std::size_t(i)].on)->load() > 0.5f) on.add(shortNames[i]);
+    return on.isEmpty() ? juce::String("NO INSTRUMENT ON") : on.joinIntoString(" + ");
+}
+
 void LiminalEditor::resized() {
     auto strip = stripArea().reduced(32, 22);
     power.setBounds(strip.removeFromLeft(100).withSizeKeepingCentre(100, 28));
+    strip.removeFromLeft(6);
+    instrumentsButton.setBounds(strip.removeFromLeft(104).withSizeKeepingCentre(104, 28));
     strip.removeFromLeft(14);
     strip.removeFromRight(140);   // wordmark
     const int each = strip.getWidth() / 4;
     for (auto* c : { &instrument, &ambience, &space, &master }) {
         c->setBounds(strip.removeFromLeft(each).withTrimmedRight(22).withSizeKeepingCentre(each - 22, 40));
     }
+    drawer.setBounds(drawerArea());
     scene = {};
     sceneScale = 0;
 }
@@ -121,6 +261,12 @@ void LiminalEditor::paint(juce::Graphics& g) {
         g.fillEllipse(r);
     }
 
+    if (drawer.isVisible()) {   // frosted glass behind the drawer
+        juce::Graphics::ScopedSaveState save(g);
+        g.reduceClipRegion(drawerArea());
+        g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
+    }
+
     // Frosted control strip.
     const auto strip = stripArea();
     {
@@ -136,7 +282,7 @@ void LiminalEditor::paint(juce::Graphics& g) {
     g.drawText("LIMINAL", mark.removeFromTop(26), juce::Justification::centredRight);
     g.setColour(ink.withAlpha(0.45f));
     g.setFont(font(9.5f));
-    g.drawText("M0  -  TEST INSTRUMENT", mark, juce::Justification::centredRight);
+    g.drawText(caption, mark, juce::Justification::centredRight);
 
     // Viewfinder frame corners and centre mark.
     const auto frame = getLocalBounds().withTrimmedBottom(strip.getHeight()).reduced(18).toFloat();
@@ -232,6 +378,11 @@ void LiminalEditor::timerCallback() {
     if (dim != flickerDim) {
         flickerDim = dim;
         if (scene.lights.size() > 1) dirty.add(scene.lights[1].getSmallestIntegerContainer().expanded(2));
+    }
+    const auto nextCaption = instrumentCaption();
+    if (nextCaption != caption) {
+        caption = nextCaption;
+        dirty.add(stripArea().reduced(32, 22).removeFromRight(140));
     }
     if (dirty.isEmpty()) {
         frames.painted(0.0, now);   // nothing to draw: the frame is done

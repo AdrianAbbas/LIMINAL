@@ -1,5 +1,5 @@
 LIMINAL - Cinematic Environmental Instrument (macOS, Apple Silicon and Intel, macOS 10.15+)
-Milestone 0 skeleton: one test instrument and a room-tone ambience. Not the final sound or look.
+Milestone 1a: Forgotten Piano, Faded Synth and Glass Memories, one room-tone ambience. Not the final look.
 
 INSTALL
   1. Quit GarageBand and Logic.
@@ -19,7 +19,9 @@ GARAGEBAND
   Track > New Track > Software Instrument. Smart Controls (B) > Plug-ins >
   Instrument slot (top) > AU Instruments > Veil Audio > LIMINAL.
   The room ambience plays straight away while the track is selected. Play notes
-  (MIDI keyboard, or Window > Show Musical Typing) to hear the test instrument.
+  (MIDI keyboard, or Window > Show Musical Typing) to hear the Forgotten Piano.
+  INSTRUMENTS (bottom strip) opens a drawer: switch the Faded Synth and Glass
+  Memories on (MIDI plays every instrument that is on), set levels, edit each one.
   If you see sliders instead of the LIMINAL interface, switch the plug-in
   window's view menu from "Controls" to "Editor".
 

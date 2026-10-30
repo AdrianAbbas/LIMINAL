@@ -482,6 +482,33 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                 std::cout << "  snapshot written to " << file.getFullPathName() << "\n";
             }
         }
+        if (i == 0) {   // The instruments drawer: opens, shows each instrument's controls, paints quickly.
+            auto* lm = dynamic_cast<LiminalEditor*>(editor.get());
+            s.check(lm != nullptr, "the editor is LIMINAL's");
+            if (lm != nullptr) {
+                lm->showInstruments(true);
+                bool fine = lm->instrumentDrawer().isVisible() && lm->instrumentDrawer().getNumChildComponents() >= 9;
+                double worst = 0;
+                for (int k = 0; k < InstrumentDrawer::count; ++k) {
+                    lm->instrumentDrawer().focus(k);
+                    const auto t0 = std::chrono::steady_clock::now();
+                    const auto shot = lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f);
+                    worst = std::max(worst, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+                    fine = fine && shot.isValid();
+                    if (snapshot.isNotEmpty()) {
+                        const char* names[] { "piano", "synth", "glass" };
+                        juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile(juce::String("editor-") + names[k] + ".png");
+                        file.deleteFile();
+                        juce::FileOutputStream out(file);
+                        juce::PNGImageFormat().writeImageToStream(shot, out);
+                    }
+                }
+                s.check(fine, "the Instruments drawer opens and shows each instrument's page");
+                s.metric("full 2x repaint with the drawer open (worst of three)", worst, " ms");
+                lm->instrumentDrawer().focus(0);
+                lm->showInstruments(false);
+            }
+        }
         s.metric("editor open + first 2x paint", ms, " ms");
         if (i == 5) s.check(ms < 1500.0, "editor opens and paints within 1.5 s (software renderer)", juce::String(ms, 0).toStdString() + " ms");
         p.editorBeingDeleted(editor.get());
@@ -497,22 +524,33 @@ void testEditor(Suite& s, const juce::String& snapshot) {
     s.check(g.frameInterval() > 1, "governor: expensive frames are spaced out");
 }
 
+// Each Milestone 1a instrument plays the same phrase and chord: first in the corridor
+// (default Space and ambience), then completely dry. Listening aid; CI uploads it.
 int renderPhrase(const juce::String& path) {
     Rig rig;
-    std::vector<Event> events;
-    const int notes[] { 64, 67, 71, 72, 71, 67, 64, 60, 59, 60 };
-    double t = 2.0;
-    for (int i = 0; i < 10; ++i, t += (i % 4 == 0 ? 1.2 : 0.6)) {
-        events.push_back({ t, on(notes[i], 60 + (i * 7) % 40) });
-        events.push_back({ t + 0.5, off(notes[i]) });
+    rig.render(1.0);
+    Signal out;
+    const char* ons[] { params::pianoOn, params::synthOn, params::glassOn };
+    for (int pass = 0; pass < 2; ++pass) {
+        if (pass == 1) dry(rig);
+        for (const char* which : ons) {
+            for (const char* id : ons) rig.set(id, std::strcmp(id, which) == 0 ? 1.0f : 0.0f);
+            std::vector<Event> events;
+            const int notes[] { 64, 67, 71, 72, 71, 67, 64, 60, 59, 60 };
+            double t = rig.time + 0.5;
+            for (int i = 0; i < 10; ++i, t += (i % 4 == 0 ? 1.0 : 0.5)) {
+                events.push_back({ t, on(notes[i], 60 + (i * 7) % 40) });
+                events.push_back({ t + 0.4, off(notes[i]) });
+            }
+            for (int note : { 45, 52, 57, 60 }) {
+                events.push_back({ t + 0.5, on(note, 70) });
+                events.push_back({ t + 3.5, off(note) });
+            }
+            const auto part = rig.render(t + 6.5 - rig.time, events);
+            out.first.insert(out.first.end(), part.first.begin(), part.first.end());
+            out.second.insert(out.second.end(), part.second.begin(), part.second.end());
+        }
     }
-    events.push_back({ t + 0.5, on(45, 70) });
-    events.push_back({ t + 0.5, on(52, 70) });
-    events.push_back({ t + 0.5, on(57, 70) });
-    events.push_back({ t + 4.0, off(45) });
-    events.push_back({ t + 4.0, off(52) });
-    events.push_back({ t + 4.0, off(57) });
-    const auto out = rig.render(t + 8.0, events);
     juce::AudioBuffer<float> buffer(2, int(out.first.size()));
     for (std::size_t i = 0; i < out.first.size(); ++i) {
         buffer.setSample(0, int(i), out.first[i]);

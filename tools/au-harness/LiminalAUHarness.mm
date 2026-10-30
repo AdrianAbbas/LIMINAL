@@ -584,7 +584,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
         const OSStatus s2 = MusicDeviceMIDIEvent(unit, 0x80, 60, 0, 0);
         r.check(s == noErr && s2 == noErr && withNote.status == noErr && withNote.finite, "MIDI note on/off accepted", withNote.describe());
 
-        // 4b. A MIDI note plays the test instrument: with the Ambience Level at its
+        // 4b. A MIDI note plays the instrument (the Forgotten Piano by default): with the Ambience Level at its
         // minimum, what is heard is the note (and its room), well above the silence.
         if (const auto* ambience = findParameter(params, { "Ambience Level" })) {
             const float original = getParameter(unit, ambience->id);
@@ -594,7 +594,7 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
             auto played = host.render(1.0, 0.0);
             MusicDeviceMIDIEvent(unit, 0x80, 57, 0, 0);
             r.check(on == noErr && played.finite && played.rmsDb() > -40.0 && played.rmsDb() > quiet.rmsDb() + 20.0,
-                    "a MIDI note plays the test instrument (audible)", strf("%.1f dBFS vs %.1f dBFS without", played.rmsDb(), quiet.rmsDb()));
+                    "a MIDI note plays the instrument (audible)", strf("%.1f dBFS vs %.1f dBFS without", played.rmsDb(), quiet.rmsDb()));
             setParameter(unit, ambience->id, original);
             host.render(0.5, 0.0);
         } else {

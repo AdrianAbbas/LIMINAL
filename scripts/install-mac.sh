@@ -158,7 +158,7 @@ cat <<'NEXT'
        Open Smart Controls (B), click Plug-ins, click the Instrument slot (the top
        slot): AU Instruments > Veil Audio > LIMINAL.
     4. The room ambience plays straight away while the track is selected. Play notes
-       (a MIDI keyboard, or Window > Show Musical Typing) to hear the test instrument.
+       (a MIDI keyboard, or Window > Show Musical Typing) to hear the Forgotten Piano.
     5. If the window shows sliders instead of the LIMINAL interface, use the view menu
        at the top of the plug-in window to switch from "Controls" to "Editor".
   Logic Pro

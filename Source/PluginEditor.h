@@ -13,7 +13,9 @@
 #include "UI/SceneArt.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <array>
 #include <memory>
+#include <vector>
 
 namespace liminal {
 
@@ -22,6 +24,8 @@ public:
     void drawLinearSlider(juce::Graphics&, int x, int y, int width, int height, float sliderPos, float minSliderPos,
                           float maxSliderPos, juce::Slider::SliderStyle, juce::Slider&) override;
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
+    void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
+    void drawButtonText(juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
 };
 
 // A thin slider with a small institutional label and its value.
@@ -38,6 +42,32 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 };
 
+// Milestone 1a's instrument drawer: slides over the right of the scene. Three rows (on/off
+// and level per instrument), tabs to pick which one is edited, and its six controls (plus
+// Glide for the synth). The full INSTRUMENTS page with artwork comes with 1b / Milestone 4.
+class InstrumentDrawer final : public juce::Component {
+public:
+    explicit InstrumentDrawer(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void focus(int index);
+    int focused() const { return current; }
+    static constexpr int count = 3;
+
+private:
+    struct Page {
+        juce::ToggleButton on;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttachment;
+        std::unique_ptr<LevelControl> level;
+        juce::TextButton tab;
+        std::vector<std::unique_ptr<LevelControl>> controls;
+        std::unique_ptr<juce::ToggleButton> glide;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> glideAttachment;
+    };
+    std::array<Page, count> pages;
+    int current = 0;
+};
+
 class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit LiminalEditor(LiminalProcessor&);
@@ -47,6 +77,8 @@ public:
     void resized() override;
 
     static constexpr int defaultWidth = 920, defaultHeight = 580;
+    void showInstruments(bool show);
+    InstrumentDrawer& instrumentDrawer() { return drawer; }
     const ui::FrameGovernor& governor() const { return frames; }
 
 private:
@@ -55,6 +87,8 @@ private:
     juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
     juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
     juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(92); }
+    juce::Rectangle<int> drawerArea() const { return { getWidth() - 376, 78, 358, stripArea().getY() - 78 - 12 }; }
+    juce::String instrumentCaption() const;
 
     LiminalProcessor& processor;
     ViewfinderLook look;
@@ -63,6 +97,9 @@ private:
     juce::ToggleButton power;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttachment;
     LevelControl master, instrument, ambience, space;
+    juce::TextButton instrumentsButton { "INSTRUMENTS" };
+    InstrumentDrawer drawer;
+    juce::String caption;
 
     ui::FrameGovernor frames;
     double paintStarted = 0, clock = 0;
