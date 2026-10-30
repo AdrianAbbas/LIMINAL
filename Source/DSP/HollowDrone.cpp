@@ -129,7 +129,8 @@ void HollowDrone::render(float* left, float* right, int n) {
                 l[i] += (v.filterL.low + sub) * g;
                 r[i] += (v.filterR.low + sub) * g;
             }
-            if ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f)) v.note = -1;
+            // Voices end only at the end of a control period, so the block size never matters.
+            if (m == clock && ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f))) v.note = -1;
         }
         clock -= m;
         done += m;

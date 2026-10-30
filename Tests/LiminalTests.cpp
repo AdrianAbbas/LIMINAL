@@ -2,7 +2,8 @@
 //   LiminalTests                       run everything
 //   LiminalTests --only a,b            run only some groups (smoke, midi, levels, ...)
 //   LiminalTests --snapshot f.png      also write an image of the editor (2x scale)
-//   LiminalTests --render f.wav        render a short phrase in the corridor (listening aid)
+//   LiminalTests --render f.wav        render each instrument in the corridor, then dry (listening aid)
+//   LiminalTests --render-places f.wav the same phrase in each environment (listening aid)
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -126,10 +127,11 @@ juce::MidiMessage on(int note, int velocity = 100, int channel = 1) { return juc
 juce::MidiMessage off(int note, int channel = 1) { return juce::MidiMessage::noteOff(channel, note); }
 juce::MidiMessage pedal(bool down) { return juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0); }
 
-// The instrument alone: ambience off, room off.
+// The instrument alone: ambience off, room off, no environment processing.
 void dry(Rig& rig) {
     rig.set(params::ambience, params::minDb);
     rig.set(params::space, 0.0f);
+    rig.set(params::environmentAmount, 0.0f);
     rig.render(0.2);
 }
 
@@ -163,6 +165,7 @@ double frequency(const std::vector<float>& x, double rate) {
 }
 
 #include "InstrumentTests.h"
+#include "EnvironmentTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -526,6 +529,25 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                 active.clickName(2);
                 s.check(std::lround(p.parameters.getRawParameterValue(params::solo)->load()) == 0, "clicking it again clears the solo");
                 p.parameters.getParameter(params::glassOn)->setValueNotifyingHost(0.0f);
+                // The environment drawer: open it, pick each place, snapshot it.
+                lm->showEnvironment(true);
+                s.check(lm->environmentDrawer().isVisible() && !lm->instrumentDrawer().isVisible() && lm->environmentToggle().getToggleState(),
+                        "the ENVIRONMENT drawer opens (and the instruments drawer closes)");
+                bool picked = true;
+                for (int place = 0; place < dsp::placeCount; ++place) {
+                    lm->environmentDrawer().choose(place);
+                    picked &= std::lround(p.parameters.getRawParameterValue(params::environment)->load()) == place;
+                    if (snapshot.isNotEmpty()) {
+                        juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile(
+                            juce::String("editor-place-") + juce::String(place + 1) + ".png");
+                        file.deleteFile();
+                        juce::FileOutputStream out(file);
+                        juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                    }
+                }
+                s.check(picked, "clicking a place selects it");
+                lm->environmentDrawer().choose(0);
+                lm->showEnvironment(false);
             }
         }
         s.metric("editor open + first 2x paint", ms, " ms");
@@ -586,6 +608,54 @@ int renderPhrase(const juce::String& path) {
     return 0;
 }
 
+// The same phrase (piano, then the piano with the choir) in each place, ambience on,
+// 12 s per place, with a place change mid-phrase at the end. Listening aid; CI uploads it.
+int renderPlaces(const juce::String& path) {
+    Signal out;
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        auto rig = rigIn(place);
+        rig->set(params::choirOn, 1.0f);
+        rig->set(params::choirLevel, -8.0f);
+        rig->render(1.0);
+        const auto part = rig->render(12.0, standardPhrase(rig->time + 0.5));
+        out.first.insert(out.first.end(), part.first.begin(), part.first.end());
+        out.second.insert(out.second.end(), part.second.begin(), part.second.end());
+    }
+    {   // Changing place while a chord rings: hospital -> pool -> garage.
+        auto rig = rigIn(0);
+        const double t = rig->time;
+        std::vector<Event> events;
+        for (int note : { 48, 55, 60, 64 }) {
+            events.push_back({ t + 0.2, on(note, 80) });
+            events.push_back({ t + 5.0, off(note) });
+        }
+        events.push_back({ t + 0.2, pedal(true) });
+        const auto a = rig->render(2.0, events);
+        setPlace(*rig, 4);
+        const auto b = rig->render(3.0, events);
+        setPlace(*rig, 3);
+        const auto c = rig->render(5.0, events);
+        for (const auto* part : { &a, &b, &c }) {
+            out.first.insert(out.first.end(), part->first.begin(), part->first.end());
+            out.second.insert(out.second.end(), part->second.begin(), part->second.end());
+        }
+    }
+    juce::AudioBuffer<float> buffer(2, int(out.first.size()));
+    for (std::size_t i = 0; i < out.first.size(); ++i) {
+        buffer.setSample(0, int(i), out.first[i]);
+        buffer.setSample(1, int(i), out.second[i]);
+    }
+    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+    file.deleteFile();
+    std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream>(file);
+    auto writer = juce::WavAudioFormat().createWriterFor(
+        stream, juce::AudioFormatWriterOptions {}.withSampleRate(48000.0).withNumChannels(2).withBitsPerSample(24));
+    if (writer == nullptr) return 1;
+    writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
+    std::cout << "wrote " << file.getFullPathName() << "\n";
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -597,6 +667,7 @@ int main(int argc, char** argv) {
         if (arg == "--snapshot" && i + 1 < argc) snapshot = argv[++i];
         else if (arg == "--only" && i + 1 < argc) only = juce::StringArray::fromTokens(argv[++i], ",", "");
         else if (arg == "--render" && i + 1 < argc) return renderPhrase(argv[++i]);
+        else if (arg == "--render-places" && i + 1 < argc) return renderPlaces(argv[++i]);
     }
     const auto run = [&](const char* name) { return only.isEmpty() || only.contains(name); };
     Suite s;
@@ -614,6 +685,7 @@ int main(int argc, char** argv) {
     if (run("box")) testBox(s);
     if (run("drone")) testDrone(s);
     if (run("instruments")) testInstruments(s);
+    if (run("environments")) testEnvironments(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

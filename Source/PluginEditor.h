@@ -104,6 +104,27 @@ private:
     int current = 0;
 };
 
+// The environment drawer: the places as a list (click to go there), what each one does,
+// and Environment Amount (how strongly the place processes the instruments).
+class EnvironmentDrawer final : public juce::Component {
+public:
+    explicit EnvironmentDrawer(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    void choose(int place);
+    bool refresh();   // true if the selected place changed
+    std::function<void()> onChoose;
+
+private:
+    juce::Rectangle<int> row(int place) const;
+    juce::AudioProcessorValueTreeState& state;
+    LevelControl amount;
+    int selected = 0, hover = -1;
+};
+
 class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit LiminalEditor(LiminalProcessor&);
@@ -117,11 +138,16 @@ public:
     InstrumentDrawer& instrumentDrawer() { return drawer; }
     ActiveInstruments& activeInstruments() { return active; }
     juce::Button& instrumentsToggle() { return instrumentsButton; }
+    void showEnvironment(bool show);
+    EnvironmentDrawer& environmentDrawer() { return places; }
+    juce::Button& environmentToggle() { return environmentButton; }
     const ui::FrameGovernor& governor() const { return frames; }
 
 private:
     void timerCallback() override;
     juce::Rectangle<int> recArea() const { return { 30, 26, 70, 22 }; }
+    bool syncPlace();
+    juce::Rectangle<int> captionArea() const { return { 52, 48, 520, 20 }; }
     juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
     juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
     juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(108); }
@@ -135,8 +161,12 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttachment;
     LevelControl master, instrument, ambience, space;
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
+    DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     ActiveInstruments active;
     InstrumentDrawer drawer;
+    EnvironmentDrawer places;
+    int placeShown = -1;
+    juce::Colour grade;   // the place's colour cast over the scene (Milestone 4 paints each place)
 
     ui::FrameGovernor frames;
     double paintStarted = 0, clock = 0;

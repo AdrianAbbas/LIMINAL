@@ -249,7 +249,8 @@ void ForgottenPiano::render(float* left, float* right, int n) {
                 r[i] += o.r * g;
                 mono[i] += (o.l + o.r) * g;
             }
-            if ((v.stolen && v.fade <= 0.0f) || (v.level < 2.0e-5f && v.attack >= 1.0f)) v.note = -1;
+            // Voices end only at the end of a control period, so the block size never matters.
+            if (m == clock && ((v.stolen && v.fade <= 0.0f) || (v.level < 2.0e-5f && v.attack >= 1.0f))) v.note = -1;
         }
         for (auto& e : events) {
             if (e.amp < 1.0e-7f && std::abs(e.y1) + std::abs(e.y2) < 1.0e-7f) continue;

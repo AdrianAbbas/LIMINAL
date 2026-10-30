@@ -146,7 +146,8 @@ void EmptyChoir::render(float* left, float* right, int n) {
                 l[i] += v.darkL.lp(ol) * g;
                 r[i] += v.darkR.lp(or_) * g;
             }
-            if ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f)) v.note = -1;
+            // Voices end only at the end of a control period, so the block size never matters.
+            if (m == clock && ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f))) v.note = -1;
         }
         clock -= m;
         done += m;

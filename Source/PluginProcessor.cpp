@@ -49,6 +49,12 @@ LiminalProcessor::LiminalProcessor()
                              params::droneMovement, params::droneRelease, params::droneAttack };
     for (int i = 0; i < 7; ++i) droneSettings[i] = raw(droneIds[i]);
     soloParam = raw(params::solo);
+    environmentChoice = raw(params::environment);
+    environmentAmount = raw(params::environmentAmount);
+}
+
+dsp::Place LiminalProcessor::selectedPlace() const {
+    return dsp::Place(std::clamp(int(std::lround(environmentChoice->load())), 0, dsp::placeCount - 1));
 }
 
 // A soloed instrument that is on mutes every other one; soloing one that is off does nothing.
@@ -75,8 +81,8 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
         slot.gain.reset(slot.targetGain());
         slot.running = slot.enabled();
     }
-    roomTone.prepare(sampleRate);
-    room.prepare(sampleRate);
+    environments.setAmount(environmentAmount->load());
+    environments.prepare(sampleRate, selectedPlace());
     juce::ignoreUnused(samplesPerBlock);
     // 20 ms smoothing for levels; Power fades over about 60 ms.
     const float levelCoef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
@@ -197,16 +203,24 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         }
     }
     for (int i = 0; i < n; ++i) {
+        const float ig = instrumentGain.next();
+        il[i] *= ig;
+        ir[i] *= ig;
+        sendL[i] *= ig;
+        sendR[i] *= ig;
+        instrumentSum += double(il[i] * il[i] + ir[i] * ir[i]) * 0.5;
+        ambienceGains[i] = ambienceGain.next();
+        spaces[i] = spaceMix.next();
+    }
+    // The environment: the instruments' processing, echoes, room and ambience.
+    std::fill(mixL, mixL + n, 0.0f);
+    std::fill(mixR, mixR + n, 0.0f);
+    std::fill(ambiencePower, ambiencePower + n, 0.0f);
+    environments.process(il, ir, sendL, sendR, ambienceGains, spaces, mixL, mixR, ambiencePower, n);
+    for (int i = 0; i < n; ++i) {
         const float p = powerGain.next(), m = masterGain.next() * p;
-        const float ig = instrumentGain.next(), ag = ambienceGain.next(), sp = spaceMix.next();
-        const dsp::Stereo bed = roomTone.tick();
-        const float instL = il[i] * ig, instR = ir[i] * ig;
-        const float ambL = bed.l * ag, ambR = bed.r * ag;
-        // The room hears the instrument fully and the ambience a little (it already is a room).
-        const dsp::Stereo wet = room.tick({ sendL[i] * ig + 0.4f * ambL, sendR[i] * ig + 0.4f * ambR });
-        const float dry = 1.0f - 0.45f * sp;
-        float l = (dry * (instL + ambL) + sp * wet.l) * m;
-        float r = (dry * (instR + ambR) + sp * wet.r) * m;
+        float l = mixL[i] * m;
+        float r = mixR[i] * m;
         // Soft safety limit above -3 dBFS; never above 0 dBFS.
         const auto soft = [](float x) {
             const float a = std::abs(x);
@@ -218,8 +232,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         if (p < 1.0e-6f) l = r = 0.0f;   // Power off is exact silence once faded
         left[i] = l;
         right[i] = r;
-        instrumentSum += double(instL * instL + instR * instR) * 0.5;
-        ambienceSum += double(ambL * ambL + ambR * ambR) * 0.5;
+        ambienceSum += double(ambiencePower[i]);
         outputSum += double(l * l + r * r) * 0.5;
     }
 }
@@ -234,6 +247,8 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     spaceMix.target = space->load();
     updateSettings();
     updateSolo();
+    environments.setAmount(environmentAmount->load());
+    environments.select(selectedPlace());
     for (auto& slot : slots) {
         slot.gain.target = slot.targetGain();
         if (slot.distance != nullptr) slot.stage.setAmount(slot.distance->load());
@@ -276,6 +291,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     for (const auto& slot : slots)
         if (slot.running) voices += slot.instrument->activeVoices();
     meters.voices.store(voices, std::memory_order_relaxed);
+    meters.place.store(int(environments.place()), std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* LiminalProcessor::createEditor() { return new LiminalEditor(*this); }

@@ -174,7 +174,8 @@ void GlassMemories::render(float* left, float* right, int n) {
                 l[i] += o.l;
                 r[i] += o.r;
             }
-            if ((v.stolen && v.fade <= 0.0f) || (v.level < 2.0e-5f && v.sing < 2.0e-5f && releasing && v.attack >= 1.0f)) v.note = -1;
+            // Voices end only at the end of a control period, so the block size never matters.
+            if (m == clock && ((v.stolen && v.fade <= 0.0f) || (v.level < 2.0e-5f && v.sing < 2.0e-5f && releasing && v.attack >= 1.0f))) v.note = -1;
         }
         clock -= m;
         done += m;

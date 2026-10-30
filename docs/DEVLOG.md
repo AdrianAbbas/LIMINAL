@@ -13,7 +13,7 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Glass Memories + tests, cross-instrument tests
   - [x] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
 - [x] **1b — Empty Choir, Lost Music Box, Hollow Drone** (2026-10-30) — quick versions by request; strip/solo/INSTRUMENTS button
-- [ ] 2a — Five environments (hospital, mall, school, garage, pool)
+- [x] **2a — Five environments: hospital, mall, school, garage, pool** (2026-10-30) — *waiting for the developer's GarageBand listening check*
 - [ ] 2b — Five environments
 - [ ] 3 — Per-instrument effects with environment influence
 - [ ] 4a — Viewfinder shell + 3 environments (prototype, then stop for approval)
@@ -353,3 +353,94 @@ has heard the three new instruments; the numbers prove behaviour, not beauty.
 - **Drone Attack** added as a seventh control (spec: "very long attack and release
   options"; its six named controls have no attack).
 - **Music box notes ignore key-up** (a comb has no dampers); they end by decay.
+
+---
+
+## Milestone 2a — Five environments (2026-10-30)
+
+Developer's direction: **the environment is the main source of sound transformation**;
+changing place should change how every instrument sounds more than any instrument
+control. Places: Vacant Hospital, Empty Shopping Mall, Abandoned School, Underground
+Parking Garage, Abandoned Indoor Pool. Details and every number: `docs/ENVIRONMENTS.md`.
+
+### What changed
+
+| | |
+|---|---|
+| `DSP/Environment` | Profiles for the five places and the chain that renders one: **instrument processing** (`Colour`: filters, a resonance, shelf, pitch wow/flutter/drift as a swinging delay, a detuned chorus "second player", tape saturation, width, nearness), a tuned **echo**, the **room**, the **ambience**. `Environments` runs two chains and cross-fades on a change: the old one stops hearing the instruments (its tail rings out) and its ambience fades over ~2 s; a change during a fade first gives the old chain a 30 ms fade. All buffers are allocated in `prepareToPlay`. |
+| `DSP/Space` | Rewritten configurable room: geometry-based early reflections (flutter / dense / sparse), input diffusion, 8-line FDN with two-band RT60, slow line modulation, band limits, width. |
+| `DSP/Ambience` | Replaces `RoomTone`. Place-specific beds (air, hum, buzz, duct whistles, brown-noise rumble, motors/fans with beating, structural sub, escalator clacks, water lapping) and events (monitor beeps, vent rattles, metal clanks, thuds/double thuds, drips with leak series, plops, stick-slip creaks, pipe rushes with knocks, steel groans, passing cars with doppler and pan, cooling ticks). Poisson scheduling with random parameters. |
+| Parameters | Appended `environment` (choice of the five; 2b appends five more at the end so saved indices keep meaning) and `env_amount` ("Environment Amount", 0–100 %, default 100 %). Space still sets the room level. |
+| Instruments | Voices now end only at control-period boundaries (all six), so the block size no longer decides the exact sample a voice stops. |
+| Editor | A **PLACE: HOSPITAL** button (doorway icon, same pill style) at the right of the strip's top line opens the **environment drawer**: the five places with what each does (click to go there; hover highlight), and Environment Amount. The camcorder caption shows the place and location; each place casts its colour over the scene (amber mall, yellowed school, sodium-orange garage, cyan pool) until Milestone 4 paints each place. Opening one drawer closes the other. |
+| Tests | Group `environments` (spec 2D comparison, switching, levels, block size, allocation); listening render `m2a-environments.wav` (the same piano + choir phrase in each place, then hospital → pool → garage under a held chord). The CI step for it is new. The full-suite step's stray trailing backslash in `build.yml` was removed. |
+
+### Tested (Linux, this container) — 235 checks pass, 0 fail
+
+- **Ambience, 30 s each, same seed:** -40.2 / -40.7 / -41.6 / -40.7 / -40.4 dBFS
+  (hospital / mall / school / garage / pool); no 1 s window drops out; events counted
+  (6 / 2 / 15 / 4 / 3 onsets 6 dB over the running median; distant mall events are mostly
+  reverb, so few are "onsets"); strongest envelope repetition at 2–12 s ≤ 0.27 (no loops);
+  every pair's octave profile differs by ≥ 4.2 dB RMS (closest: hospital / pool).
+- **The same piano phrase in each place (ambience off):** levels -28.5 / -30.6 / -27.0 /
+  -25.0 / -25.5 dBFS (within 6 dB); tail one second after the chord -33 / -15 / -62 / -31 /
+  -18 dB; L/R correlation 0.65 / 0.09 / 0.69 / 0.65 / 0.22; every pair clearly different
+  (closest hospital / garage 2.8 on the character scale where 1 = clearly audible).
+- **Place vs instrument controls:** the *average* change between two places (4.9) is
+  larger than the strongest piano control (Distance 0 → 100 %, 4.0; Softness 2.6; the
+  rest ≤ 1.3). Honest caveat: the *closest* pair of places (hospital / garage, 2.8) is a
+  smaller change than piano Distance 0 → 100 %. All six instruments differ between every
+  pair of places (closest: music box 1.8, the rest ≥ 2.2).
+- Environment Amount 0 leaves the instruments untouched (same level to 0.1 dB, and the
+  Milestone 1 tests all run at Amount 0).
+- **Switching** 16 times while playing: no allocation, no clicks (largest step 0.06 vs
+  peak 0.30); after mall → school the mall's tail is still there 0.15–0.3 s later (-3.7
+  dB), and everything dies away afterwards.
+- Block size: each place's output with 512- vs 64-sample blocks within 4e-5 (-88 dB) —
+  *not* bit-exact as the dry instruments are: float rounding differs with the split and
+  the low resonances (garage +9 dB at 170 Hz) amplify it. Inaudible; the check uses -80 dB.
+- Editor: the drawer opens (instruments drawer closes), clicking each place selects it;
+  snapshots `editor-place-1..5.png` looked at by eye.
+- Report-only CPU (x86 container, one core): default (piano, hospital) ~20 %; 16 piano
+  notes during a change of place (two environments at once) ~32 %; 16 notes on all six
+  instruments ~43 %. The environment adds roughly 8–10 % of one x86 core; Apple Silicon
+  is usually faster per core, but this is the next thing to watch on the MacBook Air.
+
+### Not verified here
+
+Everything macOS (this push runs CI) and **listening**: nobody has heard the places. The
+tests prove the places differ measurably and behave; whether they *sound like* a hospital
+or a pool is the developer's call in GarageBand (`m2a-environments.wav` in the Linux test
+logs artifact is a quick way to compare them).
+
+### Decisions (recorded instead of asking)
+
+- **Environment Amount** (new) scales only the instrument processing; **Space** keeps
+  scaling the room. At Amount 0 the instruments sound exactly as in Milestone 1.
+- **The piano's own controls stay** but are now smaller than a change of place, as asked.
+- The **choice parameter has five entries now**; 2b appends five. Hosts store the index
+  in the session, so a saved "Pool" stays the pool.
+- **Echo is part of the place** (scaled by Amount, not by Space): the corridor's far wall
+  and the pool's tiles are what make those places recognisable even with Space low.
+- Seeds: the first place uses seed 1; each later change uses a new seed, so returning to
+  a place does not replay the same event sequence.
+- Visuals: only a colour cast and caption per place in 2a; real scenes are Milestone 4.
+
+### Known limitations
+
+- The mall is very wide (L/R correlation ~0.1); it is mono-safe enough, but if it
+  sounds hollow in mono, lower its colour width (1.45) first.
+- The block-size difference above.
+- `legacy/` can now be deleted (Milestone 2 took the ideas it needed: seeded scheduling,
+  geometry-based reflections); left for 2b to decide.
+
+### For the developer's GarageBand check
+
+Download **LIMINAL-macOS-Universal** from the Actions run of this commit, run
+`bash install-mac.sh`, open LIMINAL. Expected: the hospital by default. Click **PLACE:
+HOSPITAL** (top right of the strip) and pick each place while playing: the piano (and any
+instrument) should change character immediately, the old room's tail should ring on, and
+each place's own sounds should fade in over a couple of seconds. Try **Environment
+Amount** at 0 to hear the instrument untouched. For 1b: open **INSTRUMENTS**, switch on
+the Empty Choir, Lost Music Box and Hollow Drone; the strip's top line lists what is on —
+click a name to solo it, click again to hear all.

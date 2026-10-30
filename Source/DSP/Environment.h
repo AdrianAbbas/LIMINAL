@@ -1,0 +1,153 @@
+#pragma once
+// ENVIRONMENTS (Milestone 2a): each place is a complete sound-design configuration, not a
+// reverb preset. It has
+//   - its own ambience (DSP/Ambience: bed generators and incidental events),
+//   - its own room (DSP/Space: size, two-band decay, reflection pattern, diffusion, band),
+//   - its own echoes (a tuned multi-tap delay: the corridor's far wall, the pool's tiles),
+//   - and its own *instrument processing* (Colour): filtering, resonances, pitch
+//     instability, chorus/detune, tape-like saturation, stereo width and how far away the
+//     instruments sound. This is what makes every instrument change with the place.
+// `Environment Amount` scales the instrument processing (0 = untouched, as Milestone 1);
+// `Space` scales the room, as before.
+//
+// Changing environment cross-fades two complete chains: the old one stops receiving the
+// instruments (its tail rings out naturally) and its ambience fades over two seconds
+// while the new one fades in. Buffers are allocated in prepare(); switching never
+// allocates.
+#include "DSP/Ambience.h"
+#include "DSP/Filters.h"
+#include "DSP/Space.h"
+#include <array>
+#include <vector>
+
+namespace liminal::dsp {
+
+enum class Place { hospital, mall, school, garage, pool };
+inline constexpr int placeCount = 5;
+
+struct Profile {
+    const char* name;      // shown in the interface
+    const char* location;  // the camcorder caption's second half
+    Space::Shape room;
+    struct Colour {
+        float highPassHz = 10, lowPassHz = 22000, lowPassQ = 0.707f;
+        float peakHz = 1000, peakQ = 1, peakDb = 0;
+        float shelfHz = 4000, shelfDb = 0;
+        float wowHz = 0.3f, wowCents = 0;            // slow pitch wobble
+        float flutterHz = 6.0f, flutterCents = 0;     // fast pitch wobble (tape, old machinery)
+        float driftCents = 0;                         // random, unsteady pitch
+        float chorusHz = 0.5f, chorusCents = 0, chorusMix = 0;   // detuned doubling / wash
+        float drive = 0;                              // 0..1 tape-like saturation
+        float width = 1;                              // stereo width of the instruments
+        float dryDb = 0;                              // how present (near) the instruments are
+    } colour;
+    struct Echo {
+        float leftMs = 250, rightMs = 370, feedback = 0, level = 0, lowPassHz = 4000, highPassHz = 150;
+        bool pingPong = true;
+    } echo;
+    float wetDb = 0;        // room level (at a given Space)
+    float ambienceTrim = 1; // the bed's overall level
+};
+
+const Profile& profile(Place);
+
+// The instrument processing of one place, for one stereo signal.
+class Colour {
+public:
+    void prepare(double sampleRate);
+    void configure(const Profile::Colour&, unsigned seed);
+    void reset();
+    void setAmount(float a) { amountTarget = std::clamp(a, 0.0f, 1.0f); }
+    void snapAmount() { amount = amountTarget; updateFilters(); }
+    void process(float* left, float* right, int n);
+
+private:
+    void updateFilters();
+    double sr = 48000.0;
+    Profile::Colour c;
+    float amount = 0, amountTarget = 0, amountCoef = 0.001f, filtersAt = -1;
+    Biquad hpL, hpR, peakL, peakR, shelfL, shelfR, lpL, lpR;
+    std::vector<float> lineL, lineR;
+    int write = 0, clock = 0;
+    float wowPhase = 0, flutterPhase = 0, chorusPhase = 0;
+    Random rng;
+    Wander drift;
+    float driftNow = 0;
+    bool bypassed = false;
+};
+
+// A tuned stereo echo: two taps (one per side), feedback (crossed for ping-pong) through
+// a band-pass in the loop.
+class Echo {
+public:
+    void prepare(double sampleRate);
+    void configure(const Profile::Echo&);
+    void reset();
+    Stereo tick(Stereo in, float amount);
+
+private:
+    double sr = 48000.0;
+    Profile::Echo e;
+    std::vector<float> lineL, lineR;
+    int write = 0, delayL = 1, delayR = 1;
+    OnePole lpL, lpR, hpL, hpR;
+};
+
+// One place, complete: what the processor renders for it.
+class EnvironmentChain {
+public:
+    void prepare(double sampleRate);
+    void configure(Place, unsigned seed);   // resets everything
+    Place place() const { return current; }
+    // Adds into out (instrument dry + echo + room + ambience); `instGain`/`ambGain`
+    // fade this chain's inputs (used for cross-fades between places).
+    void process(const float* instL, const float* instR, const float* sendL, const float* sendR, const float* ambienceGain,
+                 const float* space, float* outL, float* outR, float* ambienceOut, int n);
+    void setAmount(float a) { dryColour.setAmount(a); sendColour.setAmount(a); amountTarget = a; }
+    void snapAmount() { dryColour.snapAmount(); sendColour.snapAmount(); amount = amountTarget; }
+    // Fading: 1 = this is the current place; 0 = fading out.
+    void setLive(bool on) { liveTarget = on ? 1.0f : 0.0f; }
+    void snapLive() { live = ambienceFade = liveTarget; }
+    // A quick fade of everything (before it is reused for another place).
+    void kill() { killing = true; }
+    bool killed() const { return killing && outFade <= 0.0f; }
+    bool silent() const { return liveTarget == 0.0f && ambienceFade < 1.0e-4f && quietFor > quietLimit; }
+
+private:
+    double sr = 48000.0;
+    Place current = Place::hospital;
+    const Profile* p = nullptr;
+    Colour dryColour, sendColour;
+    Echo echo;
+    Space room;
+    Ambience ambience;
+    float dryGain = 1, wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
+    float live = 1, liveTarget = 1, liveCoef = 0.001f, ambienceFade = 1, ambienceCoef = 0.0001f;
+    int quietFor = 0, quietLimit = 48000;
+    bool killing = false;
+    float outFade = 1, killStep = 0.001f;
+    std::vector<float> bufL, bufR, sbufL, sbufR;
+};
+
+// Two chains and the cross-fade between them.
+class Environments {
+public:
+    void prepare(double sampleRate, Place initial);
+    void select(Place);         // called once per block with the parameter's value
+    void setAmount(float a);
+    void process(const float* instL, const float* instR, const float* sendL, const float* sendR, const float* ambienceGain,
+                 const float* space, float* outL, float* outR, float* ambienceOut, int n);
+    Place place() const { return chains[std::size_t(active)].place(); }
+    bool fading() const { return !chains[std::size_t(1 - active)].silent(); }
+
+private:
+    void start(Place);
+    std::array<EnvironmentChain, 2> chains;
+    std::array<bool, 2> running { true, false };
+    int active = 0;
+    int pending = -1;   // a place waiting for the other chain to finish its quick fade
+    float amount = 1;
+    unsigned changes = 0;
+};
+
+} // namespace liminal::dsp

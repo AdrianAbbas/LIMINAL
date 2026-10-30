@@ -3,11 +3,13 @@
 A cinematic environmental **instrument** (AU / VST3, macOS; GarageBand and Logic Pro):
 playable, unsettling instruments placed inside liminal spaces.
 
-**Status: Milestone 1b.** Six playable instruments — Forgotten Piano, Faded Synth,
+**Status: Milestone 2a.** Six playable instruments — Forgotten Piano, Faded Synth,
 Glass Memories, Empty Choir, Lost Music Box, Hollow Drone (how they are built:
-[`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — with one room-tone ambience in
-one corridor and the first sketch of the "viewfinder" interface. The environments and the
-design come in Milestones 2–7.
+[`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — in five environments that each
+reshape every instrument and have their own room and sounds: Vacant Hospital, Empty
+Shopping Mall, Abandoned School, Underground Parking Garage, Abandoned Indoor Pool
+([`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md)). The interface is still the first sketch
+of the "viewfinder"; five more places and the full design come in Milestones 2b–7.
 
 - Brief: [`LIMINAL_CLAUDE_BRIEF.md`](LIMINAL_CLAUDE_BRIEF.md), spec:
   [`LIMINAL_DIRECTION_UPDATE_1.md`](LIMINAL_DIRECTION_UPDATE_1.md)

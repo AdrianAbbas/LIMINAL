@@ -1,6 +1,5 @@
 #pragma once
-#include "DSP/RoomTone.h"
-#include "DSP/Space.h"
+#include "DSP/Environment.h"
 #include "DSP/Distance.h"
 #include "DSP/FadedSynth.h"
 #include "DSP/ForgottenPiano.h"
@@ -31,12 +30,12 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 3.0; }
+    double getTailLengthSeconds() const override { return 8.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return "Corridor (test)"; }
+    const juce::String getProgramName(int) override { return "Default"; }
     void changeProgramName(int, const juce::String&) override {}
 
     void getStateInformation(juce::MemoryBlock&) override;
@@ -48,6 +47,7 @@ public:
     struct Meters {
         std::atomic<float> instrument { 0 }, ambience { 0 }, output { 0 }; // RMS, linear
         std::atomic<int> voices { 0 };
+        std::atomic<int> place { 0 };   // the environment being heard
     } meters;
 
     static constexpr int stateVersion = 1;
@@ -98,10 +98,13 @@ private:
     dsp::HollowDrone drone;
     std::atomic<float>* droneSettings[7] {};
     std::atomic<float>* soloParam = nullptr;
-    dsp::RoomTone roomTone;
-    dsp::Space room;
+    dsp::Environments environments;
+    std::atomic<float>* environmentChoice = nullptr;
+    std::atomic<float>* environmentAmount = nullptr;
+    dsp::Place selectedPlace() const;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
     float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};
+    float ambienceGains[chunk] {}, spaces[chunk] {}, mixL[chunk] {}, mixR[chunk] {}, ambiencePower[chunk] {};
     float slotL[chunk] {}, slotR[chunk] {}, slotSendL[chunk] {}, slotSendR[chunk] {};
     double instrumentSum = 0, ambienceSum = 0, outputSum = 0;
 

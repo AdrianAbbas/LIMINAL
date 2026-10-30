@@ -80,6 +80,11 @@ inline constexpr const char* droneAttack = "drone_attack";
 inline constexpr const char* solo = "solo";
 inline constexpr int instrumentCount = 6;
 
+// Environment (Milestone 2a): which place, and how strongly it processes the instruments
+// (0 = the instruments untouched; the room is still Space).
+inline constexpr const char* environment = "environment";
+inline constexpr const char* environmentAmount = "env_amount";
+
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence
 inline constexpr float maxDb = 6.0f;
 

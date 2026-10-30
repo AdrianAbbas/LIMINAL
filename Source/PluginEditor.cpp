@@ -361,6 +361,106 @@ void InstrumentDrawer::resized() {
 }
 
 //==============================================================================
+namespace {
+struct PlaceInfo { const char* shortName; const char* summary; const char* detail; juce::uint32 grade; };
+const PlaceInfo placeInfo[dsp::placeCount] {
+    { "HOSPITAL", "Cold corridor", "Dark, filtered, unsteady pitch, far-off stereo reflections. Monitors, vents, fluorescent hum.", 0x00000000 },
+    { "SHOPPING MALL", "Huge atrium", "Washed out, very wide, endless soft decay. Escalator, far ventilation, the steel groaning.", 0x26ffc27a },
+    { "SCHOOL", "Narrow hallway", "Detuned, worn tape, boxy, tight slap-back. Creaks, pipes, old ballasts ticking.", 0x2ae8c060 },
+    { "PARKING GARAGE", "Concrete levels", "Heavy low-mids, dark top, hard early reflections. Deep rumble, cars far off.", 0x30ff7a1e },
+    { "INDOOR POOL", "Tiled hall", "Bright, distinct echoes, long shimmering tail. Drips, lapping water, a low pump.", 0x2a38c4e8 },
+};
+} // namespace
+
+EnvironmentDrawer::EnvironmentDrawer(juce::AudioProcessorValueTreeState& s)
+    : state(s), amount(s, params::environmentAmount, "ENVIRONMENT AMOUNT") {
+    addAndMakeVisible(amount);
+    refresh();
+}
+
+juce::Rectangle<int> EnvironmentDrawer::row(int place) const {
+    return { 16, 34 + place * 54, getWidth() - 32, 50 };
+}
+
+bool EnvironmentDrawer::refresh() {
+    const int now = int(std::lround(state.getRawParameterValue(params::environment)->load()));
+    if (now == selected) return false;
+    selected = now;
+    repaint();
+    return true;
+}
+
+void EnvironmentDrawer::choose(int place) {
+    auto* p = state.getParameter(params::environment);
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(p->convertTo0to1(float(place)));
+    p->endChangeGesture();
+    refresh();
+    if (onChoose) onChoose();
+}
+
+void EnvironmentDrawer::paint(juce::Graphics& g) {
+    const auto area = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0x5507100f));
+    g.fillRect(area);
+    g.setColour(ink.withAlpha(0.18f));
+    g.drawRect(area, 1.0f);
+    g.setColour(ink.withAlpha(0.45f));
+    g.setFont(font(9.5f));
+    g.drawText("ENVIRONMENT  -  WHERE THE INSTRUMENTS ARE PLAYED", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    for (int i = 0; i < dsp::placeCount; ++i) {
+        const auto r = row(i).toFloat();
+        const bool on = i == selected;
+        if (on) {
+            g.setColour(ink.withAlpha(0.14f));
+            g.fillRoundedRectangle(r, 4.0f);
+            g.setColour(ink.withAlpha(0.8f));
+            g.fillRect(r.getX(), r.getY() + 6, 2.0f, r.getHeight() - 12);
+        } else if (hover == i) {
+            g.setColour(ink.withAlpha(0.07f));
+            g.fillRoundedRectangle(r, 4.0f);
+        }
+        auto text = r.reduced(14, 6);
+        g.setColour(ink.withAlpha(on ? 1.0f : hover == i ? 0.9f : 0.7f));
+        g.setFont(font(12.0f, on));
+        g.drawText(dsp::profile(dsp::Place(i)).name, text.removeFromTop(18), juce::Justification::centredLeft);
+        g.setColour(ink.withAlpha(on ? 0.7f : 0.45f));
+        g.setFont(font(9.5f));
+        g.drawFittedText(juce::String(placeInfo[i].summary).toUpperCase() + "  -  " + placeInfo[i].detail, text.toNearestInt(), juce::Justification::topLeft, 2, 1.0f);
+    }
+    g.setColour(ink.withAlpha(0.45f));
+    g.setFont(font(9.5f));
+    g.drawFittedText("How strongly the place shapes every instrument (0 = untouched). SPACE on the strip sets how much of its room you hear.",
+                     amount.getBounds().translated(0, -34).withHeight(30), juce::Justification::bottomLeft, 2, 1.0f);
+}
+
+void EnvironmentDrawer::resized() {
+    amount.setBounds(getLocalBounds().reduced(16, 14).removeFromBottom(38));
+}
+
+void EnvironmentDrawer::mouseMove(const juce::MouseEvent& e) {
+    int h = -1;
+    for (int i = 0; i < dsp::placeCount; ++i)
+        if (row(i).contains(e.getPosition())) h = i;
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover) {
+        hover = h;
+        repaint();
+    }
+}
+
+void EnvironmentDrawer::mouseExit(const juce::MouseEvent&) {
+    hover = -1;
+    repaint();
+}
+
+void EnvironmentDrawer::mouseUp(const juce::MouseEvent& e) {
+    if (!e.mouseWasClicked()) return;
+    for (int i = 0; i < dsp::placeCount; ++i)
+        if (row(i).contains(e.getPosition())) choose(i);
+}
+
+//==============================================================================
 LiminalEditor::LiminalEditor(LiminalProcessor& p)
     : AudioProcessorEditor(p), processor(p),
       master(p.parameters, params::master, "MASTER"),
@@ -368,7 +468,8 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
       ambience(p.parameters, params::ambience, "AMB"),
       space(p.parameters, params::space, "SPACE"),
       active(p.parameters),
-      drawer(p.parameters) {
+      drawer(p.parameters),
+      places(p.parameters) {
     setLookAndFeel(&look);
     setOpaque(true);
     powerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::power, power);
@@ -376,8 +477,13 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     for (auto* c : { &instrument, &ambience, &space, &master }) addAndMakeVisible(c);
     instrumentsButton.onClick = [this] { showInstruments(!drawer.isVisible()); };
     addAndMakeVisible(instrumentsButton);
+    environmentButton.onClick = [this] { showEnvironment(!places.isVisible()); };
+    addAndMakeVisible(environmentButton);
     addAndMakeVisible(active);
     addChildComponent(drawer);
+    addChildComponent(places);
+    places.onChoose = [this] { if (syncPlace()) repaint(); };
+    syncPlace();
     setSize(defaultWidth, defaultHeight);
     startTimerHz(30);
 }
@@ -387,7 +493,26 @@ LiminalEditor::~LiminalEditor() {
     setLookAndFeel(nullptr);
 }
 
+// A new place: caption, button text and colour cast follow the Environment parameter.
+bool LiminalEditor::syncPlace() {
+    const int place = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
+    if (place == placeShown) return false;
+    placeShown = place;
+    grade = juce::Colour(placeInfo[place].grade);
+    environmentButton.setButtonText(juce::String("PLACE:  ") + placeInfo[place].shortName);
+    return true;
+}
+
+void LiminalEditor::showEnvironment(bool show) {
+    if (show) showInstruments(false);
+    places.setVisible(show);
+    environmentButton.setToggleState(show, juce::dontSendNotification);
+    repaint(drawerArea());
+    repaint(environmentButton.getBounds());
+}
+
 void LiminalEditor::showInstruments(bool show) {
+    if (show && places.isVisible()) showEnvironment(false);
     drawer.setVisible(show);
     instrumentsButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
@@ -396,7 +521,11 @@ void LiminalEditor::showInstruments(bool show) {
 
 void LiminalEditor::resized() {
     auto strip = stripArea().reduced(32, 0);
-    active.setBounds(strip.removeFromTop(34).withTrimmedTop(10).withTrimmedRight(160));
+    {
+        auto top = strip.removeFromTop(38).withTrimmedTop(8);
+        environmentButton.setBounds(top.removeFromRight(230).withSizeKeepingCentre(230, 26));
+        active.setBounds(top.withTrimmedRight(16));
+    }
     strip = strip.withTrimmedBottom(16);
     power.setBounds(strip.removeFromLeft(92).withSizeKeepingCentre(92, 28));
     strip.removeFromLeft(4);
@@ -408,6 +537,7 @@ void LiminalEditor::resized() {
         c->setBounds(strip.removeFromLeft(each).withTrimmedRight(18).withSizeKeepingCentre(each - 18, 40));
     }
     drawer.setBounds(drawerArea());
+    places.setBounds(drawerArea());
     scene = {};
     sceneScale = 0;
 }
@@ -430,7 +560,7 @@ void LiminalEditor::paint(juce::Graphics& g) {
         g.fillEllipse(r);
     }
 
-    if (drawer.isVisible()) {   // frosted glass behind the drawer
+    if (drawer.isVisible() || places.isVisible()) {   // frosted glass behind the drawer
         juce::Graphics::ScopedSaveState save(g);
         g.reduceClipRegion(drawerArea());
         g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
@@ -443,14 +573,18 @@ void LiminalEditor::paint(juce::Graphics& g) {
         g.reduceClipRegion(strip);
         g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
     }
+    if (!grade.isTransparent()) {   // the place's colour cast (scene, drawers and strip alike)
+        g.setColour(grade);
+        g.fillAll();
+    }
     g.setColour(ink.withAlpha(0.18f));
     g.fillRect(strip.getX(), strip.getY(), strip.getWidth(), 1);
-    auto mark = strip.reduced(32, 0).withTrimmedBottom(16).withTrimmedTop(34).removeFromRight(124).toFloat();
+    auto mark = strip.reduced(32, 0).withTrimmedBottom(16).withTrimmedTop(38).removeFromRight(124).toFloat();
     g.setColour(ink.withAlpha(0.92f));
     g.setFont(font(17.0f, true).withExtraKerningFactor(0.45f));
     g.drawText("LIMINAL", mark, juce::Justification::centredRight);
     g.setColour(ink.withAlpha(0.08f));
-    g.fillRect(strip.getX() + 32, strip.getY() + 34, strip.getWidth() - 64, 1);
+    g.fillRect(strip.getX() + 32, strip.getY() + 38, strip.getWidth() - 64, 1);
 
     // Viewfinder frame corners and centre mark.
     const auto frame = getLocalBounds().withTrimmedBottom(strip.getHeight()).reduced(18).toFloat();
@@ -477,7 +611,8 @@ void LiminalEditor::paint(juce::Graphics& g) {
     g.drawText("REC", recBox.withTrimmedLeft(22), juce::Justification::centredLeft);
     g.setColour(ink.withAlpha(0.6f));
     g.setFont(font(10.5f));
-    g.drawText("VACANT HOSPITAL  /  EAST WING, LEVEL 2", juce::Rectangle<float>(52, 50, 400, 16), juce::Justification::centredLeft);
+    const auto& where = dsp::profile(dsp::Place(std::clamp(placeShown, 0, dsp::placeCount - 1)));
+    g.drawText(juce::String(where.name) + "  /  " + where.location, captionArea().toFloat(), juce::Justification::centredLeft);
 
     // Time stamp and battery-style meters.
     g.setColour(ink.withAlpha(0.9f));
@@ -548,6 +683,8 @@ void LiminalEditor::timerCallback() {
         if (scene.lights.size() > 1) dirty.add(scene.lights[1].getSmallestIntegerContainer().expanded(2));
     }
     active.refresh();   // repaints itself when the instruments or the solo change
+    places.refresh();
+    if (syncPlace()) repaint();
     if (dirty.isEmpty()) {
         frames.painted(0.0, now);   // nothing to draw: the frame is done
         return;

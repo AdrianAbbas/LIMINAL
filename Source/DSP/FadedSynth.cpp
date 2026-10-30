@@ -178,7 +178,8 @@ void FadedSynth::render(float* left, float* right, int n) {
                 dryL[i] += out * v.panL;
                 dryR[i] += out * v.panR;
             }
-            if ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f)) v.note = -1;
+            // Voices end only at the end of a control period, so the block size never matters.
+            if (m == clock && ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f))) v.note = -1;
         }
         // Chorus: delays sweep 3.5 +/- 1.8 ms at 0.55 Hz; the right side's sweep is
         // offset by up to half a cycle with Width.
