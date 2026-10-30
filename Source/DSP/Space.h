@@ -15,7 +15,7 @@ namespace liminal::dsp {
 class Space {
 public:
     // How the first reflections are laid out.
-    enum class Pattern { flutter, dense, sparse };
+    enum class Pattern { flutter, dense, sparse, tunnel, grid };
     struct Shape {
         float rt60Low = 2.4f, rt60High = 1.6f, crossoverHz = 1500.0f;
         float size = 1.0f;            // scales the delay lines (0.5 .. 2.5): bigger = sparser, slower build-up
@@ -29,7 +29,7 @@ public:
         float lowCutHz = 40.0f, highCutHz = 12000.0f;
         float lateLevel = 1.0f;       // the tail's level relative to the reflections
     };
-    static constexpr float maxSize = 2.5f, maxPreDelayMs = 150.0f, maxReflectionMs = 160.0f;
+    static constexpr float maxSize = 2.5f, maxPreDelayMs = 150.0f, maxReflectionMs = 400.0f;
 
     void prepare(double sampleRate);
     void configure(const Shape&, unsigned seed);   // then reset() for a clean start

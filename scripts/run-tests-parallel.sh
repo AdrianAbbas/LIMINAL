@@ -28,7 +28,7 @@ for log in "$logs"/[1-6]-*.txt; do
     fi
     passed=$((passed + $(echo "$line" | cut -d' ' -f1)))
     failed=$((failed + $(echo "$line" | cut -d' ' -f3)))
-    grep -E '^FAIL|\[metric\]' "$log"
+    grep -E '^FAIL|^MISS|\[metric\]' "$log"
 done
 echo "$passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]

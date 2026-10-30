@@ -14,7 +14,10 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
 - [x] **1b — Empty Choir, Lost Music Box, Hollow Drone** (2026-10-30) — quick versions by request; strip/solo/INSTRUMENTS button
 - [x] **2a — Five environments: hospital, mall, school, garage, pool** (2026-10-30) — *waiting for the developer's GarageBand listening check*
-- [ ] 2b — Five environments
+- [ ] **2b — Wider differences between places, five more environments, ten-place listening render** (2026-10-30)
+  - [x] Part 1: stronger processing signature per place (resonators, notches, frequency/pitch shifting, tremolo, wandering image, modulated/diffused/pitched echoes, tunnel and grid reflections); the first five widened and re-measured
+  - [ ] Part 2: Empty Hotel, Deserted Subway Station, Empty Supermarket, Endless Office, Impossible Room (+ PLACE drawer)
+  - [ ] Part 3: listening render through all ten places; DEVLOG handoff; final push without `[skip ci]`
 - [ ] 3 — Per-instrument effects with environment influence
 - [ ] 4a — Viewfinder shell + 3 environments (prototype, then stop for approval)
 - [ ] 4b — Remaining environments' art

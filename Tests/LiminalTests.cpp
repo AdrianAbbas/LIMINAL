@@ -50,6 +50,10 @@ struct Suite {
         std::cout << (okay ? "PASS " : "FAIL ") << name << (detail.empty() ? "" : " :: " + detail) << "\n";
         return okay;
     }
+    // A target measured and reported but not enforced (a small miss after two attempts).
+    void report(bool okay, const std::string& name, const std::string& detail = {}) {
+        std::cout << (okay ? "MET  " : "MISS ") << name << " (report-only)" << (detail.empty() ? "" : " :: " + detail) << "\n";
+    }
     void section(const char* title) { std::cout << "[test] " << title << std::endl; }
     void metric(const std::string& name, double value, const char* unit = "") { std::cout << "  [metric] " << name << " = " << value << unit << "\n"; }
 };

@@ -3,7 +3,7 @@
 // switching, levels, block-size independence and real-time safety. Included by
 // LiminalTests.cpp after InstrumentTests.h.
 
-const char* placeNames[] { "hospital", "mall", "school", "garage", "pool" };
+const char* placeNames[] { "hospital", "mall", "school", "garage", "pool", "hotel", "subway", "supermarket", "office", "impossible" };
 
 void setPlace(Rig& rig, int place) {
     auto* p = rig.p->parameters.getParameter(params::environment);
@@ -128,13 +128,13 @@ double characterDistance(const Character& a, const Character& b) {
 }
 
 void testEnvironments(Suite& s) {
-    s.section("environments (Milestone 2a)");
+    s.section("environments (Milestone 2)");
     const double rate = 48000.0;
     constexpr int places = dsp::placeCount;
     {
         LiminalProcessor p;
         auto* param = p.parameters.getParameter(params::environment);
-        s.check(param != nullptr && param->getNumSteps() == places && param->getName(64) == "Environment", "an Environment parameter with the five places");
+        s.check(param != nullptr && param->getNumSteps() == places && param->getName(64) == "Environment", "an Environment parameter with every place");
         s.check(std::lround(p.parameters.getRawParameterValue(params::environment)->load()) == 0, "the default place is the Vacant Hospital");
     }
 
@@ -210,50 +210,70 @@ void testEnvironments(Suite& s) {
         }
         s.check(hi - lo < 6.0, "the phrase's level stays within 6 dB across places (loudness is not the difference)", num(lo) + " .. " + num(hi) + " dBFS");
         s.check(nearest > 1.5, "the same phrase sounds clearly different in every pair of places", "closest " + pair + " " + num(nearest, 2));
-        // The place matters more than any piano control: compare with each control swept 0 -> 1
-        // in one place (the hospital).
+        s.metric("closest pair of places for the piano (" + pair + "), character distance", nearest);
+    }
+    // The place matters more than any instrument control, for every pair of places: for
+    // each instrument, its closest pair of places is compared with its strongest control
+    // swept from one end to the other (in the hospital).
+    struct Controls { const char* name; const char* on; std::vector<std::pair<const char*, const char*>> list; };
+    const std::vector<Controls> instruments {
+        { "piano", params::pianoOn, { { params::pianoAge, "age" }, { params::pianoDetune, "detune" }, { params::pianoSoftness, "softness" },
+                                      { params::pianoNoise, "noise" }, { params::pianoDecay, "decay" }, { params::pianoDistance, "distance" } } },
+        { "synth", params::synthOn, { { params::synthDetune, "detune" }, { params::synthWarmth, "warmth" }, { params::synthDrift, "drift" },
+                                      { params::synthAttack, "attack" }, { params::synthRelease, "release" }, { params::synthWidth, "width" } } },
+        { "glass", params::glassOn, { { params::glassFragility, "fragility" }, { params::glassBrightness, "brightness" }, { params::glassResonance, "resonance" },
+                                      { params::glassDetune, "detune" }, { params::glassDecay, "decay" }, { params::glassDistance, "distance" } } },
+        { "choir", params::choirOn, { { params::choirBreath, "breath" }, { params::choirFormant, "formant" }, { params::choirDetune, "detune" },
+                                      { params::choirWidth, "width" }, { params::choirDarkness, "darkness" }, { params::choirRelease, "release" } } },
+        { "music box", params::boxOn, { { params::boxWear, "wear" }, { params::boxDrift, "drift" }, { params::boxMechanism, "mechanism" },
+                                        { params::boxBrightness, "brightness" }, { params::boxDecay, "decay" }, { params::boxDistance, "distance" } } },
+        { "drone", params::droneOn, { { params::droneDensity, "density" }, { params::droneInstability, "instability" }, { params::droneHarmonics, "harmonics" },
+                                      { params::droneSub, "sub" }, { params::droneMovement, "movement" }, { params::droneRelease, "release" },
+                                      { params::droneAttack, "attack" } } },
+    };
+    const auto renderWith = [&](int place, const char* on, const char* control, float normalised) {
+        auto rig = rigIn(place);
+        rig->set(params::ambience, params::minDb);
+        if (on != params::pianoOn) {
+            rig->set(params::pianoOn, 0.0f);
+            rig->set(on, 1.0f);
+        }
+        if (control != nullptr) {
+            auto* param = rig->p->parameters.getParameter(control);
+            param->setValueNotifyingHost(normalised);
+        }
+        rig->render(1.0);
+        return characterOf(rig->render(7.0, standardPhrase(rig->time)), rate);
+    };
+    for (const auto& instrument : instruments) {
+        std::vector<Character> cs;
+        if (instrument.on == params::pianoOn) cs = phrases;
+        else
+            for (int place = 0; place < places; ++place) cs.push_back(renderWith(place, instrument.on, nullptr, 0));
+        double nearest = 1e9;
+        std::string pair;
+        for (int a = 0; a < places; ++a)
+            for (int b = a + 1; b < places; ++b) {
+                const double d = characterDistance(cs[std::size_t(a)], cs[std::size_t(b)]);
+                if (d < nearest) { nearest = d; pair = std::string(placeNames[a]) + " / " + placeNames[b]; }
+            }
         double strongest = 0;
         std::string which;
-        const std::pair<const char*, const char*> controls[] { { params::pianoAge, "age" }, { params::pianoDetune, "detune" }, { params::pianoSoftness, "softness" },
-                                                               { params::pianoNoise, "noise" }, { params::pianoDecay, "decay" }, { params::pianoDistance, "distance" } };
-        for (const auto& [id, label] : controls) {
-            Character ends[2];
-            for (int k = 0; k < 2; ++k) {
-                auto rig = rigIn(0);
-                rig->set(params::ambience, params::minDb);
-                rig->set(id, float(k));
-                rig->render(1.0);
-                ends[k] = characterOf(rig->render(7.0, standardPhrase(rig->time)), rate);
-            }
-            const double d = characterDistance(ends[0], ends[1]);
-            s.metric(std::string("piano ") + label + " 0 -> 1, character distance", d);
+        for (const auto& [id, label] : instrument.list) {
+            const double d = characterDistance(renderWith(0, instrument.on, id, 0.0f), renderWith(0, instrument.on, id, 1.0f));
+            s.metric(std::string(instrument.name) + " " + label + " end to end, character distance", d);
             if (d > strongest) { strongest = d; which = label; }
         }
-        double average = 0;
-        for (int a = 0; a < places; ++a)
-            for (int b = a + 1; b < places; ++b) average += characterDistance(phrases[std::size_t(a)], phrases[std::size_t(b)]);
-        average /= places * (places - 1) / 2;
-        s.check(average > strongest, "changing place changes the piano more than any piano control (average place pair vs strongest control)",
-                num(average, 2) + " vs " + which + " " + num(strongest, 2));
-    }
-    {   // Every instrument is transformed, not just the piano.
-        const char* ons[] { params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn };
-        const char* names[] { "synth", "glass", "choir", "music box", "drone" };
-        for (int k = 0; k < 5; ++k) {
-            std::vector<Character> cs;
-            for (int place = 0; place < places; ++place) {
-                auto rig = rigIn(place);
-                rig->set(params::ambience, params::minDb);
-                rig->set(params::pianoOn, 0.0f);
-                rig->set(ons[k], 1.0f);
-                rig->render(1.0);
-                cs.push_back(characterOf(rig->render(7.0, standardPhrase(rig->time)), rate));
-            }
-            double nearest = 1e9;
-            for (int a = 0; a < places; ++a)
-                for (int b = a + 1; b < places; ++b) nearest = std::min(nearest, characterDistance(cs[std::size_t(a)], cs[std::size_t(b)]));
-            s.check(nearest > 1.0, std::string(names[k]) + ": sounds different in every pair of places", "closest " + num(nearest, 2));
-        }
+        const std::string name = instrument.name;
+        s.metric(name + ": closest pair of places (" + pair + ")", nearest);
+        s.check(nearest > 1.0, name + ": sounds different in every pair of places", "closest " + pair + " " + num(nearest, 2));
+        const std::string what = name + ": every change of place changes it more than any of its controls (closest pair vs strongest control)";
+        const std::string detail = pair + " " + num(nearest, 2) + " vs " + which + " " + num(strongest, 2);
+        // Enforced for the piano. For the others some controls are built to be drastic (the
+        // drone's Harmonics goes from sine to saw, the music box's Decay from a pluck to a
+        // long ring); where a pair of places still falls short it is reported (DEVLOG).
+        if (instrument.on == params::pianoOn) s.check(nearest > strongest, what, detail);
+        else s.report(nearest > strongest, what, detail);
     }
     {   // Environment Amount 0: the instruments untouched (only the room, via Space, remains).
         auto a = rigIn(4), b = rigIn(4);

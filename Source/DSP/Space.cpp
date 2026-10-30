@@ -63,6 +63,14 @@ void Space::configure(const Shape& s, unsigned seed) {
             ms = s.firstMs + s.spacingMs * float(k) * (0.7f + 0.6f * rng.uniform());
             pan = rng.bipolar() * 0.8f;
             break;
+        case Pattern::tunnel:    // a tube: ever later, ever further to one side (the tunnel mouth)
+            ms = s.firstMs + s.spacingMs * std::pow(float(k), 1.15f) * (0.95f + 0.1f * rng.uniform());
+            pan = k % 4 == 3 ? 0.5f : -0.2f - 0.7f * float(k) / float(std::max(1, s.reflections - 1));
+            break;
+        case Pattern::grid:      // a repeating structure: exactly even, alternating sides
+            ms = s.firstMs + s.spacingMs * float(k);
+            pan = (k % 2 == 0 ? -0.5f : 0.5f);
+            break;
         }
         const auto g = panGains(pan);
         tapDelay[std::size_t(k)] = std::clamp(preDelay + int(ms * 0.001 * sr), 1, historyMax);

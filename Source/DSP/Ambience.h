@@ -16,8 +16,9 @@ namespace liminal::dsp {
 
 class Ambience {
 public:
-    enum class Place { hospital, mall, school, garage, pool };
-    enum class Kind { beep, rattle, metal, thud, drip, creak, pipe, groan, car, ticks, plop };
+    enum class Place { hospital, mall, school, garage, pool, hotel, subway, supermarket, office, impossible };
+    enum class Kind { beep, rattle, metal, thud, drip, creak, pipe, groan, car, ticks, plop,
+                      elevator, murmur, rail, gust, clunk, seek, chirp, swell, phantom };
 
     void prepare(double sampleRate);
     void configure(Place, unsigned seed);   // also resets
@@ -80,11 +81,22 @@ private:
     int clackCountdown = 0;
     float clackInterval = 0, clackLevel = 0, clackEnv = 0, clackDecay = 0;
     Svf clackTone;
+    // Refrigeration: the compressor switches itself on and off (supermarket).
+    bool motorCycles = false;
+    float motorGate = 1, motorGateTarget = 1, motorGateCoef = 0.0001f;
+    int cycleCountdown = 0;
+    // A transformer's or monitor's coil whine (office).
+    float whineHz = 0, whineLevel = 0, whinePhase = 0;
+    // A cluster of inharmonic tones whose balance never settles (impossible room).
+    static constexpr int clusterTones = 6;
+    float clusterLevel = 0;
+    std::array<float, clusterTones> clusterHz {}, clusterPhase {}, clusterWeight {};
+    std::array<Wander, clusterTones> clusterWander {};
     float bedSend = 0.3f;
 
     std::array<Schedule, 5> schedules {};
     int scheduleCount = 0;
-    std::array<Event, 10> events {};
+    std::array<Event, 12> events {};
 };
 
 } // namespace liminal::dsp
