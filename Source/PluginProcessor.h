@@ -1,0 +1,75 @@
+#pragma once
+#include "DSP/RoomTone.h"
+#include "DSP/Space.h"
+#include "DSP/TestPiano.h"
+#include "Parameters.h"
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
+
+namespace liminal {
+
+class LiminalProcessor final : public juce::AudioProcessor {
+public:
+    LiminalProcessor();
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported(const BusesLayout&) const override;
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    using AudioProcessor::processBlock;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 3.0; }
+
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram(int) override {}
+    const juce::String getProgramName(int) override { return "Corridor (test)"; }
+    void changeProgramName(int, const juce::String&) override {}
+
+    void getStateInformation(juce::MemoryBlock&) override;
+    void setStateInformation(const void*, int) override;
+
+    juce::AudioProcessorValueTreeState parameters;
+
+    // Read by the editor (message thread); written once per block by the audio thread.
+    struct Meters {
+        std::atomic<float> instrument { 0 }, ambience { 0 }, output { 0 }; // RMS, linear
+        std::atomic<int> voices { 0 };
+    } meters;
+
+    static constexpr int stateVersion = 1;
+
+private:
+    struct Smooth {
+        float current = 0, target = 0, coef = 0.01f;
+        void reset(float v) { current = target = v; }
+        float next() { return current += coef * (target - current); }
+    };
+    void handleMidi(const juce::MidiMessage&);
+    void renderSegment(float* left, float* right, int n);
+    static constexpr int chunk = 256;
+
+    std::atomic<float>* power = nullptr;
+    std::atomic<float>* master = nullptr;
+    std::atomic<float>* instrumentLevel = nullptr;
+    std::atomic<float>* ambienceLevel = nullptr;
+    std::atomic<float>* space = nullptr;
+
+    dsp::TestPiano piano;
+    dsp::RoomTone roomTone;
+    dsp::Space room;
+    Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
+    float scratchL[chunk] {}, scratchR[chunk] {};
+    double instrumentSum = 0, ambienceSum = 0, outputSum = 0;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiminalProcessor)
+};
+
+} // namespace liminal

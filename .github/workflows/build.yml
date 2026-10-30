@@ -1,43 +1,164 @@
-name: Build and test
+name: Native build
+# Adapted from AdrianAbbas/Worldbuilder (docs/DEVLOG.md, Milestone 0). Commits whose
+# message contains [skip ci] do not run.
 on:
   push:
-    branches: ['**']
-    paths-ignore: ['**/*.md', 'LICENSE', 'LICENSES/**']
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  JUCE_COMMIT: ea77444750de45e036e0279bb0291144bf8e3688 # JUCE 8.0.16, as in CMakeLists.txt
 jobs:
-  desktop:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-14, windows-2022, ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      # The optional Developer ID path runs only when these secrets exist.
+      HAS_DEVELOPER_ID: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
       - uses: actions/checkout@v4
-      - name: Linux dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev libgl1-mesa-dev xvfb
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release --parallel 3
-      - name: Dry instrument listening renders
-        if: runner.os == 'Linux'
-        run: build/instrument_demo build/DEMO_AUDIO/milestone-1
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
-      - name: Verify macOS universal binaries
-        if: runner.os == 'macOS'
+      - name: Toolchain and Rosetta
         run: |
-          lipo build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3/Contents/MacOS/LIMINAL -verify_arch x86_64 arm64
-          lipo build/LIMINAL_artefacts/Release/AU/LIMINAL.component/Contents/MacOS/LIMINAL -verify_arch x86_64 arm64
-          build/host_smoke_artefacts/Release/host_smoke build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3
-      - name: Linux VST3 host and editor smoke
-        if: runner.os == 'Linux'
-        run: xvfb-run -a python3 tests/headless.py build/host_smoke_artefacts/Release/host_smoke build/LIMINAL_artefacts/Release/VST3/LIMINAL.vst3
-      - uses: actions/upload-artifact@v4
+          sw_vers
+          xcodebuild -version
+          cmake --version
+          /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+      # JUCE is fetched once and kept (the configure step otherwise clones its whole history).
+      - name: JUCE source cache
+        id: juce
+        uses: actions/cache@v4
         with:
-          name: LIMINAL-${{ runner.os }}
+          path: ${{ runner.temp }}/juce
+          key: juce-${{ env.JUCE_COMMIT }}
+      - name: Fetch JUCE 8.0.16
+        if: steps.juce.outputs.cache-hit != 'true'
+        run: bash scripts/ci-fetch-juce.sh "${{ runner.temp }}/juce" "$JUCE_COMMIT"
+      - name: Compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: macos-universal
+          max-size: 2G
+      - name: Configure (universal arm64 + x86_64, macOS 10.15+)
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+          -DJUCE_PATH="${{ runner.temp }}/juce"
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: |
+          cmake --build build --parallel 4
+          ccache --show-stats
+      # The full processor suite runs in the Linux job. Here a short smoke group checks
+      # each slice of the universal binary.
+      - name: Smoke test (arm64)
+        run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
+      - name: Smoke test (x86_64 under Rosetta)
+        run: /usr/bin/arch -x86_64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
+      - name: Universal binary and Info.plist gate
+        run: bash scripts/ci-check-bundles.sh build/LIMINAL_artefacts/Release
+      - name: Developer ID signing and notarisation (optional, untested)
+        if: env.HAS_DEVELOPER_ID == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: bash scripts/ci-developer-id.sh build/LIMINAL_artefacts/Release
+      - name: Sign, verify and package
+        run: bash scripts/package-mac.sh build/LIMINAL_artefacts/Release dist
+      - name: Build AU host harness
+        run: bash scripts/build-au-harness.sh build/LiminalAUHarness
+      - name: Install a quarantined download with install-mac.sh, then auval and harness (arm64 + x86_64)
+        run: bash scripts/ci-user-install-test.sh dist/LIMINAL-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
+      # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
+      - name: Publish install and arm64 harness logs as annotations
+        if: always()
+        run: bash scripts/ci-annotate.sh --condense build/ci-logs/quarantine.txt build/ci-logs/install-mac.txt build/ci-logs/harness-arm64-*.txt
+      - name: Publish x86_64 harness and auval logs as annotations
+        if: always()
+        run: |
+          for f in build/ci-logs/auval-*.txt; do
+            if [[ -f "$f" ]]; then tail -25 "$f" > "$f.tail"; fi
+          done
+          bash scripts/ci-annotate.sh --condense build/ci-logs/harness-x86_64-*.txt build/ci-logs/control-*.txt build/ci-logs/crashes.txt build/ci-logs/auval-*.txt.tail
+      - name: Upload installable package (only when every check passed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIMINAL-macOS-Universal
+          path: dist/LIMINAL-macOS-Universal.zip
+          if-no-files-found: error
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIMINAL-macOS-diagnostics
           path: |
-            build/LIMINAL_artefacts/Release/
-            build/DEMO_AUDIO/
+            build/ci-logs/
+          if-no-files-found: warn
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libasound2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libgl1-mesa-dev
+      - name: JUCE source cache
+        id: juce
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/juce
+          key: juce-${{ env.JUCE_COMMIT }}
+      - name: Fetch JUCE 8.0.16
+        if: steps.juce.outputs.cache-hit != 'true'
+        run: bash scripts/ci-fetch-juce.sh "${{ runner.temp }}/juce" "$JUCE_COMMIT"
+      - name: Compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: linux
+          max-size: 1G
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_PATH="${{ runner.temp }}/juce"
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: |
+          cmake --build build --parallel 4
+          ccache --show-stats
+      # The full processor suite in parallel shards, then the CPU-measuring group alone.
+      - name: Processor tests (full suite)
+        run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs
+      - name: Listening render (a short phrase in the corridor)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m0-phrase.wav
+      - name: Upload test logs, editor snapshot and listening render
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIMINAL-linux-test-logs
+          path: build/test-logs/
+          if-no-files-found: warn
+  release:
+    # Tagged commits (v*) publish the same package as a GitHub Release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LIMINAL-macOS-Universal
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" LIMINAL-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "LIMINAL $GITHUB_REF_NAME" --generate-notes

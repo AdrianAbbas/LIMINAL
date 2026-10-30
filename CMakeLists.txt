@@ -1,64 +1,69 @@
 cmake_minimum_required(VERSION 3.22)
-if(CMAKE_HOST_APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
-    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Universal Intel and Apple Silicon")
+# macOS defaults: one universal binary that loads on Apple Silicon and Intel Macs
+# back to 10.15. These must be set before project(); override on the command line.
+# (Build/CI pipeline adapted from AdrianAbbas/Worldbuilder, see docs/DEVLOG.md.)
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Target architectures")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 endif()
-project(LIMINAL VERSION 0.3.0 LANGUAGES C CXX)
-set(CMAKE_CXX_STANDARD 17)
+project(LIMINAL VERSION 0.4.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-option(LIMINAL_BUILD_PLUGIN "Build JUCE plugin and processor tests" ON)
-include(CTest)
-add_library(liminal_dsp src/environments/Profiles.cpp src/environments/Locations.cpp src/dsp/Instruments.cpp src/dsp/Engine.cpp src/Parameters.cpp src/presets/Factory.cpp)
-target_include_directories(liminal_dsp PUBLIC src)
-set_target_properties(liminal_dsp PROPERTIES POSITION_INDEPENDENT_CODE ON)
-if(BUILD_TESTING)
-    add_executable(dsp_tests tests/DspTests.cpp)
-    target_link_libraries(dsp_tests PRIVATE liminal_dsp)
-    add_test(NAME dsp COMMAND dsp_tests)
-    add_executable(instrument_tests tests/InstrumentTests.cpp)
-    target_link_libraries(instrument_tests PRIVATE liminal_dsp)
-    add_test(NAME instruments COMMAND instrument_tests)
-    add_executable(gain_tests tests/GainStagingTests.cpp)
-    target_link_libraries(gain_tests PRIVATE liminal_dsp)
-    add_test(NAME gain_staging COMMAND gain_tests "${CMAKE_BINARY_DIR}/BALANCE_REPORT")
-    add_executable(environment_tests tests/EnvironmentTests.cpp)
-    target_link_libraries(environment_tests PRIVATE liminal_dsp)
-    add_test(NAME environments COMMAND environment_tests "${CMAKE_BINARY_DIR}/DEMO_AUDIO/milestone-2")
-    add_executable(instrument_demo tests/InstrumentDemo.cpp)
-    target_link_libraries(instrument_demo PRIVATE liminal_dsp)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(LIMINAL_BUILD_TESTS "Build the offline processor tests" ON)
+set(JUCE_PATH "" CACHE PATH "Existing JUCE 8.0.16 source (otherwise fetched)")
+if(JUCE_PATH)
+    add_subdirectory("${JUCE_PATH}" "${CMAKE_BINARY_DIR}/JUCE" EXCLUDE_FROM_ALL)
+else()
+    include(FetchContent)
+    FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG ea77444750de45e036e0279bb0291144bf8e3688 # JUCE 8.0.16
+        GIT_SHALLOW FALSE)
+    FetchContent_MakeAvailable(JUCE)
 endif()
-if(LIMINAL_BUILD_PLUGIN)
-    set(JUCE_PATH "" CACHE PATH "Existing JUCE 8.0.6 checkout (otherwise fetched)")
-    if(JUCE_PATH)
-        add_subdirectory(${JUCE_PATH} ${CMAKE_BINARY_DIR}/JUCE)
-    else()
-        include(FetchContent)
-        FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-            GIT_TAG 51a8a6d7aeae7326956d747737ccf1575e61e209)
-        FetchContent_MakeAvailable(JUCE)
-    endif()
-    set(formats VST3 Standalone)
-    if(APPLE)
-        list(APPEND formats AU)
-    endif()
-    juce_add_plugin(LIMINAL COMPANY_NAME "Liminal Audio" BUNDLE_ID "audio.liminal.instrument"
-        PLUGIN_MANUFACTURER_CODE Lmnl PLUGIN_CODE Lm01 FORMATS ${formats}
-        PRODUCT_NAME "LIMINAL" IS_SYNTH TRUE NEEDS_MIDI_INPUT TRUE NEEDS_MIDI_OUTPUT FALSE
-        IS_MIDI_EFFECT FALSE COPY_PLUGIN_AFTER_BUILD FALSE VST3_CATEGORIES Instrument Synth
-        AU_MAIN_TYPE kAudioUnitType_MusicDevice)
-    target_sources(LIMINAL PRIVATE src/PluginProcessor.cpp src/PluginEditor.cpp)
-    target_link_libraries(LIMINAL PUBLIC liminal_dsp PRIVATE juce::juce_audio_utils juce::juce_dsp)
-    target_compile_definitions(LIMINAL PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
-        JUCE_VST3_CAN_REPLACE_VST2=0)
-    if(BUILD_TESTING)
-        juce_add_console_app(state_tests PRODUCT_NAME "LIMINAL state tests")
-        target_sources(state_tests PRIVATE tests/StateTests.cpp src/PluginProcessor.cpp src/PluginEditor.cpp)
-        target_link_libraries(state_tests PRIVATE liminal_dsp juce::juce_audio_utils juce::juce_dsp)
-        target_compile_definitions(state_tests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-        add_test(NAME state COMMAND state_tests)
-        juce_add_console_app(host_smoke PRODUCT_NAME "LIMINAL host smoke")
-        target_sources(host_smoke PRIVATE tests/HostSmoke.cpp)
-        target_link_libraries(host_smoke PRIVATE juce::juce_audio_utils)
-        target_compile_definitions(host_smoke PRIVATE JUCE_PLUGINHOST_VST3=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    endif()
+set(LIMINAL_FORMATS VST3 Standalone)
+if(APPLE)
+    list(APPEND LIMINAL_FORMATS AU)
+endif()
+juce_add_plugin(LIMINAL
+    COMPANY_NAME "Veil Audio"
+    BUNDLE_ID "audio.veil.liminal"
+    PLUGIN_MANUFACTURER_CODE Veil
+    PLUGIN_CODE Lmnl
+    PRODUCT_NAME "LIMINAL"
+    DESCRIPTION "Cinematic Environmental Instrument"
+    FORMATS ${LIMINAL_FORMATS}
+    # An instrument: GarageBand and Logic only reliably host generators this way.
+    IS_SYNTH TRUE
+    NEEDS_MIDI_INPUT TRUE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    VST3_CATEGORIES Instrument Synth
+    AU_MAIN_TYPE kAudioUnitType_MusicDevice
+    # Lets sandboxed hosts (GarageBand) load it in-process. It must still work
+    # out-of-process, which the AU host harness checks.
+    AU_SANDBOX_SAFE TRUE
+    COPY_PLUGIN_AFTER_BUILD FALSE)
+target_sources(LIMINAL PRIVATE
+    Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
+    Source/DSP/TestPiano.cpp Source/DSP/RoomTone.cpp Source/DSP/Space.cpp
+    Source/UI/SceneArt.cpp)
+target_include_directories(LIMINAL PUBLIC Source)
+target_compile_definitions(LIMINAL PUBLIC
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
+target_link_libraries(LIMINAL PRIVATE juce::juce_audio_utils
+    PUBLIC juce::juce_recommended_config_flags)
+if(LIMINAL_BUILD_TESTS)
+    enable_testing()
+    juce_add_console_app(LiminalTests PRODUCT_NAME "LIMINAL Tests")
+    # The linked plugin target exports the same setting using its format macro.
+    get_target_property(lm_test_definitions LiminalTests COMPILE_DEFINITIONS)
+    list(REMOVE_ITEM lm_test_definitions JUCE_STANDALONE_APPLICATION=1)
+    set_target_properties(LiminalTests PROPERTIES COMPILE_DEFINITIONS "${lm_test_definitions}")
+    target_sources(LiminalTests PRIVATE Tests/LiminalTests.cpp)
+    target_link_libraries(LiminalTests PRIVATE LIMINAL juce::juce_audio_utils)
+    target_compile_definitions(LiminalTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    add_test(NAME liminal_tests COMMAND LiminalTests)
 endif()
