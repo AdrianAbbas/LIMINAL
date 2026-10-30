@@ -182,6 +182,7 @@ void PlaceStrip::paint(juce::Graphics& g) {
     for (int i = 0; i < 10; ++i) {
         const auto r = frame(i).toFloat();
         auto& t = thumbs[std::size_t(i)];
+        if (!t.isValid()) t = ui::PhotoScene::thumbnail(i);   // the photographic places' own picture
         if (!t.isValid()) t = ui::renderPlace(i, 0, int(r.getWidth()), int(r.getHeight()), scale, true).image;
         const bool on = i == selected, over = i == hover;
         g.setOpacity(on ? 1.0f : over ? 0.85f : 0.55f);
@@ -1536,36 +1537,50 @@ void MainView::paintLights(juce::Graphics& g) {
 void MainView::paint(juce::Graphics& g) {
     paintStarted = nowMs();
     const float scale = std::max(1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
-    if (!scene.image.isValid() || std::abs(scale - sceneScale) > 0.01f || scene.place != placeShown || scene.character != characterShown) {
+    // A photographic scene (light passes composited live) where there is one; else the drawing.
+    const bool photographic = photoPlace(std::max(0, placeShown));
+    if (photographic && placeholderFor != placeShown) {
+        photoPlaceholder = ui::PhotoScene::thumbnail(placeShown);
+        placeholderFor = placeShown;
+    }
+    if (!photographic && (!scene.image.isValid() || std::abs(scale - sceneScale) > 0.01f || scene.place != placeShown || scene.character != characterShown)) {
         scene = ui::renderPlace(std::max(0, placeShown), std::max(0, characterShown), getWidth(), getHeight(), scale);
         sceneScale = scale;
     }
     const auto bounds = getLocalBounds().toFloat();
-    g.drawImage(scene.image, bounds, juce::RectanglePlacement::stretchToFit);
+    if (photographic) scene.lights.clear();   // (the drawing's lights do not belong to the photograph)
+    if (photographic && !showingPhoto()) g.fillAll(juce::Colour(0xff0a0e0d));   // (decoding: a moment)
+    const juce::Image& picture = !photographic ? scene.image : showingPhoto() ? photoImage : photoPlaceholder;
+    const juce::Image& frosted = !photographic ? scene.frosted : photoFrosted;
+    g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
+    g.drawImage(picture, bounds, juce::RectanglePlacement::stretchToFit);
 
-    paintLights(g);
+    if (!photographic) paintLights(g);   // (a photograph's lights are its passes)
+    else {   // a photograph's ceiling lights sit behind the viewfinder's captions: shade the top a little
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0x66080b0a), 0, 0, juce::Colour(0x00080b0a), 0, 150, false));
+        g.fillRect(bounds.withHeight(150));
+    }
+    const auto drawFrosted = [&](juce::Rectangle<int> area) {
+        juce::Graphics::ScopedSaveState save(g);
+        g.reduceClipRegion(area);
+        if (frosted.isValid()) g.drawImage(frosted, bounds, juce::RectanglePlacement::stretchToFit);
+        else g.fillAll(juce::Colour(0xe00a0e0d));
+    };
     if (clock < shimmerUntil) {   // Unreal: a band of the picture slips sideways, like worn tape
         const auto band = juce::Rectangle<float>(0, shimmerY, bounds.getWidth(), shimmerH);
         juce::Graphics::ScopedSaveState save(g);
         g.reduceClipRegion(band.toNearestInt());
-        g.drawImage(scene.image, bounds.translated(shimmerShift, 0), juce::RectanglePlacement::stretchToFit);
+        g.drawImage(picture, bounds.translated(shimmerShift, 0), juce::RectanglePlacement::stretchToFit);
         g.setColour(ink.withAlpha(0.12f));
         g.fillRect(band.withHeight(1.0f).translated(0, shimmerH * 0.6f));
     }
 
-    if (drawer.isVisible() || places.isVisible() || effects.isVisible() || perform.isVisible() || presetsPanel.isVisible()) {   // frosted glass behind the drawer
-        juce::Graphics::ScopedSaveState save(g);
-        g.reduceClipRegion(drawerArea());
-        g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
-    }
+    if (drawer.isVisible() || places.isVisible() || effects.isVisible() || perform.isVisible() || presetsPanel.isVisible())   // frosted glass behind the drawer
+        drawFrosted(drawerArea());
 
     // Frosted control strip.
     const auto strip = stripArea();
-    {
-        juce::Graphics::ScopedSaveState save(g);
-        g.reduceClipRegion(strip);
-        g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
-    }
+    drawFrosted(strip);
     g.setColour(ink.withAlpha(0.18f));
     g.fillRect(strip.getX(), strip.getY(), strip.getWidth(), 1);
     g.setColour(ink.withAlpha(0.08f));
@@ -1632,6 +1647,139 @@ void MainView::paint(juce::Graphics& g) {
         g.setColour(ink.withAlpha(0.6f));
         g.drawText(name, meters.removeFromRight(40), juce::Justification::centredRight);
         meters.removeFromRight(14);
+    }
+}
+
+// How a Character lights a photographic scene, per light group (1 = as rendered).
+bool MainView::photoPlace(int place) {
+    auto& known = photoKnown[std::size_t(std::clamp(place, 0, 9))];
+    if (known < 0) known = ui::PhotoScene::available(place) ? 1 : 0;
+    return known == 1;
+}
+
+static float photoLevel(int place, int character, const juce::String& pass) {
+    switch (place) {
+    case 0:   // hospital: after hours, half the corridor is off; something wrong, the far bank is dead
+        if (character == 1) return pass == "near" ? 0.55f : pass == "mid" ? 0.35f : pass == "far" ? 0.2f : pass == "base" ? 1.4f : 1.0f;
+        if (character == 2) return pass == "far" ? 0.0f : pass == "mid" ? 0.7f : pass == "exit" ? 1.6f : 1.0f;
+        return 1.0f;
+    case 4:   // pool: a bright summer afternoon; or under the surface, the sun far away
+        if (character == 1) return pass == "sun" ? 1.7f : pass == "skylights" ? 1.2f : 1.0f;
+        if (character == 2) return pass == "sun" ? 0.15f : pass == "base" ? 0.45f : pass == "skylights" ? 0.6f : pass == "caustics" ? 1.8f : 1.0f;
+        return 1.0f;
+    case 8:   // office: after hours only the near bank; a dream; every panel the same forever
+        if (character == 0) return pass == "far" ? 0.55f : 1.0f;
+        if (character == 1) return pass == "near" ? 0.75f : pass == "mid" ? 1.1f : pass == "far" ? 1.3f : 1.0f;
+        return pass == "far" ? 1.25f : 1.0f;
+    default:
+        return 1.0f;
+    }
+}
+
+// The photographic scene, one frame: every light group's level from the music (notes swell the
+// nearest bank), the place's events, the failing tube (the hum's stutter, from the audio
+// thread), the Character and the mouse; the caustics drift on their loop. The compositing runs
+// on the scene's own thread; this only asks for a look and picks up finished pictures.
+void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
+    const int place = std::max(0, placeShown), character = std::max(0, characterShown);
+    if (!photoPlace(place)) {
+        if (photo != nullptr) {
+            photo.reset();
+            photoImage = {};
+            photoFrosted = {};
+            dirty.add(getLocalBounds());
+        }
+        return;
+    }
+    if (photo == nullptr || photo->place() != place) {
+        photo = std::make_unique<ui::PhotoScene>(place);
+        photoImage = {};
+        photoFrosted = {};
+        photoLevelsSent.clear();
+        photoSwell.clear();
+        photoCharacterSent = -1;
+    }
+    const bool settleNow = settle && (!photoImage.isValid() || character != photoCharacterSent);
+    if (settleNow && photo->ensureLoaded()) {   // tests and snapshots: the first picture of a place or Character, composited now
+        auto look = photo->defaultLook();
+        const auto& passes = photo->passes();
+        for (std::size_t i = 0; i < passes.size(); ++i) look.levels[i] *= photoLevel(place, character, passes[i].name);
+        const auto& ch = dsp::character(place, character);
+        look.light = ch.light;
+        look.grade = grade.getARGB();
+        look.character = character;
+        look.causticLevel *= photoLevel(place, character, "caustics");
+        photoImage = photo->renderNow(look);
+        photoNeedsFrost = true;
+    }
+    if (!photo->loaded()) return;
+    const auto& passes = photo->passes();
+    if (photoSwell.size() != passes.size()) photoSwell.assign(passes.size(), 0.0f);
+    const auto& ch = dsp::character(place, character);
+    const int notes = processor.meters.notes.load(), events = processor.meters.events.load();
+    // The failing tube follows the hum: the darkest it got since the last frame.
+    const float lamp = processor.meters.lamp.exchange(1.0f);
+    photoLamp = lamp < photoLamp ? lamp : photoLamp + 0.6f * (lamp - photoLamp);
+    if (!still) {
+        if (notes != photoNotesSeen) {   // the nearest bank of lights swells with the note
+            for (std::size_t i = 0; i < passes.size(); ++i)
+                if (passes[i].kind != "base" && passes[i].kind != "failing") {
+                    photoSwell[i] = std::max(photoSwell[i], 0.08f + 0.22f * processor.meters.velocity.load());
+                    break;
+                }
+        }
+        if (events != photoEventsSeen && passes.size() > 1)   // the place's own sounds: a light wavers
+            photoSwell[std::size_t(1 + random.nextInt(int(passes.size()) - 1))] -= 0.18f;
+    }
+    photoNotesSeen = notes;
+    photoEventsSeen = events;
+    auto look = photo->defaultLook();
+    for (std::size_t i = 0; i < passes.size(); ++i) {
+        float level = passes[i].defaultLevel * photoLevel(place, character, passes[i].name);
+        if (passes[i].kind == "failing") level *= 0.02f + 0.98f * photoLamp * photoLamp * photoLamp;
+        if (!still) {
+            level *= 1.0f + photoSwell[i];
+            const auto a = passes[i].anchor;   // the light under the mouse warms a little
+            if (a.x >= 0 && mouse.getDistanceFrom({ a.x * float(getWidth()), a.y * float(getHeight()) }) < 90.0f) level *= 1.08f;
+        }
+        look.levels[i] = std::max(0.0f, level);
+        photoSwell[i] *= 0.88f;
+        if (std::abs(photoSwell[i]) < 0.002f) photoSwell[i] = 0.0f;
+    }
+    look.light = ch.light;
+    look.grade = grade.getARGB();
+    look.character = character;
+    look.causticLevel *= photoLevel(place, character, "caustics");
+    if (photo->hasCaustics() && !still) look.causticPhase = float(std::fmod(clock * double(photo->causticFps()) / double(photo->causticFrames()), 1.0));
+    else look.causticPhase = photoPhaseSent < 0 ? 0.0f : photoPhaseSent;
+    bool changed = character != photoCharacterSent || photoLevelsSent.size() != look.levels.size() || std::abs(look.causticPhase - photoPhaseSent) > 1.0e-4f;
+    for (std::size_t i = 0; !changed && i < look.levels.size(); ++i) changed = std::abs(look.levels[i] - photoLevelsSent[i]) > 0.004f;
+    if (changed && !settleNow) {
+        photo->request(look);
+        photoLevelsSent = look.levels;
+        photoPhaseSent = look.causticPhase;
+        if (character != photoCharacterSent) photoNeedsFrost = true;
+        photoCharacterSent = character;
+    }
+    if (settleNow) {
+        photoLevelsSent = look.levels;
+        photoPhaseSent = look.causticPhase;
+        photoCharacterSent = character;
+    }
+    juce::Image next;
+    if (photo->take(next)) {
+        photoImage = next;
+        dirty.add(getLocalBounds().withBottom(stripArea().getY()));
+    }
+    if (photoNeedsFrost && photoImage.isValid()) {   // frosted glass for the strip and the pages
+        const auto small = photoImage.rescaled(std::max(1, photoImage.getWidth() / 16), std::max(1, photoImage.getHeight() / 16), juce::Graphics::mediumResamplingQuality);
+        photoFrosted = juce::Image(juce::Image::RGB, photoImage.getWidth() / 2, photoImage.getHeight() / 2, true);
+        juce::Graphics g(photoFrosted);
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+        g.drawImage(small, 0, 0, photoFrosted.getWidth(), photoFrosted.getHeight(), 0, 0, small.getWidth(), small.getHeight());
+        g.fillAll(juce::Colour(0x8c0a0e0d));
+        photoNeedsFrost = false;
+        dirty.add(getLocalBounds());
     }
 }
 
@@ -1716,6 +1864,7 @@ void MainView::timerCallback() {
     }
     notesSeen = notes;
     eventsSeen = events;
+    animatePhoto(reduced || eco, dirty);
     {   // the evolution indicator: at most a few repaints a second of a tiny area
         const int lit = std::clamp(int(std::lround(processor.meters.activity.load() * 12.0f)), 0, 12);
         if (lit != activityLit) {

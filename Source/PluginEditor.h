@@ -11,6 +11,7 @@
 #include "Export.h"
 #include "PluginProcessor.h"
 #include "UI/FrameGovernor.h"
+#include "UI/PhotoScene.h"
 #include "UI/SceneArt.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -322,7 +323,10 @@ public:
     EffectsDrawer& effectsDrawer() { return effects; }
     juce::Button& effectsToggle() { return effectsButton; }
     const ui::FrameGovernor& governor() const { return frames; }
-    void animate() { frames = {}; timerCallback(); }   // one animation tick now (tests, snapshots)
+    // One animation tick now (tests, snapshots): the first picture of a photographic place or
+    // Character is composited on the spot; later ones go through its thread as usual.
+    void animate() { frames = {}; settle = true; timerCallback(); settle = false; }
+    bool showingPhoto() const { return photo != nullptr && photoImage.isValid() && photo->place() == placeShown; }
     PlaceStrip& placeSelector() { return placeStrip; }
     CharacterStrip& characterSelector() { return characterStrip; }
     InstrumentShelf& instrumentShelf() { return shelf; }
@@ -357,6 +361,19 @@ private:
     juce::Point<float> mouse { -1000, -1000 };
     void mouseMove(const juce::MouseEvent&) override;
     void paintLights(juce::Graphics&);
+    // The photographic scene (Direction Update 2): light passes composited live (UI/PhotoScene).
+    void animatePhoto(bool still, juce::RectangleList<int>& dirty);
+    std::unique_ptr<ui::PhotoScene> photo;
+    juce::Image photoImage, photoFrosted;
+    std::vector<float> photoSwell;
+    std::vector<float> photoLevelsSent;
+    float photoLamp = 1, photoPhaseSent = -1;
+    int photoCharacterSent = -1, photoNotesSeen = 0, photoEventsSeen = 0;
+    bool photoNeedsFrost = true, settle = false;
+    std::array<int, 10> photoKnown { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };   // has a photographic scene (cached)
+    bool photoPlace(int place);
+    juce::Image photoPlaceholder;   // the film strip's small picture, stretched, until the scene is decoded
+    int placeholderFor = -1;
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };

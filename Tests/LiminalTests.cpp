@@ -463,6 +463,117 @@ void testRealtime(Suite& s) {
     s.metric("CPU, 16 sounding notes + ambience + room, % of one core at 48 kHz (report-only)", 100.0 * seconds / 10.0, " %");
 }
 
+// Direction Update 2: the photographic scenes (light passes composited live) and the link
+// between the hum's stutter and the failing light.
+double meanDifference(const juce::Image& a, const juce::Image& b, juce::Rectangle<int> area = {}) {
+    if (area.isEmpty()) area = a.getBounds();
+    const juce::Image::BitmapData da(a, juce::Image::BitmapData::readOnly), db(b, juce::Image::BitmapData::readOnly);
+    double sum = 0;
+    long count = 0;
+    for (int y = area.getY(); y < area.getBottom(); y += 2)
+        for (int x = area.getX(); x < area.getRight(); x += 2) {
+            const auto p = da.getPixelColour(x, y), q = db.getPixelColour(x, y);
+            sum += std::abs(int(p.getRed()) - int(q.getRed())) + std::abs(int(p.getGreen()) - int(q.getGreen())) + std::abs(int(p.getBlue()) - int(q.getBlue()));
+            ++count;
+        }
+    return sum / double(std::max(1L, count) * 3 * 255);
+}
+double meanBrightness(const juce::Image& a) {
+    const juce::Image::BitmapData d(a, juce::Image::BitmapData::readOnly);
+    double sum = 0;
+    long count = 0;
+    for (int y = 0; y < a.getHeight(); y += 4)
+        for (int x = 0; x < a.getWidth(); x += 4) {
+            sum += d.getPixelColour(x, y).getBrightness();
+            ++count;
+        }
+    return sum / double(std::max(1L, count));
+}
+
+void testPhotoScenes(Suite& s) {
+    s.section("photographic scenes (Direction Update 2)");
+    const int photographic[] { 0, 4, 8 };
+    int available = 0;
+    for (int place = 0; place < dsp::placeCount; ++place) available += ui::PhotoScene::available(place) ? 1 : 0;
+    s.check(ui::PhotoScene::available(0) && ui::PhotoScene::available(4) && ui::PhotoScene::available(8) && available == 3,
+            "the hospital, the pool and the office have photographic scenes (bundled light passes)", std::to_string(available) + " places");
+    for (const int place : photographic) {
+        const std::string name = ui::PhotoScene::sceneName(place);
+        ui::PhotoScene scene(place);
+        const auto t0 = std::chrono::steady_clock::now();
+        const bool loaded = scene.ensureLoaded();
+        const auto look = scene.defaultLook();
+        const auto picture = scene.renderNow(look);
+        const double first = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        const auto& passes = scene.passes();
+        s.check(loaded && picture.isValid() && picture.getWidth() == 1440 && passes.size() >= 4, name + ": loads its passes and composites 1440 x 1080",
+                std::to_string(passes.size()) + " passes");
+        if (!loaded || !picture.isValid()) continue;
+        const double brightness = meanBrightness(picture);
+        s.metric(name + " mean brightness at the default look", brightness);
+        s.check(brightness > 0.12 && brightness < 0.7, name + ": exposed like a photograph (mean brightness 0.12-0.7)", num(brightness, 2));
+        s.metric(name + " decode + first composite", first, " ms");
+        // Every light group is its own: switching one off changes the picture.
+        int alone = 0;
+        std::string weakest;
+        double weakestDiff = 1;
+        for (std::size_t i = 1; i < passes.size(); ++i) {
+            auto off = look;
+            off.levels[i] = 0;
+            const double d = meanDifference(picture, scene.renderNow(off));
+            alone += d > 0.0003 ? 1 : 0;   // (the exit sign is small: 0.03 % of every pixel's range on average)
+            if (d < weakestDiff) { weakestDiff = d; weakest = passes[i].name.toStdString(); }
+        }
+        s.check(alone == int(passes.size()) - 1, name + ": every light group changes the picture on its own", "weakest " + weakest + " " + num(weakestDiff * 100.0, 2) + " %");
+        // Compositing again with one light changed (what the editor asks for while playing).
+        const auto t1 = std::chrono::steady_clock::now();
+        for (int k = 0; k < 5; ++k) {
+            auto l = look;
+            l.levels[1] = 0.6f + 0.1f * float(k);
+            l.causticPhase = 0.1f * float(k);
+            (void) scene.renderNow(l);
+        }
+        const double again = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count() / 5.0;
+        s.metric(name + " composite with one light changed (worker thread in the editor)", again, " ms");
+        s.check(again < 250.0, name + ": a composite costs under 250 ms here (it runs on the scene's own thread)", num(again, 1) + " ms");
+        // The Characters light it differently.
+        std::vector<juce::Image> graded;
+        for (int c = 0; c < dsp::characterCount; ++c) {
+            auto l = look;
+            l.grade = dsp::character(place, c).grade;
+            l.light = dsp::character(place, c).light;
+            l.character = c;
+            graded.push_back(scene.renderNow(l));
+        }
+        const double closest = std::min({ meanDifference(graded[0], graded[1]), meanDifference(graded[0], graded[2]), meanDifference(graded[1], graded[2]) });
+        s.check(closest > 0.02, name + ": each Character grades the photograph differently", num(closest * 100.0, 1) + " %");
+        if (scene.hasCaustics()) {   // the water's light drifts and loops without a seam
+            auto a = look, b = look, last = look;
+            b.causticPhase = 0.5f;
+            last.causticPhase = 1.0f - 1.0f / float(scene.causticFrames());
+            const auto pa = scene.renderNow(a), pb = scene.renderNow(b), pl = scene.renderNow(last);
+            auto next = look;
+            next.causticPhase = 1.0f / float(scene.causticFrames());
+            const double step = meanDifference(pa, scene.renderNow(next)), wrap = meanDifference(pl, pa), half = meanDifference(pa, pb);
+            s.metric(name + " caustics: frame-to-frame / last-to-first / half a loop apart", step * 100.0, (" / " + num(wrap * 100.0, 3) + " / " + num(half * 100.0, 3) + " %").c_str());
+            s.check(half > step && wrap < 2.5 * step + 1e-4, name + ": the caustic loop moves gently and joins without a seam", num(wrap / std::max(1e-9, step), 2) + " x a normal step");
+        }
+    }
+    {   // The hum and the light: the audio's stutter is what the picture's failing tube follows.
+        auto rig = rigIn(8);   // the office: the ballast is the room
+        rig->set(params::activity, 1.0f);
+        float darkest = 1;
+        const int before = rig->p->meters.flickers.load();
+        for (int k = 0; k < 900; ++k) {
+            rig->render(0.1);
+            darkest = std::min(darkest, rig->p->meters.lamp.exchange(1.0f));
+        }
+        const int stutters = rig->p->meters.flickers.load() - before;
+        s.metric("office, 90 s at Activity 100 %: the tube's stutters / darkest lamp", double(stutters), (" / " + num(darkest, 2)).c_str());
+        s.check(stutters >= 1 && darkest < 0.5f, "the hum's stutter reaches the editor (the failing light goes dark with it)", std::to_string(stutters) + " stutters, darkest " + num(darkest, 2));
+    }
+}
+
 void testEditor(Suite& s, const juce::String& snapshot) {
     s.section("editor");
     LiminalProcessor p;
@@ -697,6 +808,7 @@ void testEditor(Suite& s, const juce::String& snapshot) {
     s.check(g.beginFrame(66, elapsed), "governor: next frame after painting");
     g.painted(40, 70);
     s.check(g.frameInterval() > 1, "governor: expensive frames are spaced out");
+    testPhotoScenes(s);
 }
 
 // Each of the six instruments plays the same phrase and chord: first in the corridor
@@ -845,14 +957,94 @@ int writeSnapshots(const juce::String& path) {
         view.animate();
         save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "place-" + juce::String(place + 1).paddedLeft('0', 2) + "-" + names[place]);
     }
+    // Direction Update 2: the photographic scenes - each light group alone, the Characters, the
+    // failing tube off and on, the caustic loop.
+    for (const int place : { 0, 4, 8 }) {
+        if (!ui::PhotoScene::available(place)) continue;
+        ui::PhotoScene scene(place);
+        if (!scene.ensureLoaded()) continue;
+        const auto look = scene.defaultLook();
+        const auto full = scene.renderNow(look);
+        if (!full.isValid()) continue;
+        const juce::String name = ui::PhotoScene::sceneName(place);
+        save(full.rescaled(960, 720, juce::Graphics::highResamplingQuality), "photo-" + name);
+        const auto& passes = scene.passes();
+        const int cols = 3, w = 480, h = 360, rows = int((passes.size() + 2) / 3);
+        juce::Image sheet(juce::Image::RGB, w * cols, h * rows, true);
+        {
+            juce::Graphics g(sheet);
+            for (std::size_t i = 0; i < passes.size(); ++i) {
+                auto alone = look;
+                for (auto& v : alone.levels) v = 0;
+                alone.levels[i] = passes[i].kind == "base" ? 1.0f : 2.0f;
+                alone.causticLevel = 0;
+                g.drawImage(scene.renderNow(alone), int(i % 3) * w, int(i / 3) * h, w, h, 0, 0, full.getWidth(), full.getHeight());
+                g.setColour(juce::Colours::white.withAlpha(0.85f));
+                g.setFont(juce::FontOptions(13.0f));
+                g.drawText(passes[i].name.toUpperCase() + (passes[i].kind == "base" ? "  (sky / ambient only)" : "  (alone, x2)"), int(i % 3) * w + 10, int(i / 3) * h + h - 22, w - 20, 16, juce::Justification::centredLeft);
+            }
+        }
+        save(sheet, "photo-" + name + "-light-passes");
+        juce::Image characters(juce::Image::RGB, w * 3, h, true);
+        {
+            juce::Graphics g(characters);
+            for (int c = 0; c < dsp::characterCount; ++c) {
+                auto l = look;
+                l.grade = dsp::character(place, c).grade;
+                l.light = dsp::character(place, c).light;
+                l.character = c;
+                g.drawImage(scene.renderNow(l), c * w, 0, w, h, 0, 0, full.getWidth(), full.getHeight());
+                g.setColour(juce::Colours::white.withAlpha(0.85f));
+                g.setFont(juce::FontOptions(13.0f));
+                g.drawText(dsp::character(place, c).name, c * w + 10, h - 22, w - 20, 16, juce::Justification::centredLeft);
+            }
+        }
+        save(characters, "photo-" + name + "-characters");
+        for (std::size_t i = 0; i < passes.size(); ++i)
+            if (passes[i].kind == "failing") {   // the stutter: the tube dark, then lit (what the hum does)
+                juce::Image pair(juce::Image::RGB, w * 2, h, true);
+                juce::Graphics g(pair);
+                auto dark = look;
+                dark.levels[i] = 0.02f;
+                g.drawImage(scene.renderNow(dark), 0, 0, w, h, 0, 0, full.getWidth(), full.getHeight());
+                g.drawImage(full, w, 0, w, h, 0, 0, full.getWidth(), full.getHeight());
+                g.setColour(juce::Colours::white.withAlpha(0.85f));
+                g.setFont(juce::FontOptions(13.0f));
+                g.drawText("THE HUM STUTTERS: TUBE DARK", 10, h - 22, w - 20, 16, juce::Justification::centredLeft);
+                g.drawText("STEADY", w + 10, h - 22, w - 20, 16, juce::Justification::centredLeft);
+                save(pair, "photo-" + name + "-flicker");
+            }
+        if (scene.hasCaustics()) {
+            juce::Image strip(juce::Image::RGB, w * 2, h * 2, true);
+            juce::Graphics g(strip);
+            for (int k = 0; k < 4; ++k) {
+                auto l = look;
+                l.causticPhase = 0.25f * float(k);
+                l.causticLevel = 1.6f;
+                g.drawImage(scene.renderNow(l), (k % 2) * w, (k / 2) * h, w, h, 0, 0, full.getWidth(), full.getHeight());
+            }
+            save(strip, "photo-" + name + "-caustics");
+        }
+    }
     {   // All thirty Characters: the scene alone, small, in a 3 x 10 sheet.
         const int w = 320, h = 180;
         juce::Image sheet(juce::Image::RGB, w * 3, h * 10, true);
         juce::Graphics g(sheet);
         for (int place = 0; place < dsp::placeCount; ++place)
             for (int c = 0; c < dsp::characterCount; ++c) {
-                const auto sc = ui::renderPlace(place, c, w, h, 1.0f);
-                g.drawImageAt(sc.image, c * w, place * h);
+                if (ui::PhotoScene::available(place)) {   // the photographic places, graded per Character
+                    static std::unique_ptr<ui::PhotoScene> photo;
+                    if (photo == nullptr || photo->place() != place) photo = std::make_unique<ui::PhotoScene>(place);
+                    photo->ensureLoaded();
+                    auto l = photo->defaultLook();
+                    l.grade = dsp::character(place, c).grade;
+                    l.light = dsp::character(place, c).light;
+                    l.character = c;
+                    g.drawImage(photo->renderNow(l), juce::Rectangle<float>(float(c * w), float(place * h), float(w), float(h)), juce::RectanglePlacement::fillDestination);
+                } else {
+                    const auto sc = ui::renderPlace(place, c, w, h, 1.0f);
+                    g.drawImageAt(sc.image, c * w, place * h);
+                }
                 g.setColour(juce::Colours::white.withAlpha(0.8f));
                 g.setFont(juce::FontOptions(11.0f));
                 g.drawText(juce::String(names[place]).toUpperCase() + " - " + dsp::character(place, c).name, c * w + 8, place * h + h - 18, w - 16, 14, juce::Justification::centredLeft);

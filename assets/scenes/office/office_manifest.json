@@ -1,0 +1,55 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 0.0
+    },
+    {
+      "name": "near",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 3.662
+    },
+    {
+      "name": "mid",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 2.705
+    },
+    {
+      "name": "far",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 2.41
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 3.102
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "office",
+  "thumbnail": "office_thumb.jpg"
+}

@@ -1,0 +1,75 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 0.75,
+      "peak": 0.687
+    },
+    {
+      "name": "sun",
+      "kind": "sun",
+      "default": 1.3,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 2.05
+    },
+    {
+      "name": "skylights",
+      "kind": "sky",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 5.026
+    },
+    {
+      "name": "beyond",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 2.756
+    }
+  ],
+  "caustics": {
+    "frames": [
+      "pool_caustic_00.jpg",
+      "pool_caustic_01.jpg",
+      "pool_caustic_02.jpg",
+      "pool_caustic_03.jpg",
+      "pool_caustic_04.jpg",
+      "pool_caustic_05.jpg",
+      "pool_caustic_06.jpg",
+      "pool_caustic_07.jpg",
+      "pool_caustic_08.jpg",
+      "pool_caustic_09.jpg",
+      "pool_caustic_10.jpg",
+      "pool_caustic_11.jpg",
+      "pool_caustic_12.jpg",
+      "pool_caustic_13.jpg",
+      "pool_caustic_14.jpg",
+      "pool_caustic_15.jpg",
+      "pool_caustic_16.jpg",
+      "pool_caustic_17.jpg",
+      "pool_caustic_18.jpg",
+      "pool_caustic_19.jpg",
+      "pool_caustic_20.jpg",
+      "pool_caustic_21.jpg",
+      "pool_caustic_22.jpg",
+      "pool_caustic_23.jpg"
+    ],
+    "fps": 5,
+    "default": 0.6
+  },
+  "headroom": 0.7071067811865476,
+  "scene": "pool",
+  "thumbnail": "pool_thumb.jpg"
+}

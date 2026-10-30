@@ -5,8 +5,10 @@
 // vignette, film grain). Rendered once per place / Character / size into a cached Image,
 // never per frame; the animation layer only draws small light glows on top.
 //
-// If the developer adds photographs (assets/scenes/<place>/background.png, Milestone 4
-// asset pipeline), `renderPlace` uses them instead of the drawing, with the same finish.
+// If the developer adds a photograph (photographFolder()/<n>.png, Milestone 4), `renderPlace`
+// uses it instead of the drawing, with the same finish. Since Direction Update 2 the places with
+// rendered light passes (UI/PhotoScene: hospital, pool, office) are shown photographically
+// instead; the drawing remains for the other seven and as their film-strip fallback.
 #include <juce_graphics/juce_graphics.h>
 #include <vector>
 

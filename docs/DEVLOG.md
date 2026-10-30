@@ -32,7 +32,7 @@ the checklist below.
 - [x] Final handoff: per milestone, what to listen for and look at in GarageBand (end of this file)
 - [ ] **Direction Update 2 — real liminal spaces (sound + visuals)** (2026-10-30)
   - [x] Part 1 — audio: risers/whooshes/noise waves removed; all ten beds, acoustics and rare events rebuilt to Sections 1–2; default Activity 25 % (rare); Far Away (mall PA / hotel wall); listening render (phrase through ten rooms + 60 s of each bed) — pushed `[skip ci]`
-  - [ ] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — push without `[skip ci]`, then **stop for the developer's approval of the look**
+  - [x] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — pushed without `[skip ci]`; **waiting for the developer's approval of the look**
   - [ ] Part 3 (after approval) — the other seven places and the Character variants
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
@@ -866,6 +866,99 @@ tile, the office a fluorescent hum, not white noise. Details per place: `docs/EN
 - `LIMINAL_DIRECTION_UPDATE_2.md` added to the repository root beside Update 1.
 
 ---
+
+## Direction Update 2, Part 2 — photographic scenes: pipeline + Pool, Office, Hospital prototype (2026-10-30)
+
+**Stop here for the developer's approval of the look** (Section 4). The other seven places and
+the Character variants come after it.
+
+### What changed
+
+| | |
+|---|---|
+| `tools/scenes/` (new) | Blender/Cycles scenes written as Python (`common.py`: tri-planar tiles with grout and roughness variation, painted/plaster/steel materials, linoleum, wallpaper, still water with a turquoise volume, glowing troffers with their own area lights, light groups; `pool.py`, `office.py`, `hospital.py`), rendered headless with **`pip install bpy`** (Blender 5.2 LTS on Python 3.13, CPU, OpenImageDenoise): `render.py <scene>` writes linear EXR passes, then packs them for the plug-in (sRGB JPEG half a stop down, halation of the brightest light baked per pass - linear, so it adds up - a 320 x 240 thumbnail, a manifest with each group's kind, default level and where it sits in the picture). `preview.py` composites like the plug-in. Nothing downloaded: no models, textures or HDRIs. README there. |
+| Light passes | **Hospital:** base (cold daylight through the end doors' windows), near / mid / far (the ceiling panels by distance), failing (one panel, 10.5 m in), exit (the sign). **Office:** base (dark), near / mid / far, failing (one panel near the camera, right). **Pool:** base (sky through the windows and skylights), sun (warm low sun through the high windows), skylights, beyond (the next pool room and a side hall), and the **caustic loop**: 32 frames at half size of light thrown off the water onto the ceiling and walls and through it onto the basin floor - a 4D Voronoi pattern on two shadow-only "gobo" planes, its third and fourth coordinates going once round a circle so the loop has no seam; played at 8 frames a second, cross-faded between frames. |
+| `UI/PhotoScene` (new) | Decodes a scene's passes (bundled BinaryData, or the developer's own renders in `…/LIMINAL/Scenes/<place>/`), keeps a **running linear sum** (a changed light costs one pass), adds the caustics, then one pass over the picture: vignette, the film curve (the same as `preview.py`), the Character's grade and light, the second Character's fade, grain. All on its own thread: the editor asks for a look and takes the newest picture; it never waits. |
+| Editor | Hospital, pool and office show the photograph (film-strip thumbnails too; the thumbnail stands in while the passes decode). Per frame, every light group's level: **the nearest bank swells with each note** (by velocity), the place's events make a light waver, **the failing tube follows the hum's stutter** (`meters.lamp`, the darkest the audio's lamp got since the last frame, so a 20 ms flick is never missed at 30 fps), the light under the mouse warms a little, and the Character sets the banks (hospital After Hours: half the corridor off; Something Wrong: the far bank dead; pool Forgotten Summer: brighter sun; Submerged: the sun far away, the caustics strong; office After Hours: far bank dim). Eco or slow frames: still. The other seven places are still painted. |
+| CMake | `assets/scenes/*/*.jpg|json` bundled as BinaryData (`LiminalScenes`) when present. |
+| Tests | Editor group: the three scenes load and composite 1440 x 1080, are exposed like photographs, every light group changes the picture on its own, a composite's cost, each Character grades differently, the caustic loop moves and joins without a seam; **the hum's stutter reaches the editor** (office, 90 s at Activity 100 %: the lamp goes dark with each stutter). `--snapshots` writes the photographic snapshots below. |
+
+### Snapshots (`docs/snapshots/`, looked at by eye)
+
+- `place-01-hospital.jpg`, `place-05-pool.jpg`, `place-09-office.jpg`: the editor showing the
+  photographs (the other places still painted).
+- `photo-<place>.jpg`: the composite alone; `photo-<place>-light-passes.jpg`: **every light group
+  alone** (x2) - the base, each bank, the failing tube, the exit sign, the sun, the next room;
+  `photo-<place>-characters.jpg`: the three Characters; `photo-hospital-flicker.jpg` /
+  `photo-office-flicker.jpg`: the failing tube dark (what the hum's stutter does) and steady;
+  `photo-pool-caustics.jpg`: four moments of the caustic loop (shown stronger than default).
+- `characters-all-30.jpg` now shows the photographs, graded, for these three places.
+
+### Tested (Linux, this container) — 404 checks pass, 0 fail (full suite, on exactly this commit)
+
+- Rendering (Blender 5.2.3 via `pip install bpy`, Cycles on 4 x86 cores, 96 samples + OIDN,
+  1440 x 1080): 4.5–8.5 min per pass (the office's ~70 area lights are the slowest); hospital
+  6 passes, office 5, pool 4 + 24 caustic frames (~20 s each at 360 x 270). About 1 h 40 min
+  for all three. **Bundled size: 1.25 MB** (hospital 288 KB, office 236 KB, pool 724 KB with
+  its caustic loop) - far under the 80 MB budget, so a 2x set is affordable later.
+- Plug-in side: decoding a scene + the first composite 170–215 ms (on the scene's thread; the
+  thumbnail is shown meanwhile); a composite after a light change 16–20 ms here (on its
+  thread, never the message thread); the editor's own animation frame stays ~3 ms.
+- The hum and the light: in the office at Activity 100 %, 5 stutters in 90 s; the published
+  lamp went down to 0.09 with them (the failing tube goes dark exactly when the buzz drops).
+- The caustic loop: half a loop apart differs more than one step (0.27 % vs 0.20 % of the
+  picture), and the last frame joins the first like any other step (0.92x).
+
+### Not verified here
+
+The look on the MacBook Air's Retina screen in GarageBand, how fast the scene decodes there,
+and whether the flicker feels in sync to the eye and ear together (tests prove the same
+stutter drives both; nobody has watched and listened at once).
+
+### Decisions (recorded instead of asking)
+
+- **Blender as a Python module** (`pip install bpy`) in the cloud container: no GUI, no GPU,
+  no GitHub Actions job (renders are committed, the plug-in build never needs Blender).
+- **No reference image was attached** to the session (only the text of Update 2): the pool was
+  built from Section 2's description ("white grid-tiled pool room with rounded pillars, still
+  turquoise water with gentle caustics, soft warm sunlight patches against shadowed corners,
+  low ceiling, openings leading to more pool rooms"). Nothing copied from anyone's artwork.
+- **Caustics as an animated light pattern** (a looping 4D Voronoi on shadow-only planes)
+  rather than true refractive caustics: path-traced caustics through still water would need
+  far more samples and could not loop. They are stored as 24 luminance frames at a quarter of
+  the size (the pattern is soft) and played at 5 fps, cross-faded, faint by default (0.6).
+- **Water lets shadow rays through** (tinted), so the basin is lit while refractive caustics
+  are off (Cycles' usual trade for speed).
+- **Passes as 8-bit sRGB JPEG at -0.5 EV**, not EXR: 1.25 MB instead of tens; the darkest
+  passes band slightly when pushed far up (visible in the x2 light-pass sheet, not at the
+  default look). A 16-bit format is the fix if the developer sees banding.
+- **Compositing on a worker thread**, not the message thread: the brief's "never block the
+  message thread" and the MacBook Air. The editor only asks for a look and takes pictures.
+- **Grade in the plug-in** (curve, Character grade/light, fade, vignette, grain) so the 30
+  Characters need no extra renders for now; Section 3's per-Character *render variants*
+  (e.g. Room 404's door ajar) are Part 3.
+- **Character lighting for these three**: per-bank levels (After Hours: half the corridor
+  off; Something Wrong: the far bank dead; pool Submerged: no sun, strong caustics).
+
+### Known limitations
+
+- Prototype geometry: doors without handles, the office carpet and wallpaper read smoother
+  than real ones (fibre and stain textures to add), no clutter or signage beyond the exit sign.
+- 1x set only (1440 x 1080, drawn at 960 x 720 logical): fine at 1x, slightly soft on Retina.
+- The darkest passes' JPEG banding (above).
+- Seven places still painted until Part 3.
+
+### For the developer's approval of the look
+
+Download **LIMINAL-macOS-Universal** from the Actions run of this commit, `bash install-mac.sh`,
+open LIMINAL. The hospital opens first: a photographic corridor; play a few notes (the nearest
+panels swell), set **Activity** to 100 % and listen for the hum stuttering: the failing panel
+(the third one visible down the ceiling) should go dark with it. Click POOL in the film strip: still water,
+light drifting slowly on the ceiling, sun patches; OFFICE: the yellow rooms, the hum, the
+near-left panel failing with the buzz. Try the three Character chips in each. Then the sound:
+every place is now still - a steady hum and room tone, events a minute apart, the room
+carrying the instrument (`u2-rooms.wav` and `u2-rooms-beds.flac` in the Linux artifact).
+**Please say whether this photographic direction is right before the other seven are built.**
 
 ### CI fix after the Milestone 4 push (07:00 wake-up)
 The Linux CI run for 9dd29db failed in the full test suite. The cause was the "animated light

@@ -1,0 +1,65 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 1.587
+    },
+    {
+      "name": "near",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 3.615
+    },
+    {
+      "name": "mid",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 3.072
+    },
+    {
+      "name": "far",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 2.885
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 2.977
+    },
+    {
+      "name": "exit",
+      "kind": "sign",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "peak": 10.163
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "hospital",
+  "thumbnail": "hospital_thumb.jpg"
+}
