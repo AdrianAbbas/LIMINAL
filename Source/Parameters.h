@@ -22,6 +22,18 @@ inline constexpr const char* pianoNoise = "piano_noise";
 inline constexpr const char* pianoDecay = "piano_decay";
 inline constexpr const char* pianoDistance = "piano_distance";
 
+// Faded Synth (Milestone 1a)
+inline constexpr const char* synthOn = "synth_on";
+inline constexpr const char* synthLevel = "synth_level";
+inline constexpr const char* synthDetune = "synth_detune";
+inline constexpr const char* synthWarmth = "synth_warmth";
+inline constexpr const char* synthDrift = "synth_drift";
+inline constexpr const char* synthAttack = "synth_attack";
+inline constexpr const char* synthRelease = "synth_release";
+inline constexpr const char* synthWidth = "synth_width";
+inline constexpr const char* synthGlide = "synth_glide";          // off by default
+inline constexpr const char* synthGlideTime = "synth_glidetime";
+
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence
 inline constexpr float maxDb = 6.0f;
 

@@ -63,3 +63,29 @@ Cheng, Dixon & Mauch, ICASSP 2015, *Modelling the decay of piano sounds*
 (https://webspace.eecs.qmul.ac.uk/s.e.dixon/pub/2015/ChengDixonMauch-ICASSP2015-Decay.pdf);
 DAFx 2004 inharmonicity estimation (https://dafx.de/paper-archive/2004/P_212.PDF);
 *Entropy-based tuning of musical instruments* (https://arxiv.org/pdf/1203.5101).
+
+---
+
+## Faded Synth
+
+**Model** (`dsp::FadedSynth`): subtractive "virtual analog" with the faults of old
+electronics kept on purpose.
+
+| Aspect | What the model does | Basis |
+|---|---|---|
+| Oscillators | Two sawtooths and a pulse (levels 0.5 / 0.5 / 0.35), band-limited with PolyBLEP, free-running (random phase per note) | Standard analog-polysynth voice *(ref)*; PolyBLEP: Välimäki & Huovilainen anti-aliasing *(ref)* |
+| Detune | Saws at -/+ half the spread, the pulse at +0.15; spread 0–24 cents (`24 x^1.5`, default 5 cents) | *(estimate)*; test: beating doubles from Detune 0 to 1 |
+| Drift | Each oscillator wanders on its own (~0.25 Hz, up to 7 cents at Drift 1), a shared slow wow (0.6 Hz, up to 6 cents at Drift 1, quadratic so the default is subtle), cutoff wander up to 15 % | Listeners notice fluctuations around a cent or less; "2 cents at 1 kHz ~ 0.1 Hz"; VCO and ladder-filter cutoff drift with temperature *(web: synth-diy list "Analogue Drift" thread; Analogue Systems RS-100 manual)*. Default Drift 0.3: ~2 cents per oscillator, 0.5 cents of wow. Test: 0.6 -> 1.9 cents RMS. |
+| Slow modulation | Pulse width 0.5 +/- 0.18 at 0.22–0.42 Hz per voice; the same LFO moves the cutoff +/-4 % | *(estimate)* |
+| Warm saturation | `tanh`-like (Padé) input stage, drive 1–4 with Warmth, small bias for even harmonics | OTA/ladder filters have a tanh term in their transfer function: soft saturation; Moog ladder and OTA input stages behave similarly; cutoff shifts with drive *(web: synth-diy "best VC drive approach" thread on the Juno-106 filter)* |
+| Filter | Four one-pole stages (24 dB/octave) with feedback 0.55 (soft resonance); cutoff 9 kHz (Warmth 0) to 500 Hz (Warmth 1), key tracking `(f/261.6)^0.6`, envelope 0.8–2.4 octaves with velocity (decays to 15 % in ~1.2 s) | Ladder topology *(ref: Moog; Stilson & Smith)*; values *(estimate)*. Test: Warmth 0 -> 1 halves the centroid. |
+| Envelopes | RC-style: attack charges toward 1.3 and stops at 1 (the analog curve), decay to 0.8 over ~1.6 s, release T60 = Release; Attack 1 ms–4 s, Release 10 ms–6 s | *(ref: analog ADSR behaviour)* |
+| Width / chorus | Voices alternate left/right (up to +/-0.6), and a bucket-brigade-style chorus: 3.5 +/- 1.8 ms at 0.55 Hz, darkened, cross-fed, the right sweep offset by up to half a cycle; mix 12–50 % | Juno chorus: MN3009 BBD, "only a very limited range of the chip"; the delay range 0.64–12.8 ms is the chip's; clone presets list I+II at ~1 Hz, 8 % depth; emulations sweep 0–1.2 Hz *(web: SoundForce Chorus 6 manual via ModularGrid; Plugin Boutique)*. Roland's own figures were not found. |
+| Glide | Optional (`Synth Glide`, **off by default**), 10 ms–2 s, from the previous note | Brief: any slide into pitch must be an option, default off |
+| Polyphony | 12 + 4 fading; restrike 12 ms; stealing 5 ms | |
+
+**Sources (web):** synth-diy mailing list, "Analogue Drift" (https://synth-diy.org/pipermail/synth-diy/2012-November/141794.html)
+and "best VC drive approach" (https://synth-diy.org/pipermail/synth-diy/2022-February/170149.html);
+Analogue Systems RS-100 manual (https://www.analoguesystems.co.uk/images/AS_manuals/RS100S.pdf);
+SoundForce Chorus 6 (https://modulargrid.net/e/soundforce-chorus-6-); Feedback Chorus
+(https://www.pluginboutique.com/products/17837-Feedback-Chorus).

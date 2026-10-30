@@ -22,6 +22,16 @@ std::unique_ptr<juce::AudioParameterFloat> amount(const char* id, const char* na
         juce::ParameterID { id, 1 }, name, juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), value,
         juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)); }));
 }
+// A time in seconds, shown as ms below one second.
+std::unique_ptr<juce::AudioParameterFloat> seconds(const char* id, const char* name, float lo, float hi, float centre, float value) {
+    juce::NormalisableRange<float> range(lo, hi, 0.0001f);
+    range.setSkewForCentre(centre);
+    return std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { id, 1 }, name, range, value,
+        juce::AudioParameterFloatAttributes().withLabel("s").withStringFromValueFunction([](float v, int) {
+            return v < 1.0f ? juce::String(juce::roundToInt(v * 1000.0f)) + " ms" : juce::String(v, 2) + " s";
+        }));
+}
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
@@ -42,6 +52,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     layout.add(amount(pianoNoise, "Piano Mechanical Noise", 0.4f));
     layout.add(amount(pianoDecay, "Piano Decay", 0.5f));
     layout.add(amount(pianoDistance, "Piano Distance", 0.0f));
+    // Faded Synth
+    layout.add(toggle(synthOn, "Synth On", false));
+    layout.add(level(synthLevel, "Synth Level", 0.0f));
+    layout.add(amount(synthDetune, "Synth Detune", 0.35f));
+    layout.add(amount(synthWarmth, "Synth Warmth", 0.5f));
+    layout.add(amount(synthDrift, "Synth Drift", 0.3f));
+    layout.add(seconds(synthAttack, "Synth Attack", 0.001f, 4.0f, 0.15f, 0.008f));
+    layout.add(seconds(synthRelease, "Synth Release", 0.01f, 6.0f, 0.6f, 0.6f));
+    layout.add(amount(synthWidth, "Synth Width", 0.5f));
+    layout.add(toggle(synthGlide, "Synth Glide", false));
+    layout.add(seconds(synthGlideTime, "Synth Glide Time", 0.01f, 2.0f, 0.2f, 0.12f));
     return layout;
 }
 

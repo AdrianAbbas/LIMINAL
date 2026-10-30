@@ -19,6 +19,12 @@ LiminalProcessor::LiminalProcessor()
     slots[0].distance = raw(params::pianoDistance);
     const char* pianoIds[] { params::pianoAge, params::pianoDetune, params::pianoSoftness, params::pianoNoise, params::pianoDecay };
     for (int i = 0; i < 5; ++i) pianoSettings[i] = raw(pianoIds[i]);
+    slots[1].instrument = &synth;
+    slots[1].on = raw(params::synthOn);
+    slots[1].level = raw(params::synthLevel);
+    const char* synthIds[] { params::synthDetune, params::synthWarmth, params::synthDrift, params::synthAttack,
+                             params::synthRelease, params::synthWidth, params::synthGlide, params::synthGlideTime };
+    for (int i = 0; i < 8; ++i) synthSettings[i] = raw(synthIds[i]);
 }
 
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -87,6 +93,16 @@ void LiminalProcessor::updateSettings() {
     p.noise = pianoSettings[3]->load();
     p.decay = pianoSettings[4]->load();
     piano.setSettings(p);
+    dsp::FadedSynth::Settings f;
+    f.detune = synthSettings[0]->load();
+    f.warmth = synthSettings[1]->load();
+    f.drift = synthSettings[2]->load();
+    f.attack = synthSettings[3]->load();
+    f.release = synthSettings[4]->load();
+    f.width = synthSettings[5]->load();
+    f.glide = synthSettings[6]->load() > 0.5f;
+    f.glideTime = synthSettings[7]->load();
+    synth.setSettings(f);
 }
 
 void LiminalProcessor::renderSegment(float* left, float* right, int n) {

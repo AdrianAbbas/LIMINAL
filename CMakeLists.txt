@@ -47,7 +47,7 @@ juce_add_plugin(LIMINAL
     COPY_PLUGIN_AFTER_BUILD FALSE)
 target_sources(LIMINAL PRIVATE
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
-    Source/DSP/ForgottenPiano.cpp Source/DSP/RoomTone.cpp Source/DSP/Space.cpp
+    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/RoomTone.cpp Source/DSP/Space.cpp
     Source/UI/SceneArt.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 target_compile_definitions(LIMINAL PUBLIC

@@ -2,6 +2,7 @@
 #include "DSP/RoomTone.h"
 #include "DSP/Space.h"
 #include "DSP/Distance.h"
+#include "DSP/FadedSynth.h"
 #include "DSP/ForgottenPiano.h"
 #include "Parameters.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -65,7 +66,7 @@ private:
         bool enabled() const { return on->load() > 0.5f; }
         float targetGain() const { return enabled() ? params::levelGain(level->load()) : 0.0f; }
     };
-    static constexpr int instrumentCount = 1;
+    static constexpr int instrumentCount = 2;
     void handleMidi(const juce::MidiMessage&);
     void updateSettings();
     void renderSegment(float* left, float* right, int n);
@@ -80,6 +81,8 @@ private:
     dsp::ForgottenPiano piano;
     std::array<Slot, instrumentCount> slots;
     std::atomic<float>* pianoSettings[5] {};
+    dsp::FadedSynth synth;
+    std::atomic<float>* synthSettings[8] {};
     dsp::RoomTone roomTone;
     dsp::Space room;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;

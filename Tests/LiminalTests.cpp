@@ -14,6 +14,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
+#include <numeric>
 #include <new>
 #include <string>
 #include <vector>
@@ -550,6 +551,7 @@ int main(int argc, char** argv) {
     if (run("rates")) testRates(s);
     if (run("determinism")) testDeterminism(s);
     if (run("piano")) testPiano(s);
+    if (run("synth")) testSynth(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

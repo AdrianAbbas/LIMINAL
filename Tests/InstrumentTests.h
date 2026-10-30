@@ -79,7 +79,7 @@ double centsBetween(double a, double b) { return 1200.0 * std::log2(a / b); }
 
 // Only one instrument on, every control at its default.
 void solo(Rig& rig, const char* onId) {
-    for (const char* id : { params::pianoOn })
+    for (const char* id : { params::pianoOn, params::synthOn })
         rig.set(id, std::strcmp(id, onId) == 0 ? 1.0f : 0.0f);
     dry(rig);
 }
@@ -231,5 +231,124 @@ void testPiano(Suite& s) {
         }
         s.check(allFinite, "A0 to C8 all render finite and unclipped");
         s.check(worst < 6.0, "neighbouring keys (a minor third apart) within 6 dB of each other", juce::String(worst, 1).toStdString() + " dB");
+    }
+}
+
+// Envelope wobble: mean deviation (dB) of 10 ms frames from a straight-line trend.
+double wobbleDb(const Signal& x, double rate, double from, double to, double frame = 0.01) {
+    std::vector<double> frames;
+    for (double t = from; t < to; t += frame) frames.push_back(windowDb(x, rate, t, t + frame));
+    double sum = 0;
+    const double slope = (frames.back() - frames.front()) / double(frames.size() - 1);
+    for (std::size_t i = 0; i < frames.size(); ++i) sum += std::abs(frames[i] - (frames.front() + slope * double(i)));
+    return sum / double(frames.size());
+}
+// Left/right correlation (1 = mono).
+double correlation(const Signal& x, double rate, double from, double to) {
+    double lr = 0, ll = 0, rr = 0;
+    for (std::size_t i = std::size_t(from * rate); i < std::min(x.first.size(), std::size_t(to * rate)); ++i) {
+        lr += double(x.first[i]) * x.second[i];
+        ll += double(x.first[i]) * x.first[i];
+        rr += double(x.second[i]) * x.second[i];
+    }
+    return lr / std::sqrt(std::max(1e-30, ll * rr));
+}
+
+void testSynth(Suite& s) {
+    s.section("synth (Faded Synth)");
+    const double rate = 48000.0;
+    const auto fresh = [&](std::initializer_list<std::pair<const char*, float>> settings = {}) {
+        auto rig = std::make_unique<Rig>(rate);
+        solo(*rig, params::synthOn);
+        for (const auto& [id, value] : settings) rig->set(id, value);
+        return rig;
+    };
+    {
+        auto rig = fresh();
+        const auto a4 = playNote(*rig, 69, 100, 1.0, 0.1);
+        const double f = pitchAt(a4, rate, 0.3, 0.7);
+        s.check(std::abs(centsBetween(f, 440.0)) < 4.0, "A4 in tune (within 4 cents, default drift)", juce::String(f, 2).toStdString() + " Hz");
+        s.check(finite(a4), "output finite and within +/-1");
+        const double early = pitchAt(a4, rate, 0.012, 0.06);
+        s.check(std::abs(centsBetween(early, f)) < 4.0, "no pitch glide: the note starts on its pitch", juce::String(centsBetween(early, f), 2).toStdString() + " cents");
+    }
+    {   // Sustains while held (unlike the piano and glass), and releases.
+        auto rig = fresh();
+        const auto c4 = playNote(*rig, 60, 100, 2.5, 1.5);
+        const double held = windowDb(c4, rate, 2.0, 2.4) - windowDb(c4, rate, 0.3, 0.7);
+        s.check(held > -4.0, "a held note sustains (within 4 dB after 2 s)", juce::String(held, 1).toStdString() + " dB");
+        s.check(windowDb(c4, rate, 3.5, 4.0) < windowDb(c4, rate, 2.0, 2.4) - 50.0, "released, it fades away (default release 0.6 s)");
+        s.check(rig->p->meters.voices.load() == 0, "no voice left after the release");
+    }
+    {   // Legato from C4 to E4: no glide by default; with Glide on, it slides.
+        const auto legato = [&](bool glide) {
+            auto rig = fresh({ { params::synthGlide, glide ? 1.0f : 0.0f }, { params::synthGlideTime, 0.3f }, { params::synthRelease, 0.02f } });
+            const double t = rig->time;
+            return rig->render(1.2, { { t, on(60) }, { t + 0.5, on(64) }, { t + 0.5, off(60) }, { t + 1.1, off(64) } });
+        };
+        const auto plain = legato(false), slide = legato(true);
+        const double target = dsp::noteHz(64.0f);
+        const double p0 = pitchAt(plain, rate, 0.51, 0.56), p1 = pitchAt(slide, rate, 0.51, 0.56), settled = pitchAt(slide, rate, 1.0, 1.1);
+        s.check(std::abs(centsBetween(p0, target)) < 6.0, "Glide off (default): the next note starts on its pitch", juce::String(centsBetween(p0, target), 1).toStdString() + " cents");
+        s.check(centsBetween(p1, target) < -60.0 && std::abs(centsBetween(settled, target)) < 6.0, "Glide on: it slides up from the previous note, then settles",
+                juce::String(centsBetween(p1, target), 1).toStdString() + " cents at the start");
+    }
+    {   // Chords.
+        auto rig = fresh();
+        const double t = rig->time;
+        const auto chord = rig->render(2.5, { { t, on(48, 90) }, { t, on(55, 90) }, { t, on(60, 90) }, { t, on(64, 90) }, { t, on(67, 90) },
+                                               { t + 1.5, off(48) }, { t + 1.5, off(55) }, { t + 1.5, off(60) }, { t + 1.5, off(64) }, { t + 1.5, off(67) } });
+        s.check(finite(chord) && peak(chord) < 0.9f, "a five-note chord is unclipped", juce::String(peak(chord), 2).toStdString());
+        s.check(windowDb(chord, rate, 0.5, 1.4) > -30.0, "the chord is full (over -30 dBFS)", juce::String(windowDb(chord, rate, 0.5, 1.4), 1).toStdString());
+    }
+    {   // Velocity: louder and brighter.
+        auto rig = fresh();
+        const auto soft = playNote(*rig, 60, 35, 0.6, 0.6), hard = playNote(*rig, 60, 120, 0.6, 0.6);
+        const double range = windowDb(hard, rate, 0.05, 0.5) - windowDb(soft, rate, 0.05, 0.5);
+        const double c0 = Spectrum(monoOf(soft, rate, 0.05, 0.5), rate).centroid(), c1 = Spectrum(monoOf(hard, rate, 0.05, 0.5), rate).centroid();
+        s.check(range > 8.0 && c1 > 1.2 * c0, "velocity 35 to 120: over 8 dB louder and brighter",
+                juce::String(range, 1).toStdString() + " dB, centroid " + juce::String(c0, 0).toStdString() + " -> " + juce::String(c1, 0).toStdString());
+    }
+    {   // Each control is heard.
+        const auto note = [&](std::initializer_list<std::pair<const char*, float>> settings, double hold = 2.0) {
+            auto rig = fresh(settings);
+            return playNote(*rig, 60, 100, hold, 0.3);
+        };
+        const auto bright = note({ { params::synthWarmth, 0.0f } }), warm = note({ { params::synthWarmth, 1.0f } });
+        const double c0 = Spectrum(monoOf(bright, rate, 0.5, 1.5), rate).centroid(), c1 = Spectrum(monoOf(warm, rate, 0.5, 1.5), rate).centroid();
+        s.check(c1 < 0.6 * c0, "Warmth darkens it", juce::String(c0, 0).toStdString() + " -> " + juce::String(c1, 0).toStdString() + " Hz");
+
+        const auto still = note({ { params::synthDetune, 0.0f }, { params::synthDrift, 0.0f } }), spread = note({ { params::synthDetune, 1.0f }, { params::synthDrift, 0.0f } });
+        s.check(wobbleDb(spread, rate, 0.5, 1.9) > 2.0 * wobbleDb(still, rate, 0.5, 1.9) + 0.1, "Detune makes the oscillators beat",
+                juce::String(wobbleDb(still, rate, 0.5, 1.9), 2).toStdString() + " -> " + juce::String(wobbleDb(spread, rate, 0.5, 1.9), 2).toStdString() + " dB");
+
+        const auto pitchSpread = [&](float drift) {
+            const auto x = note({ { params::synthDrift, drift }, { params::synthDetune, 0.0f } }, 4.0);
+            std::vector<double> p;
+            for (double t = 0.3; t < 3.9; t += 0.3) p.push_back(centsBetween(pitchAt(x, rate, t, t + 0.12), 261.63));
+            const double mean = std::accumulate(p.begin(), p.end(), 0.0) / double(p.size());
+            double sum = 0;
+            for (double v : p) sum += (v - mean) * (v - mean);
+            return std::sqrt(sum / double(p.size()));
+        };
+        const double d0 = pitchSpread(0.0f), d1 = pitchSpread(1.0f);
+        s.check(d1 > d0 + 0.8 && d1 < 15.0, "Drift makes the tuning wander (slowly, a few cents)",
+                juce::String(d0, 2).toStdString() + " -> " + juce::String(d1, 2).toStdString() + " cents RMS");
+
+        const auto fast = note({ { params::synthAttack, 0.002f } }), slow = note({ { params::synthAttack, 1.0f } });
+        const double a0 = windowDb(fast, rate, 0.02, 0.08) - windowDb(fast, rate, 1.5, 1.9), a1 = windowDb(slow, rate, 0.02, 0.08) - windowDb(slow, rate, 1.5, 1.9);
+        s.check(a1 < a0 - 15.0, "Attack slows the onset", juce::String(a0, 1).toStdString() + " vs " + juce::String(a1, 1).toStdString() + " dB at 50 ms");
+
+        const auto shortR = note({ { params::synthRelease, 0.05f } }), longR = note({ { params::synthRelease, 4.0f } });
+        const double r0 = windowDb(shortR, rate, 2.15, 2.3), r1 = windowDb(longR, rate, 2.15, 2.3);
+        s.check(r1 > r0 + 20.0, "Release lengthens the tail", juce::String(r0, 1).toStdString() + " vs " + juce::String(r1, 1).toStdString() + " dB");
+
+        const auto chord = [&](float width) {
+            auto rig = fresh({ { params::synthWidth, width } });
+            const double t = rig->time;
+            return rig->render(1.5, { { t, on(55) }, { t, on(60) }, { t, on(64) }, { t + 1.4, off(55) }, { t + 1.4, off(60) }, { t + 1.4, off(64) } });
+        };
+        const double w0 = correlation(chord(0.0f), rate, 0.2, 1.4), w1 = correlation(chord(1.0f), rate, 0.2, 1.4);
+        s.check(w1 < w0 - 0.15, "Width widens the stereo image", "L/R correlation " + juce::String(w0, 2).toStdString() + " -> " + juce::String(w1, 2).toStdString());
     }
 }
