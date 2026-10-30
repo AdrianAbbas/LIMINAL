@@ -25,10 +25,10 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Part 1: `DSP/Characters` (30 Characters, Unreal flavours, macro responses, Evolution), Character/evolution/macro/scene parameters, parameter mirror for scene morphing, 64-sample control grid, tests group `characters` (320 checks pass)
   - [x] Part 2: editor (Character choice in the PLACE drawer, PERFORM drawer: macros, evolution, scenes; activity indicator; Character grade), DEVLOG section, push without `[skip ci]`
 - [x] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (2026-10-30)
-- [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)
+- [x] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (2026-10-30)
   - [x] Part 1: ten procedural scenes (`UI/SceneArt`), graded per Character; resizable editor (MainView scaled, 85–150 %, 960x720); main view: film strip of places, Character chips, instrument objects, four ring knobs, page tabs; lights that answer notes/events/Character flicker/mouse; Unreal tape-slip; PLACE view shows room/materials/processing (350 checks pass)
-  - [ ] Part 2: snapshots of every place (and Characters, window sizes) in `docs/snapshots/`, editor tests for art/animation cost, DEVLOG section, push without `[skip ci]`
-- [ ] Final handoff: per milestone, what to listen for and look at in GarageBand
+  - [x] Part 2: snapshots of every place (and Characters, window sizes) in `docs/snapshots/`, editor tests for art/animation cost, DEVLOG section, push without `[skip ci]`
+- [x] Final handoff: per milestone, what to listen for and look at in GarageBand (end of this file)
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
 
@@ -733,3 +733,106 @@ harness), the native save panel for export, and listening to the presets.
 
 - The preset list is not searchable; 86 entries in five tabs.
 - Export length is chosen from a menu (30 s, 1, 2, 5, 10 min).
+
+---
+
+## Milestone 4 — the viewfinder, for real (2026-10-30)
+
+Done last tonight (after 3, 5 and 6, so it could show everything they added). The brief's
+"prototype, then stop for approval" for 4a was overridden by the developer's overnight
+plan ("Milestone 4 in full… I'll review in the morning").
+
+### What changed
+
+| | |
+|---|---|
+| `UI/SceneArt` | Rewritten: a small perspective toolkit (room shell lit by its own fixtures, fog, boxes, doors, ceiling and wall lights with halos and floor reflections) and **ten scenes**: hospital corridor (green fluorescent, exit sign), mall atrium (three storeys of half-shuttered shopfronts, glass roof, escalator, warm balcony lamps), school hallway (yellowed walls, lockers, notice boards, old tubes), parking garage (pillars, beams, bay lines, isolated sodium lights in the dark), indoor pool (tiles, high windows, blue water with lane lines, caustic glints, ladder), hotel corridor (patterned carpet, striped wallpaper, brass numbers, warm sconces, curtained window), subway platform (yellow line, track trench, rails, tunnel mouth, tiled wall and signs, strip lights), supermarket aisle (shelves of faded packaging, long tubes, glossy floor, glowing cold cases), endless office (ceiling grid, cubicle rows to the horizon, dead monitors), impossible room (tilted, frames inside frames, doors on the ceiling, stairs into a wall, violet). Finish: the Character's grade and light, a faded wash (Character 2) or darker, hazier edges (Character 3), haze, vignette, halation and grain (one pass over the pixels). Cached per place/Character/size; a place change re-renders once (~100–150 ms). If `…/Veil Audio/LIMINAL/Scenes/<n>.png` exists (the developer's photograph of place n), it replaces the drawing with the same finish. |
+| Editor structure | `MainView` (the old editor, now a 960 x 720 logical canvas) inside a thin `LiminalEditor` that **scales it to the window**: resizable 85–150 % with a fixed aspect ratio, remembered in the song (`uiScale`). |
+| Main view | The scene fills the window. Viewfinder: REC, wordmark, place / Character / location caption, EVOLVING ticks, **Character chips** (click), PLAYING line (click a name to solo), clock, INST/AMB meters, **page tabs** (INSTRUMENTS, PLACE, EFFECTS, PERFORM, PRESETS). Strip: a **film strip of the ten places** (their own art in miniature; click to go), the **instruments as objects** (piano, cassette, glass, voices, music box, waveform; lit when on, click to switch), the **four macros as ring knobs**, MASTER / INST / AMB / SPACE, POWER. |
+| Pages | The drawers became pages over the right of the scene (frosted): INSTRUMENTS, PLACE (places, Characters, and now the room's numbers, materials and what it does to the instruments, Environment Amount), EFFECTS (per instrument, with MIDI), PERFORM (macros, evolution, scenes), PRESETS (with quality and export). Controls shrink their label to fit beside their value (no overlaps). |
+| Animation | **Lights that answer the music**: every note swells the nearest fixtures, their halo and their floor reflection; the place's own events make a light pulse; the Character's flicker decides how often a tube stutters; the light under the mouse warms. **Unreal** makes a band of the picture slip sideways like worn tape. Only changed regions are repainted, through the frame governor; Eco quality (or slow frames) stops the animation. |
+| Processor | `meters.notes`, `meters.events` (the lights' cues), `uiScale` in the state. |
+| Tests | Editor group: distinct art per place, Characters change the picture, the film strip changes the picture, chips and objects work, an animated light frame's cost, 150 % / 85 % sizes remembered. `--snapshots <folder>` writes the documentation's screenshots. |
+| `docs/snapshots/` | `place-01…10-*.jpg` (main view in each place), `characters-all-30.jpg` (every Character's grading), `page-*.jpg` (each page), `size-85.jpg`, `size-150.jpg`. JPEG at 1x to keep the repository light (2.4 MB). |
+
+### Tested (Linux, this container) — 358 checks pass, 0 fail
+
+- Art: closest pair of places' mean colour difference 4.5 % (all pairs over 4 %); each
+  Character changes the picture (closest 3.5 %); choosing a place in the film strip changes
+  the picture (14.8 % in the sampled area).
+- An animation frame with the lights answering a note: ~19 ms for a 360 x 260 region at 2x
+  in the software renderer here (the Mac draws with CoreGraphics; the governor spaces
+  frames out if they get slow).
+- Editor open + first 2x paint ~150–220 ms (software renderer; includes rendering the scene
+  and the ten miniatures).
+- 150 % and 85 % sizes work and are remembered; all pages open; one at a time.
+- Looked at every snapshot by eye (places, all 30 Characters, pages, both sizes).
+
+### Not verified here
+
+The look on a real Retina screen in GarageBand, how resizing behaves inside GarageBand's
+plug-in window (JUCE's AU wrapper supports host-resizable editors; not tried here), and
+whether the animation stays smooth on the MacBook Air (the governor should guarantee it
+never freezes).
+
+### Decisions (recorded instead of asking)
+
+- **Pages stay as panels over the right of the scene** (not full-screen pages), so the
+  place is always visible; the main view itself holds the place selector, Characters,
+  instruments, macros and outputs, as the spec's MAIN VIEW asks.
+- **Source/listener positioning (floor plan)**: not built. The legacy floor plan was never
+  real, and the engine places instruments with Distance and Presence instead; the PLACE
+  page shows the room's dimensions and materials. Candidate for Milestone 7.
+- **No parallax** (the scene is one cached image): depth comes from perspective, fog and
+  light; parallax would mean re-rendering layers every frame.
+- **Custom font**: still the system sans-serif (no font file to license yet).
+- **Snapshots as JPEG** in the repository; CI keeps uploading full PNGs with the test logs.
+
+### Known limitations
+
+- Painted, not photographic: geometry is simple (flat shading, no textures beyond lines);
+  the photograph pipeline is ready for the developer's own pictures.
+- A place change re-renders the scene on the message thread (~0.1–0.2 s here).
+- The mall's balcony rails cross the near edge of the picture at a steep angle.
+
+---
+
+## Morning handoff (2026-10-30): what to listen for and look at in GarageBand
+
+Install **LIMINAL-macOS-Universal** from the Actions run of the last commit of the night
+(`bash install-mac.sh`), open a Software Instrument track, load LIMINAL. CI built and
+tested 2b, 3, 5 and 6 on macOS (auval + the AU harness, arm64 and x86_64) as they were
+pushed; check that the final run is green too.
+
+**2b — ten places, wider differences.** Play the same short phrase and click through the
+film strip. Every place should sound like a different room *and* a different instrument
+(hotel: through a wall; subway: bass, metallic ring, long tunnel echo; supermarket: thin,
+humming; office: soft, notched, wavering echo; impossible room: dissonant, echoes a tritone
+up, a rising tail). Hospital vs garage should no longer be close (thin and cold vs heavy
+and boomy). `m2b-environments.wav` in the Linux artifact plays one phrase through all ten.
+
+**3 — per-instrument effects.** Open EFFECTS: each instrument has Drift, Tape, Reverb send,
+Echo (try sync 1/4 against GarageBand's tempo), Chorus, Filter, Granular (try Freeze while
+a chord rings). Turn **Influence** down to hear the place let go of that instrument; switch
+places and read the last line ("…ADDS") change. Effects Mix 0 = dry.
+
+**5 — Characters, evolution, scenes, macros.** Click the three Character chips under the
+caption in a few places (e.g. School: After Class → Childhood Memory → Nightmare). Sweep the
+four knobs: **Unreal** should do something different in each place (pool: loud echoes a
+fifth up; school: wobbling tape; garage: the concrete answering an octave down). PERFORM:
+evolution rate/freeze/reset; STORE A, change place and instruments, STORE B, switch MORPH
+on and sweep it (or automate "Scene Morph" in GarageBand) — no clicks, no stuck notes.
+
+**6 — presets and workflow.** GarageBand's preset menu should list Init + 20 scenes (e.g.
+"The Last Patient", "Dream of an Empty Pool", "Rooms That Shouldn't Exist"). PRESETS
+page: places, Characters, instruments, scenes, your own (save one, reload the project).
+EFFECTS → MIDI row: lowest/highest key per instrument (layer piano low, glass high),
+velocity to volume/filter. Quality: Eco should lighten the CPU meter. Export ambience: pick
+a length and a file (the save panel), check the WAV.
+
+**4 — the look.** The whole window is the place; each of the ten is its own scene and each
+Character regrades it. Lights should swell gently with your notes, stutter now and then
+(more in "Something Wrong", "Fluorescent Nightmare", "Pursuit"), and warm under the mouse;
+with Unreal above ~35 % the picture slips like tape. Drag the window corner (85–150 %).
+Please report anything clipped, overlapping or sluggish on the MacBook Air — and whether
+the painted style is the right direction before it gets more detail.

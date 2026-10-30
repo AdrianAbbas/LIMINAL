@@ -3,13 +3,16 @@
 A cinematic environmental **instrument** (AU / VST3, macOS; GarageBand and Logic Pro):
 playable, unsettling instruments placed inside liminal spaces.
 
-**Status: Milestone 2a.** Six playable instruments — Forgotten Piano, Faded Synth,
-Glass Memories, Empty Choir, Lost Music Box, Hollow Drone (how they are built:
-[`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — in five environments that each
-reshape every instrument and have their own room and sounds: Vacant Hospital, Empty
-Shopping Mall, Abandoned School, Underground Parking Garage, Abandoned Indoor Pool
-([`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md)). The interface is still the first sketch
-of the "viewfinder"; five more places and the full design come in Milestones 2b–7.
+**Status: Milestones 0–6 done (7 and 8 to come).** Six playable instruments — Forgotten
+Piano, Faded Synth, Glass Memories, Empty Choir, Lost Music Box, Hollow Drone
+([`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — in ten places that each reshape
+every instrument and have their own room and sounds ([`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md)),
+each with three Characters, evolution, four macros and Scene A/B morphing
+([`docs/CHARACTERS.md`](docs/CHARACTERS.md)); per-instrument effects with the place's defaults
+([`docs/EFFECTS.md`](docs/EFFECTS.md)); 86 factory presets, ambience export to WAV,
+Eco/Standard/High quality. The interface is the "viewfinder": every place painted as its
+own scene, graded per Character, lights that answer the music
+([`docs/snapshots/`](docs/snapshots/)).
 
 - Brief: [`LIMINAL_CLAUDE_BRIEF.md`](LIMINAL_CLAUDE_BRIEF.md), spec:
   [`LIMINAL_DIRECTION_UPDATE_1.md`](LIMINAL_DIRECTION_UPDATE_1.md)

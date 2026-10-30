@@ -169,6 +169,7 @@ void PlaceStrip::choose(int place) {
     p->setValueNotifyingHost(p->convertTo0to1(float(place)));
     p->endChangeGesture();
     refresh();
+    if (onChoose) onChoose();
 }
 
 void PlaceStrip::paint(juce::Graphics& g) {
@@ -246,6 +247,7 @@ void CharacterStrip::choose(int character) {
     p->setValueNotifyingHost(p->convertTo0to1(float(character)));
     p->endChangeGesture();
     refresh();
+    if (onChoose) onChoose();
 }
 
 void CharacterStrip::paint(juce::Graphics& g) {
@@ -1375,6 +1377,8 @@ MainView::MainView(LiminalProcessor& p)
         if (syncPlace()) repaint();
     };
     places.onChoose = [this] { if (syncPlace()) repaint(); };
+    placeStrip.onChoose = [this] { if (syncPlace()) repaint(); };
+    characterStrip.onChoose = [this] { if (syncPlace()) repaint(); };
     syncPlace();
     setSize(defaultWidth, defaultHeight);
     startTimerHz(30);

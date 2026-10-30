@@ -59,6 +59,7 @@ public:
     bool refresh();
     juce::Rectangle<int> frame(int place) const;
     void choose(int place);
+    std::function<void()> onChoose;
 
 private:
     juce::AudioProcessorValueTreeState& state;
@@ -77,6 +78,7 @@ public:
     void mouseUp(const juce::MouseEvent&) override;
     bool refresh();
     void choose(int character);
+    std::function<void()> onChoose;
 
 private:
     juce::Rectangle<float> chip(int character) const;
@@ -320,6 +322,10 @@ public:
     EffectsDrawer& effectsDrawer() { return effects; }
     juce::Button& effectsToggle() { return effectsButton; }
     const ui::FrameGovernor& governor() const { return frames; }
+    void animate() { frames = {}; timerCallback(); }   // one animation tick now (tests, snapshots)
+    PlaceStrip& placeSelector() { return placeStrip; }
+    CharacterStrip& characterSelector() { return characterStrip; }
+    InstrumentShelf& instrumentShelf() { return shelf; }
 
 private:
     void timerCallback() override;

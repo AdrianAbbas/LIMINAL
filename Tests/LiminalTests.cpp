@@ -614,6 +614,75 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                 lm->showPresets(false);
             }
         }
+        if (i == 0)
+            if (auto* lm = dynamic_cast<LiminalEditor*>(editor.get())) {   // Milestone 4: the art, the animation, the sizes
+                auto& view = lm->view();
+                // Every place has its own picture (mean difference between every pair of scenes).
+                std::vector<juce::Image> art;
+                for (int place = 0; place < dsp::placeCount; ++place) art.push_back(ui::renderPlace(place, 0, 192, 144, 1.0f, true).image);
+                double nearest = 1e9;
+                for (std::size_t a = 0; a < art.size(); ++a)
+                    for (std::size_t b = a + 1; b < art.size(); ++b) {
+                        double sum = 0;
+                        for (int y = 0; y < 144; y += 2)
+                            for (int x = 0; x < 192; x += 2) {
+                                const auto ca = art[a].getPixelAt(x, y), cb = art[b].getPixelAt(x, y);
+                                sum += std::abs(ca.getFloatRed() - cb.getFloatRed()) + std::abs(ca.getFloatGreen() - cb.getFloatGreen()) + std::abs(ca.getFloatBlue() - cb.getFloatBlue());
+                            }
+                        nearest = std::min(nearest, sum / (96.0 * 72.0 * 3.0));
+                    }
+                s.check(nearest > 0.04, "every place has distinct artwork (closest pair's mean colour difference over 4 %)", num(nearest * 100.0, 1) + " %");
+                double nearestCharacter = 1e9;
+                for (int place = 0; place < dsp::placeCount; ++place)
+                    for (int c = 1; c < dsp::characterCount; ++c) {
+                        const auto a = ui::renderPlace(place, 0, 96, 72, 1.0f, true).image, b = ui::renderPlace(place, c, 96, 72, 1.0f, true).image;
+                        double sum = 0;
+                        for (int y = 0; y < 72; ++y)
+                            for (int x = 0; x < 96; ++x) sum += std::abs(a.getPixelAt(x, y).getBrightness() - b.getPixelAt(x, y).getBrightness()) + std::abs(a.getPixelAt(x, y).getHue() - b.getPixelAt(x, y).getHue()) * 0.5;
+                        nearestCharacter = std::min(nearestCharacter, sum / (96.0 * 72.0));
+                    }
+                s.check(nearestCharacter > 0.02, "each Character changes the picture (grade, light, haze)", num(nearestCharacter * 100.0, 1) + " %");
+                // The picture follows the place.
+                const auto before = editor->createComponentSnapshot({ 200, 200, 300, 200 }, true, 1.0f);
+                view.placeSelector().choose(4);
+                const auto after = editor->createComponentSnapshot({ 200, 200, 300, 200 }, true, 1.0f);
+                double change = 0;
+                for (int y = 0; y < 200; y += 4)
+                    for (int x = 0; x < 300; x += 4) change += std::abs(before.getPixelAt(x, y).getBrightness() - after.getPixelAt(x, y).getBrightness());
+                s.check(change / (75.0 * 50.0) > 0.03 && std::lround(p.parameters.getRawParameterValue(params::environment)->load()) == 4,
+                        "choosing a place in the film strip changes the picture", num(change / (75.0 * 50.0) * 100.0, 1) + " %");
+                view.characterSelector().choose(2);
+                s.check(std::lround(p.parameters.getRawParameterValue(params::character)->load()) == 2, "the Character chips choose the Character");
+                view.instrumentShelf().toggle(3);
+                s.check(p.parameters.getRawParameterValue(params::choirOn)->load() > 0.5f, "clicking an instrument object switches it on");
+                view.instrumentShelf().toggle(3);
+                // Lights answering a note: the animation repaints only small areas, quickly.
+                {
+                    juce::AudioBuffer<float> buffer(2, 512);
+                    juce::MidiBuffer midi;
+                    midi.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8) 100), 0);
+                    p.processBlock(buffer, midi);
+                    view.animate();
+                    const auto t0 = std::chrono::steady_clock::now();
+                    for (int k = 0; k < 10; ++k) {
+                        view.animate();
+                        (void) editor->createComponentSnapshot({ 300, 150, 360, 260 }, true, 2.0f);
+                    }
+                    const double frame = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 10.0;
+                    s.metric("animated light frame (360 x 260 region, 2x, software)", frame, " ms");
+                    s.check(frame < 30.0, "an animation frame with the lights answering a note costs under 30 ms (software renderer)", num(frame, 1) + " ms");
+                }
+                // Sizes: the window scales (85-150 %), the controls stay where the scaled layout puts them, the size is remembered.
+                editor->setSize(juce::roundToInt(LiminalEditor::defaultWidth * 1.5f), juce::roundToInt(LiminalEditor::defaultHeight * 1.5f));
+                const auto big = editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f);
+                s.check(big.getWidth() == juce::roundToInt(LiminalEditor::defaultWidth * 1.5f) && std::abs(p.uiScale.load() - 1.5f) < 0.01f,
+                        "the window scales to 150 % and remembers it", num(p.uiScale.load(), 2));
+                editor->setSize(juce::roundToInt(LiminalEditor::defaultWidth * 0.85f), juce::roundToInt(LiminalEditor::defaultHeight * 0.85f));
+                s.check(std::abs(p.uiScale.load() - 0.85f) < 0.01f, "and down to 85 %");
+                editor->setSize(LiminalEditor::defaultWidth, LiminalEditor::defaultHeight);
+                view.placeSelector().choose(0);
+                view.characterSelector().choose(0);
+            }
         s.metric("editor open + first 2x paint", ms, " ms");
         if (i == 5) s.check(ms < 1500.0, "editor opens and paints within 1.5 s (software renderer)", juce::String(ms, 0).toStdString() + " ms");
         p.editorBeingDeleted(editor.get());
@@ -725,6 +794,68 @@ int renderPlaces(const juce::String& path) {
 
 } // namespace
 
+// The documentation's screenshots (docs/snapshots): the main view in every place, every
+// Character's grading, each page, and two window sizes. JPEG, 1x, to keep the repository light.
+int writeSnapshots(const juce::String& path) {
+    const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+    folder.createDirectory();
+    const auto save = [&](const juce::Image& image, const juce::String& name) {
+        auto file = folder.getChildFile(name + ".jpg");
+        file.deleteFile();
+        juce::FileOutputStream out(file);
+        juce::JPEGImageFormat jpeg;
+        jpeg.setQuality(0.86f);
+        jpeg.writeImageToStream(image, out);
+    };
+    LiminalProcessor p;
+    p.prepareToPlay(48000.0, 512);
+    std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditorAndMakeActive());
+    auto* lm = dynamic_cast<LiminalEditor*>(editor.get());
+    if (lm == nullptr) return 1;
+    auto& view = lm->view();
+    p.parameters.getParameter(params::glassOn)->setValueNotifyingHost(1.0f);
+    const char* names[] { "hospital", "mall", "school", "garage", "pool", "hotel", "subway", "supermarket", "office", "impossible" };
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        view.placeSelector().choose(place);
+        view.characterSelector().choose(0);
+        view.animate();
+        save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "place-" + juce::String(place + 1).paddedLeft('0', 2) + "-" + names[place]);
+    }
+    {   // All thirty Characters: the scene alone, small, in a 3 x 10 sheet.
+        const int w = 320, h = 180;
+        juce::Image sheet(juce::Image::RGB, w * 3, h * 10, true);
+        juce::Graphics g(sheet);
+        for (int place = 0; place < dsp::placeCount; ++place)
+            for (int c = 0; c < dsp::characterCount; ++c) {
+                const auto sc = ui::renderPlace(place, c, w, h, 1.0f);
+                g.drawImageAt(sc.image, c * w, place * h);
+                g.setColour(juce::Colours::white.withAlpha(0.8f));
+                g.setFont(juce::FontOptions(11.0f));
+                g.drawText(juce::String(names[place]).toUpperCase() + " - " + dsp::character(place, c).name, c * w + 8, place * h + h - 18, w - 16, 14, juce::Justification::centredLeft);
+            }
+        save(sheet, "characters-all-30");
+    }
+    view.placeSelector().choose(0);
+    view.characterSelector().choose(0);
+    const std::pair<std::function<void(bool)>, const char*> pages[] { { [&](bool s) { lm->showInstruments(s); }, "page-instruments" },
+                                                                      { [&](bool s) { lm->showEnvironment(s); }, "page-place" },
+                                                                      { [&](bool s) { lm->showEffects(s); }, "page-effects" },
+                                                                      { [&](bool s) { lm->showPerform(s); }, "page-perform" },
+                                                                      { [&](bool s) { lm->showPresets(s); }, "page-presets" } };
+    for (const auto& [show, name] : pages) {
+        show(true);
+        save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), name);
+        show(false);
+    }
+    for (const float scale : { 0.85f, 1.5f }) {
+        editor->setSize(juce::roundToInt(LiminalEditor::defaultWidth * scale), juce::roundToInt(LiminalEditor::defaultHeight * scale));
+        save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "size-" + juce::String(juce::roundToInt(scale * 100)));
+    }
+    p.editorBeingDeleted(editor.get());
+    std::cout << "wrote snapshots to " << folder.getFullPathName() << "\n";
+    return 0;
+}
+
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
     juce::String snapshot;
@@ -735,6 +866,7 @@ int main(int argc, char** argv) {
         else if (arg == "--only" && i + 1 < argc) only = juce::StringArray::fromTokens(argv[++i], ",", "");
         else if (arg == "--render" && i + 1 < argc) return renderPhrase(argv[++i]);
         else if (arg == "--render-places" && i + 1 < argc) return renderPlaces(argv[++i]);
+        else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
         else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
             const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(argv[++i]);
             folder.createDirectory();

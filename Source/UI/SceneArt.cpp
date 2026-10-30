@@ -641,11 +641,23 @@ Scene renderPlace(int place, int character, int width, int height, float scale, 
             g.fillRect(0.0f, 0.0f, w, h);
         }
         if (ch.light < 1.0f) {
-            g.setColour(juce::Colours::black.withAlpha(std::clamp(1.0f - ch.light, 0.0f, 0.7f)));
+            g.setColour(juce::Colours::black.withAlpha(std::clamp(0.7f * (1.0f - ch.light), 0.0f, 0.45f)));
             g.fillRect(0.0f, 0.0f, w, h);
         } else if (ch.light > 1.0f) {
             g.setColour(scene.lightColour.withAlpha(std::clamp((ch.light - 1.0f) * 0.25f, 0.0f, 0.2f)));
             g.fillRect(0.0f, 0.0f, w, h);
+        }
+        // The second Character is a faded memory; the third is darker at the edges, hazier.
+        if (scene.character == 1) {
+            g.setColour(juce::Colour(0xff8a8478).withAlpha(0.16f));
+            g.fillRect(0.0f, 0.0f, w, h);
+        } else if (scene.character == 2) {
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0x00000000), { w * 0.5f, h * 0.46f }, juce::Colour(0x58000000), { w * 0.5f, 0 }, true));
+            g.fillRect(0.0f, 0.0f, w, h);
+            if (ch.grade != 0) {
+                g.setGradientFill(juce::ColourGradient(juce::Colour(ch.grade).withAlpha(0.22f), { w * 0.5f, h * 0.46f }, juce::Colour(ch.grade).withAlpha(0.0f), { w * 0.8f, h * 0.46f }, true));
+                g.fillRect(0.0f, 0.0f, w, h);
+            }
         }
         // Haze toward the vanishing point, then the vignette.
         g.setGradientFill(juce::ColourGradient(scene.lightColour.withAlpha(0.08f), { w * 0.5f, h * 0.46f }, scene.lightColour.withAlpha(0.0f), { w * 0.95f, h * 0.46f }, true));
