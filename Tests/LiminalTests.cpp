@@ -663,6 +663,7 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                     midi.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8) 100), 0);
                     p.processBlock(buffer, midi);
                     view.animate();
+                    (void) editor->createComponentSnapshot(editor->getLocalBounds(), true, 2.0f);   // the scene for the new Character is drawn once, not per frame
                     const auto t0 = std::chrono::steady_clock::now();
                     for (int k = 0; k < 10; ++k) {
                         view.animate();

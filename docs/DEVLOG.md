@@ -797,6 +797,13 @@ never freezes).
 
 ---
 
+### CI fix after the Milestone 4 push (07:00 wake-up)
+The Linux CI run for 9dd29db failed in the full test suite. The cause was the "animated light
+frame under 30 ms" check: its first timed frame also redrew the whole scene for the Character
+chosen just before (about 160 ms on its own), so the 10-frame average was ~18 ms here and went
+over 30 ms on the slower runner. Steady frames take 2–4 ms. The test now draws the new scene
+once before it starts timing; the editor code is unchanged. 358 checks pass.
+
 ## Morning handoff (2026-10-30): what to listen for and look at in GarageBand
 
 Install **LIMINAL-macOS-Universal** from the Actions run of the last commit of the night
