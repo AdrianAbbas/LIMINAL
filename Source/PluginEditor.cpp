@@ -64,6 +64,9 @@ void ViewfinderLook::drawButtonText(juce::Graphics& g, juce::TextButton& b, bool
     g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred);
 }
 
+juce::Font ViewfinderLook::getComboBoxFont(juce::ComboBox&) { return font(10.5f); }
+juce::Font ViewfinderLook::getPopupMenuFont() { return font(12.0f); }
+
 //==============================================================================
 LevelControl::LevelControl(juce::AudioProcessorValueTreeState& state, const char* id, juce::String text)
     : label(std::move(text)), parameter(state.getParameter(id)) {
@@ -139,6 +142,12 @@ void DrawerButton::paintButton(juce::Graphics& g, bool highlighted, bool down) {
     if (icon == Icon::instruments) {   // three keys of a keyboard
         for (int k = 0; k < 3; ++k) g.drawRect(glyph.getX() + 5.0f * float(k), glyph.getY(), 5.5f, glyph.getHeight(), 1.0f);
         for (int k = 0; k < 2; ++k) g.fillRect(glyph.getX() + 3.5f + 5.0f * float(k), glyph.getY(), 3.0f, 7.0f);
+    } else if (icon == Icon::effects) {   // three sliders on a rack
+        for (int k = 0; k < 3; ++k) {
+            const float x = glyph.getX() + 2.0f + 5.5f * float(k);
+            g.fillRect(x, glyph.getY(), 1.0f, glyph.getHeight());
+            g.fillRect(x - 2.0f, glyph.getY() + (k == 1 ? 7.0f : k == 0 ? 2.0f : 5.0f), 5.0f, 2.5f);
+        }
     } else {   // a doorway in perspective
         juce::Path p;
         p.startNewSubPath(glyph.getX(), glyph.getBottom());
@@ -475,6 +484,141 @@ void EnvironmentDrawer::mouseUp(const juce::MouseEvent& e) {
 }
 
 //==============================================================================
+namespace {
+struct ModuleInfo {
+    const char* name; const char* on;
+    std::vector<std::pair<const char*, const char*>> controls;
+};
+const std::vector<ModuleInfo>& modules() {
+    static const std::vector<ModuleInfo> list {
+        { "DRIFT", params::fx::driftOn, { { params::fx::drift, "AMT" }, { params::fx::driftRate, "RATE" } } },
+        { "TAPE", params::fx::tapeOn, { { params::fx::tape, "AMT" }, { params::fx::tapeTone, "TONE" }, { params::fx::tapeHiss, "HISS" }, { params::fx::tapeDropouts, "DROP" } } },
+        { "REVERB", params::fx::reverbOn, { { params::fx::reverb, "ROOM" } } },
+        { "ECHO", params::fx::echoOn, { { params::fx::echo, "AMT" }, { params::fx::echoTime, "MS" }, { params::fx::echoFeedback, "FDBK" }, { params::fx::echoTone, "TONE" } } },
+        { "CHORUS", params::fx::chorusOn, { { params::fx::chorus, "AMT" }, { params::fx::chorusRate, "RATE" } } },
+        { "FILTER", params::fx::filterOn, { { params::fx::filter, "AMT" }, { params::fx::filterLow, "LP" }, { params::fx::filterHigh, "HP" }, { params::fx::filterRes, "RES" } } },
+        { "GRANULAR", params::fx::grainOn, { { params::fx::grain, "AMT" }, { params::fx::grainSize, "SIZE" }, { params::fx::grainSpread, "SPRD" } } },
+    };
+    return list;
+}
+void styleCombo(juce::ComboBox& c) {
+    c.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0x2207100f));
+    c.setColour(juce::ComboBox::outlineColourId, ink.withAlpha(0.3f));
+    c.setColour(juce::ComboBox::textColourId, ink.withAlpha(0.9f));
+    c.setColour(juce::ComboBox::arrowColourId, ink.withAlpha(0.7f));
+}
+} // namespace
+
+EffectsDrawer::EffectsDrawer(juce::AudioProcessorValueTreeState& s) : state(s) {
+    for (int i = 0; i < params::instrumentCount; ++i) {
+        auto& tab = tabs[std::size_t(i)];
+        tab.setButtonText(tabNames[i]);
+        tab.onClick = [this, i] { focus(i); };
+        addAndMakeVisible(tab);
+    }
+    focus(0);
+}
+
+// Controls exist only for the instrument shown (cheaper than 192 hidden ones).
+void EffectsDrawer::focus(int instrument) {
+    current = std::clamp(instrument, 0, params::instrumentCount - 1);
+    for (int i = 0; i < params::instrumentCount; ++i) tabs[std::size_t(i)].setToggleState(i == current, juce::dontSendNotification);
+    orderAttachment.reset();   // attachments go before the controls they are attached to
+    rows.clear();
+    const auto id = [&](const char* n) { return params::fxId(current, n); };
+    for (const auto& m : modules()) {
+        Row row;
+        row.on = std::make_unique<juce::ToggleButton>(m.name);
+        row.onAttachment = std::make_unique<ButtonAttachment>(state, id(m.on), *row.on);
+        addAndMakeVisible(*row.on);
+        for (const auto& [n, label] : m.controls) {
+            row.controls.push_back(std::make_unique<LevelControl>(state, id(n).toRawUTF8(), label));
+            addAndMakeVisible(*row.controls.back());
+        }
+        if (m.on == params::fx::echoOn) {
+            row.choice = std::make_unique<juce::ComboBox>();
+            row.choice->addItemList(juce::StringArray(params::fx::syncNames, 8), 1);
+            styleCombo(*row.choice);
+            row.choiceAttachment = std::make_unique<ComboAttachment>(state, id(params::fx::echoSync), *row.choice);
+            row.choice->setTooltip("Echo time: free (TIME) or synced to the song's tempo");
+            addAndMakeVisible(*row.choice);
+        }
+        if (m.on == params::fx::grainOn) {
+            row.extra = std::make_unique<juce::ToggleButton>("FREEZE");
+            row.extraAttachment = std::make_unique<ButtonAttachment>(state, id(params::fx::grainFreeze), *row.extra);
+            addAndMakeVisible(*row.extra);
+        }
+        rows.push_back(std::move(row));
+    }
+    mix = std::make_unique<LevelControl>(state, id(params::fx::mix).toRawUTF8(), "EFFECTS MIX");
+    influence = std::make_unique<LevelControl>(state, id(params::fx::influence).toRawUTF8(), "INFLUENCE");
+    addAndMakeVisible(*mix);
+    addAndMakeVisible(*influence);
+    order = std::make_unique<juce::ComboBox>();
+    order->addItemList(juce::StringArray(params::fx::orderNames, 3), 1);
+    styleCombo(*order);
+    orderAttachment = std::make_unique<ComboAttachment>(state, id(params::fx::order), *order);
+    order->setTooltip("Effect order: Standard (drift, tape, filter, chorus, granular, echo), Texture first, Echo into texture");
+    addAndMakeVisible(*order);
+    resized();
+    repaint();
+}
+
+void EffectsDrawer::paint(juce::Graphics& g) {
+    const auto area = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0x5507100f));
+    g.fillRect(area);
+    g.setColour(ink.withAlpha(0.18f));
+    g.drawRect(area, 1.0f);
+    g.setColour(ink.withAlpha(0.45f));
+    g.setFont(font(9.5f));
+    g.drawText("EFFECTS  -  EACH INSTRUMENT HAS ITS OWN", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    g.setColour(ink.withAlpha(0.1f));
+    for (std::size_t i = 1; i < rows.size(); ++i) g.fillRect(16.0f, float(rows[i].on->getY() - 3), area.getWidth() - 32.0f, 1.0f);
+    // What the place adds to this instrument at full Influence.
+    const int place = std::clamp(int(std::lround(state.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
+    const auto e = dsp::placeEffects(dsp::Place(place), current);
+    juce::StringArray adds;
+    const auto pct = [](float v) { return juce::String(juce::roundToInt(v * 100.0f)); };
+    if (e.drift > 0) adds.add("DRIFT " + pct(e.drift));
+    if (e.tape > 0) adds.add("TAPE " + pct(e.tape));
+    if (e.chorus > 0) adds.add("CHORUS " + pct(e.chorus));
+    if (e.grain > 0) adds.add("GRAIN " + pct(e.grain));
+    if (e.echo > 0) adds.add("ECHO " + pct(e.echo) + " @ " + juce::String(juce::roundToInt(e.echoMs)) + " MS");
+    if (e.lowOctaves > 0) adds.add("LP -" + juce::String(e.lowOctaves, 1) + " OCT");
+    if (e.highOctaves > 0) adds.add("HP +" + juce::String(e.highOctaves, 1) + " OCT");
+    if (e.reverbBias != 0) adds.add(juce::String("ROOM ") + (e.reverbBias > 0 ? "+" : "") + pct(e.reverbBias) + " %");
+    g.setColour(ink.withAlpha(0.5f));
+    g.setFont(font(9.0f));
+    g.drawFittedText(juce::String(dsp::profile(dsp::Place(place)).name) + " ADDS (AT 100 %):  " + adds.joinIntoString("  /  "),
+                     juce::Rectangle<int>(16, getHeight() - 30, getWidth() - 32, 24), juce::Justification::topLeft, 2, 1.0f);
+}
+
+void EffectsDrawer::resized() {
+    auto area = getLocalBounds().reduced(16, 10);
+    area.removeFromTop(16);
+    auto tabRow = area.removeFromTop(24);
+    const int tabWidth = tabRow.getWidth() / params::instrumentCount;
+    for (auto& tab : tabs) tab.setBounds(tabRow.removeFromLeft(tabWidth));
+    area.removeFromTop(6);
+    for (auto& row : rows) {
+        auto r = area.removeFromTop(38);
+        auto left = r.removeFromLeft(96);
+        row.on->setBounds(left.removeFromTop(19));
+        if (row.choice != nullptr) row.choice->setBounds(left.withTrimmedTop(1).withHeight(17).withTrimmedRight(8));
+        if (row.extra != nullptr) row.extra->setBounds(left.withHeight(18));
+        const int w = r.getWidth() / 4;
+        for (auto& c : row.controls) c->setBounds(r.removeFromLeft(w).withTrimmedRight(8).withSizeKeepingCentre(w - 8, 34));
+    }
+    area.removeFromTop(4);
+    auto bottom = area.removeFromTop(36);
+    const int w = bottom.getWidth() / 3;
+    mix->setBounds(bottom.removeFromLeft(w).withTrimmedRight(10));
+    influence->setBounds(bottom.removeFromLeft(w).withTrimmedRight(10));
+    order->setBounds(bottom.withSizeKeepingCentre(bottom.getWidth(), 22).translated(0, 6));
+}
+
+//==============================================================================
 LiminalEditor::LiminalEditor(LiminalProcessor& p)
     : AudioProcessorEditor(p), processor(p),
       master(p.parameters, params::master, "MASTER"),
@@ -483,7 +627,8 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
       space(p.parameters, params::space, "SPACE"),
       active(p.parameters),
       drawer(p.parameters),
-      places(p.parameters) {
+      places(p.parameters),
+      effects(p.parameters) {
     setLookAndFeel(&look);
     setOpaque(true);
     powerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::power, power);
@@ -493,9 +638,12 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     addAndMakeVisible(instrumentsButton);
     environmentButton.onClick = [this] { showEnvironment(!places.isVisible()); };
     addAndMakeVisible(environmentButton);
+    effectsButton.onClick = [this] { showEffects(!effects.isVisible()); };
+    addAndMakeVisible(effectsButton);
     addAndMakeVisible(active);
     addChildComponent(drawer);
     addChildComponent(places);
+    addChildComponent(effects);
     places.onChoose = [this] { if (syncPlace()) repaint(); };
     syncPlace();
     setSize(defaultWidth, defaultHeight);
@@ -514,11 +662,27 @@ bool LiminalEditor::syncPlace() {
     placeShown = place;
     grade = juce::Colour(placeInfo[place].grade);
     environmentButton.setButtonText(juce::String("PLACE:  ") + placeInfo[place].shortName);
+    effects.repaint();   // it shows what the place adds
     return true;
 }
 
+void LiminalEditor::showEffects(bool show) {
+    if (show) {
+        if (drawer.isVisible()) showInstruments(false);
+        if (places.isVisible()) showEnvironment(false);
+        effects.focus(drawer.focused());   // the instrument last looked at
+    }
+    effects.setVisible(show);
+    effectsButton.setToggleState(show, juce::dontSendNotification);
+    repaint(drawerArea());
+    repaint(effectsButton.getBounds());
+}
+
 void LiminalEditor::showEnvironment(bool show) {
-    if (show) showInstruments(false);
+    if (show) {
+        showInstruments(false);
+        if (effects.isVisible()) showEffects(false);
+    }
     places.setVisible(show);
     environmentButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
@@ -527,6 +691,7 @@ void LiminalEditor::showEnvironment(bool show) {
 
 void LiminalEditor::showInstruments(bool show) {
     if (show && places.isVisible()) showEnvironment(false);
+    if (show && effects.isVisible()) showEffects(false);
     drawer.setVisible(show);
     instrumentsButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
@@ -538,6 +703,8 @@ void LiminalEditor::resized() {
     {
         auto top = strip.removeFromTop(38).withTrimmedTop(8);
         environmentButton.setBounds(top.removeFromRight(230).withSizeKeepingCentre(230, 26));
+        top.removeFromRight(10);
+        effectsButton.setBounds(top.removeFromRight(118).withSizeKeepingCentre(118, 26));
         active.setBounds(top.withTrimmedRight(16));
     }
     strip = strip.withTrimmedBottom(16);
@@ -552,6 +719,7 @@ void LiminalEditor::resized() {
     }
     drawer.setBounds(drawerArea());
     places.setBounds(drawerArea());
+    effects.setBounds(drawerArea());
     scene = {};
     sceneScale = 0;
 }

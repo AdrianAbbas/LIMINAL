@@ -26,6 +26,8 @@ public:
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
     void drawButtonText(juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
+    juce::Font getComboBoxFont(juce::ComboBox&) override;
+    juce::Font getPopupMenuFont() override;
 };
 
 // A thin slider with a small institutional label and its value.
@@ -46,7 +48,7 @@ private:
 // hover, filled while its drawer is open, with a pointing-hand cursor.
 class DrawerButton final : public juce::Button {
 public:
-    enum class Icon { instruments, environment };
+    enum class Icon { instruments, environment, effects };
     DrawerButton(const juce::String& text, Icon);
     void paintButton(juce::Graphics&, bool highlighted, bool down) override;
 
@@ -125,6 +127,38 @@ private:
     int selected = 0, hover = -1;
 };
 
+// The effects drawer (Milestone 3): one instrument at a time (tabs). Each module is a row:
+// its switch, its amount and its details. Under them: Effects Mix, Environment Influence,
+// Effect Order, and what the current place adds to this instrument.
+class EffectsDrawer final : public juce::Component {
+public:
+    explicit EffectsDrawer(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void focus(int instrument);
+    int focused() const { return current; }
+
+private:
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    struct Row {
+        std::unique_ptr<juce::ToggleButton> on;
+        std::unique_ptr<ButtonAttachment> onAttachment;
+        std::vector<std::unique_ptr<LevelControl>> controls;
+        std::unique_ptr<juce::ComboBox> choice;          // echo sync
+        std::unique_ptr<ComboAttachment> choiceAttachment;
+        std::unique_ptr<juce::ToggleButton> extra;       // granular freeze
+        std::unique_ptr<ButtonAttachment> extraAttachment;
+    };
+    juce::AudioProcessorValueTreeState& state;
+    std::array<juce::TextButton, params::instrumentCount> tabs;
+    std::vector<Row> rows;
+    std::unique_ptr<LevelControl> mix, influence;
+    std::unique_ptr<juce::ComboBox> order;
+    std::unique_ptr<ComboAttachment> orderAttachment;
+    int current = 0;
+};
+
 class LiminalEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit LiminalEditor(LiminalProcessor&);
@@ -141,6 +175,9 @@ public:
     void showEnvironment(bool show);
     EnvironmentDrawer& environmentDrawer() { return places; }
     juce::Button& environmentToggle() { return environmentButton; }
+    void showEffects(bool show);
+    EffectsDrawer& effectsDrawer() { return effects; }
+    juce::Button& effectsToggle() { return effectsButton; }
     const ui::FrameGovernor& governor() const { return frames; }
 
 private:
@@ -162,9 +199,11 @@ private:
     LevelControl master, instrument, ambience, space;
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
+    DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };
     ActiveInstruments active;
     InstrumentDrawer drawer;
     EnvironmentDrawer places;
+    EffectsDrawer effects;
     int placeShown = -1;
     juce::Colour grade;   // the place's colour cast over the scene (Milestone 4 paints each place)
 

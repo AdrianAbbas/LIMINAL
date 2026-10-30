@@ -553,6 +553,25 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                 s.check(picked, "clicking a place selects it");
                 lm->environmentDrawer().choose(0);
                 lm->showEnvironment(false);
+                // The effects drawer: opens (closing the others), shows each instrument's rack.
+                lm->showInstruments(true);
+                lm->showEffects(true);
+                s.check(lm->effectsDrawer().isVisible() && !lm->instrumentDrawer().isVisible() && !lm->environmentDrawer().isVisible()
+                            && lm->effectsToggle().getToggleState(), "the EFFECTS drawer opens (and the other drawers close)");
+                bool tabs = true;
+                for (int k = 0; k < params::instrumentCount; ++k) {
+                    lm->effectsDrawer().focus(k);
+                    tabs &= lm->effectsDrawer().focused() == k;
+                    if (snapshot.isNotEmpty() && (k == 0 || k == 5)) {
+                        juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile(
+                            juce::String("editor-effects-") + params::instrumentKeys[k] + ".png");
+                        file.deleteFile();
+                        juce::FileOutputStream out(file);
+                        juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                    }
+                }
+                s.check(tabs, "every instrument's effects can be shown");
+                lm->showEffects(false);
             }
         }
         s.metric("editor open + first 2x paint", ms, " ms");
