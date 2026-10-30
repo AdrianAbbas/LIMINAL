@@ -574,6 +574,27 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                 }
                 s.check(tabs, "every instrument's effects can be shown");
                 lm->showEffects(false);
+                // Characters (in the place drawer) and the PERFORM drawer.
+                lm->showEnvironment(true);
+                lm->environmentDrawer().chooseCharacter(2);
+                s.check(std::lround(p.parameters.getRawParameterValue(params::character)->load()) == 2, "clicking a Character selects it");
+                if (snapshot.isNotEmpty()) {
+                    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile("editor-character.png");
+                    file.deleteFile();
+                    juce::FileOutputStream out(file);
+                    juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                }
+                lm->environmentDrawer().chooseCharacter(0);
+                lm->showPerform(true);
+                s.check(lm->performDrawer().isVisible() && !lm->environmentDrawer().isVisible() && lm->performToggle().getToggleState(),
+                        "the PERFORM drawer opens (and the others close)");
+                if (snapshot.isNotEmpty()) {
+                    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile("editor-perform.png");
+                    file.deleteFile();
+                    juce::FileOutputStream out(file);
+                    juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                }
+                lm->showPerform(false);
             }
         }
         s.metric("editor open + first 2x paint", ms, " ms");

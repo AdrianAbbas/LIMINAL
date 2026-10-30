@@ -48,7 +48,7 @@ private:
 // hover, filled while its drawer is open, with a pointing-hand cursor.
 class DrawerButton final : public juce::Button {
 public:
-    enum class Icon { instruments, environment, effects };
+    enum class Icon { instruments, environment, effects, perform };
     DrawerButton(const juce::String& text, Icon);
     void paintButton(juce::Graphics&, bool highlighted, bool down) override;
 
@@ -120,11 +120,32 @@ public:
     bool refresh();   // true if the selected place changed
     std::function<void()> onChoose;
 
+    void chooseCharacter(int character);
+
 private:
     juce::Rectangle<int> row(int place) const;
+    juce::Rectangle<int> characterBox(int character) const;
     juce::AudioProcessorValueTreeState& state;
     LevelControl amount;
-    int selected = 0, hover = -1;
+    int selected = 0, hover = -1, selectedCharacter = 0, hoverCharacter = -1;
+};
+
+// The performance drawer (Milestone 5): the four macros, evolution (rate, freeze, seed,
+// reset) and scenes A/B (store, morph).
+class PerformDrawer final : public juce::Component {
+public:
+    PerformDrawer(LiminalProcessor&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void refreshScenes();
+
+private:
+    LiminalProcessor& processor;
+    LevelControl presence, scale, activity, unreal, rate, morph;
+    juce::ToggleButton freeze { "FREEZE" }, morphOn { "MORPH A - B" };
+    juce::TextButton reset { "RESET" }, storeA { "STORE A" }, storeB { "STORE B" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeAttachment, morphOnAttachment;
+    LevelControl seed;
 };
 
 // The effects drawer (Milestone 3): one instrument at a time (tabs). Each module is a row:
@@ -176,6 +197,9 @@ public:
     EnvironmentDrawer& environmentDrawer() { return places; }
     juce::Button& environmentToggle() { return environmentButton; }
     void showEffects(bool show);
+    void showPerform(bool show);
+    PerformDrawer& performDrawer() { return perform; }
+    juce::Button& performToggle() { return performButton; }
     EffectsDrawer& effectsDrawer() { return effects; }
     juce::Button& effectsToggle() { return effectsButton; }
     const ui::FrameGovernor& governor() const { return frames; }
@@ -184,7 +208,7 @@ private:
     void timerCallback() override;
     juce::Rectangle<int> recArea() const { return { 30, 26, 70, 22 }; }
     bool syncPlace();
-    juce::Rectangle<int> captionArea() const { return { 52, 48, 520, 20 }; }
+    juce::Rectangle<int> captionArea() const { return { 52, 48, 600, 20 }; }
     juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
     juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
     juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(108); }
@@ -200,10 +224,15 @@ private:
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };
+    DrawerButton performButton { "PERFORM", DrawerButton::Icon::perform };
     ActiveInstruments active;
     InstrumentDrawer drawer;
     EnvironmentDrawer places;
     EffectsDrawer effects;
+    PerformDrawer perform;
+    int characterShown = -1;
+    int activityLit = -1;
+    juce::Rectangle<int> activityArea() const { return { 52, 70, 240, 14 }; }
     int placeShown = -1;
     juce::Colour grade;   // the place's colour cast over the scene (Milestone 4 paints each place)
 

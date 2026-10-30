@@ -142,6 +142,11 @@ void DrawerButton::paintButton(juce::Graphics& g, bool highlighted, bool down) {
     if (icon == Icon::instruments) {   // three keys of a keyboard
         for (int k = 0; k < 3; ++k) g.drawRect(glyph.getX() + 5.0f * float(k), glyph.getY(), 5.5f, glyph.getHeight(), 1.0f);
         for (int k = 0; k < 2; ++k) g.fillRect(glyph.getX() + 3.5f + 5.0f * float(k), glyph.getY(), 3.0f, 7.0f);
+    } else if (icon == Icon::perform) {   // a fader between two scenes
+        g.drawRect(glyph.getX(), glyph.getY() + 2.0f, 4.0f, 8.0f, 1.0f);
+        g.drawRect(glyph.getRight() - 4.0f, glyph.getY() + 2.0f, 4.0f, 8.0f, 1.0f);
+        g.fillRect(glyph.getX() + 4.0f, glyph.getCentreY() - 0.5f, glyph.getWidth() - 8.0f, 1.0f);
+        g.fillRect(glyph.getCentreX() - 1.5f, glyph.getY(), 3.0f, glyph.getHeight());
     } else if (icon == Icon::effects) {   // three sliders on a rack
         for (int k = 0; k < 3; ++k) {
             const float x = glyph.getX() + 2.0f + 5.5f * float(k);
@@ -393,13 +398,29 @@ EnvironmentDrawer::EnvironmentDrawer(juce::AudioProcessorValueTreeState& s)
 }
 
 juce::Rectangle<int> EnvironmentDrawer::row(int place) const {
-    return { 16, 32 + place * 25, getWidth() - 32, 24 };
+    return { 16, 30 + place * 23, getWidth() - 32, 22 };
+}
+
+juce::Rectangle<int> EnvironmentDrawer::characterBox(int character) const {
+    const int w = (getWidth() - 32 - 2 * 6) / dsp::characterCount;
+    return { 16 + character * (w + 6), row(dsp::placeCount - 1).getBottom() + 48, w, 24 };
+}
+
+void EnvironmentDrawer::chooseCharacter(int character) {
+    auto* p = state.getParameter(params::character);
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(p->convertTo0to1(float(character)));
+    p->endChangeGesture();
+    refresh();
+    if (onChoose) onChoose();
 }
 
 bool EnvironmentDrawer::refresh() {
     const int now = int(std::lround(state.getRawParameterValue(params::environment)->load()));
-    if (now == selected) return false;
+    const int ch = int(std::lround(state.getRawParameterValue(params::character)->load()));
+    if (now == selected && ch == selectedCharacter) return false;
     selected = now;
+    selectedCharacter = ch;
     repaint();
     return true;
 }
@@ -446,34 +467,60 @@ void EnvironmentDrawer::paint(juce::Graphics& g) {
     }
     {
         const int shown = std::clamp(hover >= 0 ? hover : selected, 0, dsp::placeCount - 1);
-        const auto box = juce::Rectangle<int>(28, row(dsp::placeCount - 1).getBottom() + 8, getWidth() - 56, 30);
+        const auto box = juce::Rectangle<int>(28, row(dsp::placeCount - 1).getBottom() + 6, getWidth() - 56, 26);
         g.setColour(ink.withAlpha(0.62f));
-        g.setFont(font(9.5f));
+        g.setFont(font(9.0f));
         g.drawFittedText(placeInfo[shown].detail, box, juce::Justification::topLeft, 2, 1.0f);
+    }
+    // The place's three Characters.
+    const int place = std::clamp(selected, 0, dsp::placeCount - 1);
+    g.setColour(ink.withAlpha(0.45f));
+    g.setFont(font(9.0f));
+    g.drawText("CHARACTER", characterBox(0).translated(0, -15).withHeight(13), juce::Justification::centredLeft);
+    for (int c = 0; c < dsp::characterCount; ++c) {
+        const auto r = characterBox(c).toFloat();
+        const bool on = c == selectedCharacter;
+        g.setColour(on ? ink.withAlpha(0.85f) : ink.withAlpha(hoverCharacter == c ? 0.12f : 0.05f));
+        g.fillRoundedRectangle(r, 3.0f);
+        g.setColour(ink.withAlpha(on ? 0.0f : 0.3f));
+        g.drawRoundedRectangle(r, 3.0f, 1.0f);
+        g.setColour(on ? juce::Colour(0xff0b1412) : ink.withAlpha(0.8f));
+        g.setFont(font(8.5f, on));
+        g.drawFittedText(dsp::character(place, c).name, r.reduced(4, 0).toNearestInt(), juce::Justification::centred, 2, 0.8f);
+    }
+    {
+        const auto& ch = dsp::character(place, std::clamp(hoverCharacter >= 0 ? hoverCharacter : selectedCharacter, 0, 2));
+        g.setColour(ink.withAlpha(0.55f));
+        g.setFont(font(9.0f));
+        g.drawFittedText(juce::String(ch.mood).toUpperCase() + "  -  SUITS " + ch.recommended,
+                         characterBox(0).withWidth(getWidth() - 32).translated(0, 28).withHeight(13), juce::Justification::centredLeft, 1, 0.8f);
     }
     g.setColour(ink.withAlpha(0.45f));
     g.setFont(font(9.5f));
-    g.drawFittedText("How strongly the place shapes every instrument (0 = untouched). SPACE on the strip sets how much of its room you hear.",
-                     amount.getBounds().translated(0, -34).withHeight(30), juce::Justification::bottomLeft, 2, 1.0f);
+    g.drawFittedText("How strongly the place shapes every instrument (0 = untouched).",
+                     amount.getBounds().translated(0, -16).withHeight(14), juce::Justification::bottomLeft, 1, 1.0f);
 }
 
 void EnvironmentDrawer::resized() {
-    amount.setBounds(getLocalBounds().reduced(16, 14).removeFromBottom(38));
+    amount.setBounds(getLocalBounds().reduced(16, 10).removeFromBottom(34));
 }
 
 void EnvironmentDrawer::mouseMove(const juce::MouseEvent& e) {
-    int h = -1;
+    int h = -1, hc = -1;
     for (int i = 0; i < dsp::placeCount; ++i)
         if (row(i).contains(e.getPosition())) h = i;
-    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
-    if (h != hover) {
+    for (int c = 0; c < dsp::characterCount; ++c)
+        if (characterBox(c).contains(e.getPosition())) hc = c;
+    setMouseCursor(h >= 0 || hc >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover || hc != hoverCharacter) {
         hover = h;
+        hoverCharacter = hc;
         repaint();
     }
 }
 
 void EnvironmentDrawer::mouseExit(const juce::MouseEvent&) {
-    hover = -1;
+    hover = hoverCharacter = -1;
     repaint();
 }
 
@@ -481,6 +528,8 @@ void EnvironmentDrawer::mouseUp(const juce::MouseEvent& e) {
     if (!e.mouseWasClicked()) return;
     for (int i = 0; i < dsp::placeCount; ++i)
         if (row(i).contains(e.getPosition())) choose(i);
+    for (int c = 0; c < dsp::characterCount; ++c)
+        if (characterBox(c).contains(e.getPosition())) chooseCharacter(c);
 }
 
 //==============================================================================
@@ -619,6 +668,88 @@ void EffectsDrawer::resized() {
 }
 
 //==============================================================================
+PerformDrawer::PerformDrawer(LiminalProcessor& p)
+    : processor(p),
+      presence(p.parameters, params::presence, "PRESENCE"), scale(p.parameters, params::scale, "SCALE"),
+      activity(p.parameters, params::activity, "ACTIVITY"), unreal(p.parameters, params::unreal, "UNREAL"),
+      rate(p.parameters, params::evolution, "EVOLUTION RATE"), morph(p.parameters, params::sceneMorph, "MORPH"),
+      seed(p.parameters, params::evolutionSeed, "SEED") {
+    for (auto* c : { &presence, &scale, &activity, &unreal, &rate, &morph, &seed }) addAndMakeVisible(c);
+    freezeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::evolutionFreeze, freeze);
+    morphOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::sceneOn, morphOn);
+    addAndMakeVisible(freeze);
+    addAndMakeVisible(morphOn);
+    reset.setTooltip("Start the place's evolution again from its seed");
+    reset.onClick = [this] { processor.requestEvolutionReset(); };
+    storeA.setTooltip("Store everything as it is now as scene A");
+    storeB.setTooltip("Store everything as it is now as scene B");
+    storeA.onClick = [this] { processor.storeScene(0); refreshScenes(); };
+    storeB.onClick = [this] { processor.storeScene(1); refreshScenes(); };
+    for (auto* b : { &reset, &storeA, &storeB }) addAndMakeVisible(b);
+    refreshScenes();
+}
+
+void PerformDrawer::refreshScenes() {
+    storeA.setButtonText(processor.sceneStored(0) ? "STORE A  *" : "STORE A");
+    storeB.setButtonText(processor.sceneStored(1) ? "STORE B  *" : "STORE B");
+    repaint();
+}
+
+void PerformDrawer::paint(juce::Graphics& g) {
+    const auto area = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0x5507100f));
+    g.fillRect(area);
+    g.setColour(ink.withAlpha(0.18f));
+    g.drawRect(area, 1.0f);
+    g.setFont(font(9.5f));
+    g.setColour(ink.withAlpha(0.45f));
+    g.drawText("PERFORM  -  THE PLACE, AS YOU PLAY", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    g.setFont(font(9.0f));
+    for (const auto& [y, text] : { std::pair<int, const char*> { presence.getY() - 16, "MACROS" }, { rate.getY() - 16, "EVOLUTION" }, { storeA.getY() - 18, "SCENES" } }) {
+        g.setColour(ink.withAlpha(0.12f));
+        g.fillRect(16, y - 4, getWidth() - 32, 1);
+        g.setColour(ink.withAlpha(0.45f));
+        g.drawText(text, 16, y, 120, 12, juce::Justification::centredLeft);
+    }
+    g.setColour(ink.withAlpha(0.42f));
+    g.drawFittedText("While MORPH is on, the stored scenes play (an unstored scene = the knobs as they are). Place, Character and switches change at half-way.",
+                     juce::Rectangle<int>(16, getHeight() - 32, getWidth() - 32, 24), juce::Justification::topLeft, 2, 1.0f);
+}
+
+void PerformDrawer::resized() {
+    auto area = getLocalBounds().reduced(16, 10);
+    area.removeFromTop(36);
+    const int half = (area.getWidth() - 16) / 2;
+    auto row = area.removeFromTop(38);
+    presence.setBounds(row.removeFromLeft(half));
+    row.removeFromLeft(16);
+    scale.setBounds(row);
+    area.removeFromTop(6);
+    row = area.removeFromTop(38);
+    activity.setBounds(row.removeFromLeft(half));
+    row.removeFromLeft(16);
+    unreal.setBounds(row);
+    area.removeFromTop(30);
+    row = area.removeFromTop(38);
+    rate.setBounds(row.removeFromLeft(half));
+    row.removeFromLeft(16);
+    seed.setBounds(row);
+    area.removeFromTop(4);
+    row = area.removeFromTop(24);
+    freeze.setBounds(row.removeFromLeft(half));
+    reset.setBounds(row.removeFromLeft(90));
+    area.removeFromTop(30);
+    row = area.removeFromTop(26);
+    storeA.setBounds(row.removeFromLeft(110));
+    row.removeFromLeft(8);
+    storeB.setBounds(row.removeFromLeft(110));
+    row.removeFromLeft(8);
+    morphOn.setBounds(row);
+    area.removeFromTop(4);
+    morph.setBounds(area.removeFromTop(38));
+}
+
+//==============================================================================
 LiminalEditor::LiminalEditor(LiminalProcessor& p)
     : AudioProcessorEditor(p), processor(p),
       master(p.parameters, params::master, "MASTER"),
@@ -628,7 +759,8 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
       active(p.parameters),
       drawer(p.parameters),
       places(p.parameters),
-      effects(p.parameters) {
+      effects(p.parameters),
+      perform(p) {
     setLookAndFeel(&look);
     setOpaque(true);
     powerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, params::power, power);
@@ -640,10 +772,13 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p)
     addAndMakeVisible(environmentButton);
     effectsButton.onClick = [this] { showEffects(!effects.isVisible()); };
     addAndMakeVisible(effectsButton);
+    performButton.onClick = [this] { showPerform(!perform.isVisible()); };
+    addAndMakeVisible(performButton);
     addAndMakeVisible(active);
     addChildComponent(drawer);
     addChildComponent(places);
     addChildComponent(effects);
+    addChildComponent(perform);
     places.onChoose = [this] { if (syncPlace()) repaint(); };
     syncPlace();
     setSize(defaultWidth, defaultHeight);
@@ -658,16 +793,34 @@ LiminalEditor::~LiminalEditor() {
 // A new place: caption, button text and colour cast follow the Environment parameter.
 bool LiminalEditor::syncPlace() {
     const int place = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
-    if (place == placeShown) return false;
+    const int ch = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::character)->load())), 0, dsp::characterCount - 1);
+    if (place == placeShown && ch == characterShown) return false;
     placeShown = place;
-    grade = juce::Colour(placeInfo[place].grade);
+    characterShown = ch;
+    // The Character's grade (Milestone 4 adds its light and flicker to the painted scene).
+    const auto characterGrade = dsp::character(place, ch).grade;
+    grade = juce::Colour(characterGrade != 0 ? characterGrade : placeInfo[place].grade);
     environmentButton.setButtonText(juce::String("PLACE:  ") + placeInfo[place].shortName);
     effects.repaint();   // it shows what the place adds
     return true;
 }
 
+void LiminalEditor::showPerform(bool show) {
+    if (show) {
+        if (drawer.isVisible()) showInstruments(false);
+        if (places.isVisible()) showEnvironment(false);
+        if (effects.isVisible()) showEffects(false);
+        perform.refreshScenes();
+    }
+    perform.setVisible(show);
+    performButton.setToggleState(show, juce::dontSendNotification);
+    repaint(drawerArea());
+    repaint(performButton.getBounds());
+}
+
 void LiminalEditor::showEffects(bool show) {
     if (show) {
+        if (perform.isVisible()) showPerform(false);
         if (drawer.isVisible()) showInstruments(false);
         if (places.isVisible()) showEnvironment(false);
         effects.focus(drawer.focused());   // the instrument last looked at
@@ -682,6 +835,7 @@ void LiminalEditor::showEnvironment(bool show) {
     if (show) {
         showInstruments(false);
         if (effects.isVisible()) showEffects(false);
+        if (perform.isVisible()) showPerform(false);
     }
     places.setVisible(show);
     environmentButton.setToggleState(show, juce::dontSendNotification);
@@ -692,6 +846,7 @@ void LiminalEditor::showEnvironment(bool show) {
 void LiminalEditor::showInstruments(bool show) {
     if (show && places.isVisible()) showEnvironment(false);
     if (show && effects.isVisible()) showEffects(false);
+    if (show && perform.isVisible()) showPerform(false);
     drawer.setVisible(show);
     instrumentsButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
@@ -704,7 +859,9 @@ void LiminalEditor::resized() {
         auto top = strip.removeFromTop(38).withTrimmedTop(8);
         environmentButton.setBounds(top.removeFromRight(230).withSizeKeepingCentre(230, 26));
         top.removeFromRight(10);
-        effectsButton.setBounds(top.removeFromRight(118).withSizeKeepingCentre(118, 26));
+        effectsButton.setBounds(top.removeFromRight(112).withSizeKeepingCentre(112, 26));
+        top.removeFromRight(10);
+        performButton.setBounds(top.removeFromRight(118).withSizeKeepingCentre(118, 26));
         active.setBounds(top.withTrimmedRight(16));
     }
     strip = strip.withTrimmedBottom(16);
@@ -720,6 +877,7 @@ void LiminalEditor::resized() {
     drawer.setBounds(drawerArea());
     places.setBounds(drawerArea());
     effects.setBounds(drawerArea());
+    perform.setBounds(drawerArea());
     scene = {};
     sceneScale = 0;
 }
@@ -742,7 +900,7 @@ void LiminalEditor::paint(juce::Graphics& g) {
         g.fillEllipse(r);
     }
 
-    if (drawer.isVisible() || places.isVisible()) {   // frosted glass behind the drawer
+    if (drawer.isVisible() || places.isVisible() || effects.isVisible() || perform.isVisible()) {   // frosted glass behind the drawer
         juce::Graphics::ScopedSaveState save(g);
         g.reduceClipRegion(drawerArea());
         g.drawImage(scene.frosted, bounds, juce::RectanglePlacement::stretchToFit);
@@ -794,7 +952,19 @@ void LiminalEditor::paint(juce::Graphics& g) {
     g.setColour(ink.withAlpha(0.6f));
     g.setFont(font(10.5f));
     const auto& where = dsp::profile(dsp::Place(std::clamp(placeShown, 0, dsp::placeCount - 1)));
-    g.drawText(juce::String(where.name) + "  /  " + where.location, captionArea().toFloat(), juce::Justification::centredLeft);
+    g.drawText(juce::String(where.name) + "  /  " + dsp::character(placeShown, std::max(0, characterShown)).name + "  /  " + where.location,
+               captionArea().toFloat(), juce::Justification::centredLeft);
+    // Evolution: a quiet row of ticks, lit by how much the place is changing right now.
+    {
+        auto box = activityArea().toFloat();
+        g.setColour(ink.withAlpha(0.4f));
+        g.setFont(font(8.5f));
+        g.drawText("EVOLVING", box.removeFromLeft(62), juce::Justification::centredLeft);
+        for (int i = 0; i < 12; ++i) {
+            g.setColour(ink.withAlpha(i < activityLit ? 0.65f : 0.15f));
+            g.fillRect(box.getX() + float(i) * 6.0f, box.getCentreY() - 2.0f, 3.0f, 4.0f);
+        }
+    }
 
     // Time stamp and battery-style meters.
     g.setColour(ink.withAlpha(0.9f));
@@ -863,6 +1033,13 @@ void LiminalEditor::timerCallback() {
     if (dim != flickerDim) {
         flickerDim = dim;
         if (scene.lights.size() > 1) dirty.add(scene.lights[1].getSmallestIntegerContainer().expanded(2));
+    }
+    {   // the evolution indicator: at most a few repaints a second of a tiny area
+        const int lit = std::clamp(int(std::lround(processor.meters.activity.load() * 12.0f)), 0, 12);
+        if (lit != activityLit) {
+            activityLit = lit;
+            dirty.add(activityArea());
+        }
     }
     active.refresh();   // repaints itself when the instruments or the solo change
     places.refresh();

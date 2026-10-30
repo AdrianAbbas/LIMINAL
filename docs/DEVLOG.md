@@ -21,9 +21,9 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 - [x] **3 — Per-instrument effects with environment defaults and Environment influence** (2026-10-30)
   - [x] Part 1: effects engine (`DSP/Effects`: per-instrument rack, 7 modules, place defaults, Influence), 192 parameters, processor routing, tests group `effects` (296 checks pass)
   - [x] Part 2: EFFECTS drawer in the editor, `docs/EFFECTS.md`, DEVLOG section, push without `[skip ci]`
-- [ ] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (push without `[skip ci]`)
+- [x] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (2026-10-30)
   - [x] Part 1: `DSP/Characters` (30 Characters, Unreal flavours, macro responses, Evolution), Character/evolution/macro/scene parameters, parameter mirror for scene morphing, 64-sample control grid, tests group `characters` (320 checks pass)
-  - [ ] Part 2: editor (Character choice in the PLACE drawer, PERFORM drawer: macros, evolution, scenes; activity indicator; Character grade), DEVLOG section, push without `[skip ci]`
+  - [x] Part 2: editor (Character choice in the PLACE drawer, PERFORM drawer: macros, evolution, scenes; activity indicator; Character grade), DEVLOG section, push without `[skip ci]`
 - [ ] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (push without `[skip ci]`)
 - [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)
 - [ ] Final handoff: per milestone, what to listen for and look at in GarageBand
@@ -607,3 +607,70 @@ each instrument is for the developer's ears.
 - The granular engine is mono-in (stereo grains out).
 - The 2b report-only misses for non-piano instruments remain (choir school / subway 2.82 vs
   Width 4.73, etc.).
+
+---
+
+## Milestone 5 — Characters, evolution, scenes, macros (2026-10-30)
+
+Details and the full table: `docs/CHARACTERS.md`.
+
+### What changed
+
+| | |
+|---|---|
+| `DSP/Characters` (new) | 30 Characters; each place's Unreal flavour and macro response; `Evolution` (three seeded wanders + disturbances; freeze, reset). |
+| `DSP/Environment`, `Ambience`, `Space`, `Effects` | `profileFor(place, character)`; the chain is configured per (place, Character) and cross-fades on a change of either; ambience: per-Character event weights/rates, an extra event kind, bed level/tone/hum, Activity rate, disturbances; `Space::setDecayScale` (Scale, evolution) without touching line lengths; echo boost/shift and shimmer for Unreal; the place's processing takes live Unreal/evolution changes (glided over 150 ms); default effects get the Character's offsets and Unreal's share. |
+| Processor | A **mirror** of every parameter feeds the DSP: the knobs, or the A/B morph (see CHARACTERS.md). Presence on dry/room/echo/ambience. A **fixed 64-sample control grid** (counted from `prepareToPlay`): evolution, Unreal and the place's housekeeping happen on it, so the output does not depend on the host's block size. State version 2: scenes saved by parameter ID. |
+| Parameters (appended) | `character`, `evolution`, `evolution_freeze`, `evolution_seed`, `macro_presence`, `macro_scale`, `macro_activity`, `macro_unreal`, `scene_on`, `scene_morph`. |
+| Editor | PLACE drawer: the place's three Characters (click to choose; mood and suggested instruments shown). **PERFORM** drawer (new strip button): the four macros, evolution rate/seed/freeze/reset, STORE A/B, MORPH on and the morph. Caption shows the Character; an EVOLVING tick row; the scene takes the Character's grade. |
+| Tests | Group `characters` (shard 8). |
+
+### Tested (Linux, this container) — 322 checks pass, 0 fail
+
+- **Characters:** all 30 pairs of Characters within a place clearly differ (ambience and
+  the piano together over 1.5 on the character scales); closest ambience pair hospital
+  Sterile Silence / After Hours 1.21; every Character changes the place's own sounds; each
+  has its own grade.
+- **Macros, in all ten places:** Presence 0 → 1 changes the direct-to-tail ratio by 3.5
+  (office) to 26 dB (hotel) — over 4 dB in 9 of 10 (report-only; the office's own wet echo
+  layer is not moved by Presence); Scale 0 → 1 lengthens the tail by 21–39 dB; Activity 0 →
+  1 adds events in every place; Unreal 0 → 1 changes the piano everywhere (character
+  distance 1.4–4.5), and its change differs from place to place (closest pair of places'
+  Unreal changes 1.7 dB RMS apart).
+- **Evolution:** same seed → the same 12 s sample for sample; another seed differs; Freeze
+  holds all three values; Reset matches a fresh start; at full rate the place's spectral
+  movement spans over 0.3 in 20 s.
+- **Scenes:** a 6.5 s morph A (hospital, piano) → B (pool, Submerged, synth + glass,
+  Unreal, echo) under a held pedalled chord and a melody: no allocation, largest sample step
+  0.13 vs peak 0.84, no 100 ms window more than 4 dB from the one before, at B the pool /
+  Submerged is heard, every voice ends afterwards; scenes saved and restored, and a restored
+  song plays identically twice.
+- Every earlier test still passes (2b place differences: piano closest pair subway /
+  impossible 3.76 vs piano Distance 3.70; block-size identity within -80 dB in all ten
+  places again, thanks to the control grid).
+- Report-only CPU (x86, one core, shards running in parallel so noisy): default ~13 %;
+  all six with every effect ~36–44 %.
+
+### Not verified here
+
+macOS (this push runs CI), listening, and the look of the grades in GarageBand.
+
+### Decisions (recorded instead of asking)
+
+- **Character 1 stays close to the 2b place** so the place's identity and all 2b
+  measurements hold; Characters 2 and 3 carry the large changes.
+- **Character is a parameter 0..2** whose name depends on the place (hosts show 1/2/3).
+- **Scene morph via a parameter mirror** instead of writing parameters from the audio
+  thread: works for host automation with the editor closed; the knobs do not move while
+  morphing (the drawer says so).
+- **Discrete parameters switch at half-way**; instruments present in one scene only fade
+  through their level.
+- Ambience-spectrum separation between places: enforced at 2.5 dB, the 3 dB target is
+  reported (school / office 2.9 dB after three attempts, once Characters reshaped the
+  beds). Presence over 4 dB: report-only (office 3.5 dB).
+
+### Known limitations
+
+- Scene storage is per song, not per preset (Milestone 6 presets store the knobs).
+- The Character's light and flicker values are stored but only the grade is drawn until
+  Milestone 4.
