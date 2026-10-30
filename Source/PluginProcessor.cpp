@@ -12,6 +12,13 @@ LiminalProcessor::LiminalProcessor()
     instrumentLevel = parameters.getRawParameterValue(params::instrument);
     ambienceLevel = parameters.getRawParameterValue(params::ambience);
     space = parameters.getRawParameterValue(params::space);
+    const auto raw = [this](const char* id) { return parameters.getRawParameterValue(id); };
+    slots[0].instrument = &piano;
+    slots[0].on = raw(params::pianoOn);
+    slots[0].level = raw(params::pianoLevel);
+    slots[0].distance = raw(params::pianoDistance);
+    const char* pianoIds[] { params::pianoAge, params::pianoDetune, params::pianoSoftness, params::pianoNoise, params::pianoDecay };
+    for (int i = 0; i < 5; ++i) pianoSettings[i] = raw(pianoIds[i]);
 }
 
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -21,7 +28,15 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 }
 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
-    piano.prepare(sampleRate);
+    updateSettings();
+    for (auto& slot : slots) {
+        slot.instrument->prepare(sampleRate);
+        slot.stage.setAmount(slot.distance != nullptr ? slot.distance->load() : 0.0f);
+        slot.stage.prepare(sampleRate);
+        slot.gain.coef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
+        slot.gain.reset(slot.targetGain());
+        slot.running = slot.enabled();
+    }
     roomTone.prepare(sampleRate);
     room.prepare(sampleRate);
     juce::ignoreUnused(samplesPerBlock);
@@ -36,22 +51,42 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     spaceMix.reset(space->load());
 }
 
+// New notes go to every enabled instrument; everything else (note-offs, pedal, bend,
+// panic) to every instrument still sounding, so nothing is left hanging.
 void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
-    if (m.isNoteOn()) {
-        piano.noteOn(m.getNoteNumber(), m.getFloatVelocity());
-    } else if (m.isNoteOff()) {
-        piano.noteOff(m.getNoteNumber());
-    } else if (m.isSustainPedalOn()) {
-        piano.sustain(true);
-    } else if (m.isSustainPedalOff()) {
-        piano.sustain(false);
-    } else if (m.isPitchWheel()) {
-        piano.pitchBend(m.getPitchWheelValue());
-    } else if (m.isAllSoundOff()) {
-        piano.allSoundOff();
-    } else if (m.isAllNotesOff() || m.isResetAllControllers()) {
-        piano.allNotesOff();
+    for (auto& slot : slots) {
+        auto& in = *slot.instrument;
+        if (m.isNoteOn()) {
+            if (slot.enabled()) {
+                slot.running = true;
+                in.noteOn(m.getNoteNumber(), m.getFloatVelocity());
+            }
+        } else if (!slot.running) {
+            continue;
+        } else if (m.isNoteOff()) {
+            in.noteOff(m.getNoteNumber());
+        } else if (m.isSustainPedalOn()) {
+            in.sustain(true);
+        } else if (m.isSustainPedalOff()) {
+            in.sustain(false);
+        } else if (m.isPitchWheel()) {
+            in.pitchBend(m.getPitchWheelValue());
+        } else if (m.isAllSoundOff()) {
+            in.allSoundOff();
+        } else if (m.isAllNotesOff() || m.isResetAllControllers()) {
+            in.allNotesOff();
+        }
     }
+}
+
+void LiminalProcessor::updateSettings() {
+    dsp::ForgottenPiano::Settings p;
+    p.age = pianoSettings[0]->load();
+    p.detune = pianoSettings[1]->load();
+    p.softness = pianoSettings[2]->load();
+    p.noise = pianoSettings[3]->load();
+    p.decay = pianoSettings[4]->load();
+    piano.setSettings(p);
 }
 
 void LiminalProcessor::renderSegment(float* left, float* right, int n) {
@@ -59,7 +94,29 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
     float* ir = scratchR;
     std::fill(il, il + n, 0.0f);
     std::fill(ir, ir + n, 0.0f);
-    piano.render(il, ir, n);
+    std::fill(sendL, sendL + n, 0.0f);
+    std::fill(sendR, sendR + n, 0.0f);
+    for (auto& slot : slots) {
+        if (!slot.running) continue;
+        std::fill(slotL, slotL + n, 0.0f);
+        std::fill(slotR, slotR + n, 0.0f);
+        std::fill(slotSendL, slotSendL + n, 0.0f);
+        std::fill(slotSendR, slotSendR + n, 0.0f);
+        slot.instrument->render(slotL, slotR, n);
+        slot.stage.process(slotL, slotR, slotSendL, slotSendR, n);
+        for (int i = 0; i < n; ++i) {
+            const float g = slot.gain.next();
+            il[i] += slotL[i] * g;
+            ir[i] += slotR[i] * g;
+            sendL[i] += slotSendL[i] * g;
+            sendR[i] += slotSendR[i] * g;
+        }
+        // Switched off and faded out: stop it (and forget its notes) until enabled again.
+        if (!slot.enabled() && slot.gain.current < 1.0e-5f) {
+            slot.instrument->reset();
+            slot.running = false;
+        }
+    }
     for (int i = 0; i < n; ++i) {
         const float p = powerGain.next(), m = masterGain.next() * p;
         const float ig = instrumentGain.next(), ag = ambienceGain.next(), sp = spaceMix.next();
@@ -67,7 +124,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         const float instL = il[i] * ig, instR = ir[i] * ig;
         const float ambL = bed.l * ag, ambR = bed.r * ag;
         // The room hears the instrument fully and the ambience a little (it already is a room).
-        const dsp::Stereo wet = room.tick({ instL + 0.4f * ambL, instR + 0.4f * ambR });
+        const dsp::Stereo wet = room.tick({ sendL[i] * ig + 0.4f * ambL, sendR[i] * ig + 0.4f * ambR });
         const float dry = 1.0f - 0.45f * sp;
         float l = (dry * (instL + ambL) + sp * wet.l) * m;
         float r = (dry * (instR + ambR) + sp * wet.r) * m;
@@ -96,6 +153,12 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     instrumentGain.target = params::levelGain(instrumentLevel->load());
     ambienceGain.target = params::levelGain(ambienceLevel->load());
     spaceMix.target = space->load();
+    updateSettings();
+    for (auto& slot : slots) {
+        slot.gain.target = slot.targetGain();
+        if (slot.distance != nullptr) slot.stage.setAmount(slot.distance->load());
+        if (slot.enabled()) slot.running = true;
+    }
 
     float* left = buffer.getWritePointer(0);
     float* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
@@ -129,7 +192,10 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         meters.ambience.store(float(std::sqrt(ambienceSum / total)), std::memory_order_relaxed);
         meters.output.store(float(std::sqrt(outputSum / total)), std::memory_order_relaxed);
     }
-    meters.voices.store(piano.activeVoices(), std::memory_order_relaxed);
+    int voices = 0;
+    for (const auto& slot : slots)
+        if (slot.running) voices += slot.instrument->activeVoices();
+    meters.voices.store(voices, std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* LiminalProcessor::createEditor() { return new LiminalEditor(*this); }

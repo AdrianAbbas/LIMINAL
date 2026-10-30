@@ -1,7 +1,8 @@
 #pragma once
 #include "DSP/RoomTone.h"
 #include "DSP/Space.h"
-#include "DSP/TestPiano.h"
+#include "DSP/Distance.h"
+#include "DSP/ForgottenPiano.h"
 #include "Parameters.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
@@ -52,7 +53,21 @@ private:
         void reset(float v) { current = target = v; }
         float next() { return current += coef * (target - current); }
     };
+    // One playable instrument with its on/off, level and distance (before the room).
+    struct Slot {
+        dsp::Instrument* instrument = nullptr;
+        std::atomic<float>* on = nullptr;
+        std::atomic<float>* level = nullptr;
+        std::atomic<float>* distance = nullptr;   // optional
+        dsp::Distance stage;
+        Smooth gain;
+        bool running = false;
+        bool enabled() const { return on->load() > 0.5f; }
+        float targetGain() const { return enabled() ? params::levelGain(level->load()) : 0.0f; }
+    };
+    static constexpr int instrumentCount = 1;
     void handleMidi(const juce::MidiMessage&);
+    void updateSettings();
     void renderSegment(float* left, float* right, int n);
     static constexpr int chunk = 256;
 
@@ -62,11 +77,14 @@ private:
     std::atomic<float>* ambienceLevel = nullptr;
     std::atomic<float>* space = nullptr;
 
-    dsp::TestPiano piano;
+    dsp::ForgottenPiano piano;
+    std::array<Slot, instrumentCount> slots;
+    std::atomic<float>* pianoSettings[5] {};
     dsp::RoomTone roomTone;
     dsp::Space room;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
-    float scratchL[chunk] {}, scratchR[chunk] {};
+    float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};
+    float slotL[chunk] {}, slotR[chunk] {}, slotSendL[chunk] {}, slotSendR[chunk] {};
     double instrumentSum = 0, ambienceSum = 0, outputSum = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiminalProcessor)

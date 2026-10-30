@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <complex>
+#include <cstring>
 #include <cstdlib>
 #include <iostream>
 #include <new>
@@ -159,12 +161,14 @@ double frequency(const std::vector<float>& x, double rate) {
     return 0.0;
 }
 
+#include "InstrumentTests.h"
+
 //==============================================================================
 void testParameters(Suite& s) {
     s.section("parameters");
     LiminalProcessor p;
     const auto& list = p.getParameters();
-    s.check(list.size() == 5, "five skeleton parameters", std::to_string(list.size()));
+    s.check(list.size() >= 5, "the skeleton parameters and the instruments'", std::to_string(list.size()));
     const char* names[] { "Power", "Master Level", "Instrument Level", "Ambience Level", "Space" };
     const char* ids[] { params::power, params::master, params::instrument, params::ambience, params::space };
     for (int i = 0; i < 5; ++i) {
@@ -545,6 +549,7 @@ int main(int argc, char** argv) {
     if (run("power")) testPower(s);
     if (run("rates")) testRates(s);
     if (run("determinism")) testDeterminism(s);
+    if (run("piano")) testPiano(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

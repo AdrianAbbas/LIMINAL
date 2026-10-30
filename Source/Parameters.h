@@ -1,5 +1,5 @@
 #pragma once
-// LIMINAL's automatable parameters (Milestone 0 skeleton set).
+// LIMINAL's automatable parameters.
 // IDs are stable: append new ones, never rename or reuse an ID (saved sessions and
 // host automation refer to them). Names are what hosts and the AU harness see.
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -11,6 +11,16 @@ inline constexpr const char* master = "master";         // Master Level, dB
 inline constexpr const char* instrument = "instrument"; // Instrument Level, dB
 inline constexpr const char* ambience = "ambience";     // Ambience Level, dB
 inline constexpr const char* space = "space";           // Space: how much of the room is heard
+
+// Forgotten Piano (Milestone 1a)
+inline constexpr const char* pianoOn = "piano_on";
+inline constexpr const char* pianoLevel = "piano_level";
+inline constexpr const char* pianoAge = "piano_age";
+inline constexpr const char* pianoDetune = "piano_detune";
+inline constexpr const char* pianoSoftness = "piano_softness";
+inline constexpr const char* pianoNoise = "piano_noise";
+inline constexpr const char* pianoDecay = "piano_decay";
+inline constexpr const char* pianoDistance = "piano_distance";
 
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence
 inline constexpr float maxDb = 6.0f;

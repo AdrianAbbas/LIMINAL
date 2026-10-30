@@ -5,8 +5,13 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 
 ## Progress checklist
 
-- [x] **0 — Audit, WORLDBUILDER-derived pipeline, skeleton** (2026-10-30) — *waiting for the developer's GarageBand check*
-- [ ] 1a — Forgotten Piano, Faded Synth, Glass Memories
+- [x] **0 — Audit, WORLDBUILDER-derived pipeline, skeleton** (2026-10-30) — confirmed by the developer in GarageBand: loads, plays, layout looks good
+- [ ] **1a — Forgotten Piano, Faded Synth, Glass Memories** (in progress, 2026-10-30)
+  - [x] Research and `docs/INSTRUMENT_NOTES.md` (piano section)
+  - [x] Shared instrument layer (`DSP/Instrument.h`), Distance stage, processor routing, Forgotten Piano + tests
+  - [ ] Faded Synth + tests
+  - [ ] Glass Memories + tests
+  - [ ] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
 - [ ] 1b — Empty Choir, Lost Music Box, Hollow Drone
 - [ ] 2a — Five environments
 - [ ] 2b — Five environments
@@ -17,6 +22,16 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 - [ ] 6 — Presets, MIDI performance, WAV export, quality modes, state
 - [ ] 7 — Final sound/visual polish and validation
 - [ ] 8 — Samples from `AdrianAbbas/Samples`
+
+### Requests from the developer for later milestones
+
+- **Milestone 4 — more realism in the scenes** (asked 2026-10-30, after the M0 check):
+  interactive lights — fluorescent tubes that flicker, buzz visually, and brighten or
+  dim in response to the notes being played and to the ambience events; light spilling
+  onto walls and floors; reflections on tiles, water and glossy floors; maybe lights
+  reacting to the mouse. More depth and atmosphere overall. (Within the editor's frame
+  budget: the MacBook Air must never freeze. The audio thread already publishes meter
+  levels; note-on/ambience-event counters for the lights can be published the same way.)
 
 ---
 
