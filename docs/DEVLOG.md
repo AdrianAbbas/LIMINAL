@@ -15,16 +15,20 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 - [x] **1b — Empty Choir, Lost Music Box, Hollow Drone** (2026-10-30) — quick versions by request; strip/solo/INSTRUMENTS button
 - [x] **2a — Five environments: hospital, mall, school, garage, pool** (2026-10-30) — *waiting for the developer's GarageBand listening check*
 - [ ] **2b — Wider differences between places, five more environments, ten-place listening render** (2026-10-30)
-  - [x] Part 1: stronger processing signature per place (resonators, notches, frequency/pitch shifting, tremolo, wandering image, modulated/diffused/pitched echoes, tunnel and grid reflections); the first five widened and re-measured
-  - [ ] Part 2: Empty Hotel, Deserted Subway Station, Empty Supermarket, Endless Office, Impossible Room (+ PLACE drawer)
-  - [ ] Part 3: listening render through all ten places; DEVLOG handoff; final push without `[skip ci]`
-- [ ] 3 — Per-instrument effects with environment influence
-- [ ] 4a — Viewfinder shell + 3 environments (prototype, then stop for approval)
-- [ ] 4b — Remaining environments' art
-- [ ] 5 — Characters, evolution, Scene A/B, macros
-- [ ] 6 — Presets, MIDI performance, WAV export, quality modes, state
-- [ ] 7 — Final sound/visual polish and validation
-- [ ] 8 — Samples from `AdrianAbbas/Samples`
+  - [x] Part 1: stronger processing signature per place (resonators, notches, frequency/pitch shifting, tremolo, wandering image, modulated/diffused/pitched echoes, tunnel and grid reflections); the first five widened and re-measured (pushed `[skip ci]`)
+  - [x] Part 2: Empty Hotel, Deserted Subway Station, Empty Supermarket, Endless Office, Impossible Room (+ PLACE drawer), all ten tuned apart (271 checks pass; piano closest pair mall / subway 3.79 > piano Distance 3.35)
+  - [ ] Part 3: listening render through all ten places; DEVLOG section; push **without** `[skip ci]`
+- [ ] **3 — Per-instrument effects with environment defaults and Environment influence** (push without `[skip ci]` when done)
+- [ ] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (push without `[skip ci]`)
+- [ ] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (push without `[skip ci]`)
+- [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)
+- [ ] Final handoff: per milestone, what to listen for and look at in GarageBand
+- [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
+- [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
+
+**Overnight plan (2026-10-30, developer asleep):** order 2b → 3 → 5 → 6 → 4, without stopping
+between milestones. Push each part with `[skip ci]`, each whole milestone without. Backup wake-ups
+at 7:00, 10:00, 13:00 Toronto time: resume from the first unticked item above.
 
 ### Requests from the developer for later milestones
 

@@ -369,6 +369,11 @@ const PlaceInfo placeInfo[dsp::placeCount] {
     { "SCHOOL", "Narrow hallway", "Detuned, worn tape, boxy, tight slap-back. Creaks, pipes, old ballasts ticking.", 0x2ae8c060 },
     { "PARKING GARAGE", "Concrete levels", "Heavy low-mids, dark top, hard early reflections. Deep rumble, cars far off.", 0x30ff7a1e },
     { "INDOOR POOL", "Tiled hall", "Bright, distinct echoes, long shimmering tail. Drips, lapping water, a low pump.", 0x2a38c4e8 },
+    { "HOTEL", "Carpeted corridor", "Muffled through the wall, worn tape, a short soft room. The lift, voices next door, doors.", 0x2cd29a64 },
+    { "SUBWAY", "Empty platform", "Bass resonance, metallic ringing, a long tunnel echo, sagging pitch. Singing rails, tunnel wind.", 0x28a6c46a },
+    { "SUPERMARKET", "Frozen aisle", "Thin and nostalgic, a mild chorus, mains hum in the notes. Compressors cycling, a till beeping.", 0x24d6f2ff },
+    { "OFFICE", "Open plan, forever", "Soft and distant, moving spectral notches, a wavering smeared delay. HVAC, drives, coil whine.", 0x22c4dcb4 },
+    { "IMPOSSIBLE ROOM", "Should not exist", "Dissonant shifted partials, echoes a tritone higher, a rising tail, a drifting image.", 0x2ab27aff },
 };
 } // namespace
 
@@ -379,7 +384,7 @@ EnvironmentDrawer::EnvironmentDrawer(juce::AudioProcessorValueTreeState& s)
 }
 
 juce::Rectangle<int> EnvironmentDrawer::row(int place) const {
-    return { 16, 34 + place * 54, getWidth() - 32, 50 };
+    return { 16, 32 + place * 25, getWidth() - 32, 24 };
 }
 
 bool EnvironmentDrawer::refresh() {
@@ -408,6 +413,8 @@ void EnvironmentDrawer::paint(juce::Graphics& g) {
     g.setColour(ink.withAlpha(0.45f));
     g.setFont(font(9.5f));
     g.drawText("ENVIRONMENT  -  WHERE THE INSTRUMENTS ARE PLAYED", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    // Ten compact rows (name and a two-word summary); what the hovered (or the selected)
+    // place does is described under the list.
     for (int i = 0; i < dsp::placeCount; ++i) {
         const auto r = row(i).toFloat();
         const bool on = i == selected;
@@ -415,18 +422,25 @@ void EnvironmentDrawer::paint(juce::Graphics& g) {
             g.setColour(ink.withAlpha(0.14f));
             g.fillRoundedRectangle(r, 4.0f);
             g.setColour(ink.withAlpha(0.8f));
-            g.fillRect(r.getX(), r.getY() + 6, 2.0f, r.getHeight() - 12);
+            g.fillRect(r.getX(), r.getY() + 5, 2.0f, r.getHeight() - 10);
         } else if (hover == i) {
             g.setColour(ink.withAlpha(0.07f));
             g.fillRoundedRectangle(r, 4.0f);
         }
-        auto text = r.reduced(14, 6);
+        auto text = r.reduced(12, 0);
         g.setColour(ink.withAlpha(on ? 1.0f : hover == i ? 0.9f : 0.7f));
-        g.setFont(font(12.0f, on));
-        g.drawText(dsp::profile(dsp::Place(i)).name, text.removeFromTop(18), juce::Justification::centredLeft);
-        g.setColour(ink.withAlpha(on ? 0.7f : 0.45f));
+        g.setFont(font(11.5f, on));
+        g.drawText(dsp::profile(dsp::Place(i)).name, text, juce::Justification::centredLeft);
+        g.setColour(ink.withAlpha(on ? 0.7f : 0.42f));
+        g.setFont(font(9.0f));
+        g.drawText(juce::String(placeInfo[i].summary).toUpperCase(), text, juce::Justification::centredRight);
+    }
+    {
+        const int shown = std::clamp(hover >= 0 ? hover : selected, 0, dsp::placeCount - 1);
+        const auto box = juce::Rectangle<int>(28, row(dsp::placeCount - 1).getBottom() + 8, getWidth() - 56, 30);
+        g.setColour(ink.withAlpha(0.62f));
         g.setFont(font(9.5f));
-        g.drawFittedText(juce::String(placeInfo[i].summary).toUpperCase() + "  -  " + placeInfo[i].detail, text.toNearestInt(), juce::Justification::topLeft, 2, 1.0f);
+        g.drawFittedText(placeInfo[shown].detail, box, juce::Justification::topLeft, 2, 1.0f);
     }
     g.setColour(ink.withAlpha(0.45f));
     g.setFont(font(9.5f));

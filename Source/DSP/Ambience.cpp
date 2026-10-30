@@ -112,21 +112,21 @@ void Ambience::configure(Place p, unsigned s) {
         bedSend = 0.5f;
         add(Kind::rail, 20.0f, 7.0f, 1.0f, 0.8f);
         add(Kind::gust, 13.0f, 4.0f, 1.0f, 0.6f);
-        add(Kind::metal, 19.0f, 6.0f, 0.7f, 0.75f);
-        add(Kind::ticks, 12.0f, 3.0f, 0.6f, 0.5f);
+        add(Kind::metal, 12.0f, 4.0f, 1.0f, 0.55f);
+        add(Kind::ticks, 9.0f, 2.5f, 1.0f, 0.4f);
         break;
     case Place::supermarket:   // refrigeration cycling, fluorescent hum, a till that beeps at no one
         mains = 60.0;
         airLevel = 0.025f; airHz = 1300.0f;
-        ductLevel = 0.006f; ductHz = 1150.0f; ductQ = 14.0f;   // a cold-case fan's tone
-        humLevel = 0.004f; humWeights = { 1.0f, 0.6f, 0.3f, 0.15f };
+        ductLevel = 0.012f; ductHz = 1150.0f; ductQ = 14.0f;   // a cold-case fan's tone
+        humLevel = 0.007f; humWeights = { 1.0f, 0.6f, 0.3f, 0.15f };
         buzzLevel = 0.003f;
-        motorHz = 49.0f; motorLevel = 0.012f; motorWeights = { 1.0f, 0.8f, 0.5f, 0.3f }; motorAmRate = 0.3f; motorAmDepth = 0.15f;
+        motorHz = 49.0f; motorLevel = 0.007f; motorWeights = { 1.0f, 0.8f, 0.5f, 0.3f }; motorAmRate = 0.3f; motorAmDepth = 0.15f;
         motorCycles = true;
         bedSend = 0.35f;
-        add(Kind::beep, 21.0f, 6.0f, 0.8f, 0.6f);
-        add(Kind::rattle, 19.0f, 6.0f, 0.7f, 0.5f);
-        add(Kind::ticks, 13.0f, 4.0f, 0.8f, 0.4f);
+        add(Kind::beep, 14.0f, 4.0f, 1.0f, 0.5f);
+        add(Kind::rattle, 15.0f, 5.0f, 1.0f, 0.4f);
+        add(Kind::ticks, 10.0f, 3.0f, 1.0f, 0.35f);
         add(Kind::clunk, 45.0f, 15.0f, 0.8f, 0.5f);
         break;
     case Place::office:     // HVAC, transformers, coil whine, drives seeking in machines nobody uses
@@ -146,8 +146,8 @@ void Ambience::configure(Place p, unsigned s) {
     case Place::impossible:   // a room tone that will not settle, things that arrive backwards
         mains = 50.0;
         airLevel = 0.022f; airHz = 300.0f;
-        clusterLevel = 0.0065f;
-        bedSend = 0.7f;
+        clusterLevel = 0.004f;
+        bedSend = 0.5f;
         add(Kind::swell, 8.0f, 3.0f, 1.0f, 0.7f);
         add(Kind::phantom, 11.0f, 4.0f, 1.0f, 0.8f);
         add(Kind::ticks, 14.0f, 3.0f, 0.6f, 0.7f);
@@ -433,7 +433,7 @@ Ambience::Event* Ambience::spawn(const Schedule& s, int delay) {
         e.length = int(fs * (1.5f + 3.0f * random()));
         e.f = 200.0f + 1800.0f * random();
         e.bp1.set(e.f, 5.0f, sr);
-        e.amp = 0.4f * s.level * (0.5f + random());
+        e.amp = 0.15f * s.level * (0.5f + random());
         break;
     }
     case Kind::phantom: {   // two tones nobody plays, beating, out of nowhere
@@ -768,7 +768,7 @@ Ambience::Out Ambience::tick() {
     if (motorCycles) {   // the compressor's own schedule: on for a while, off for a while
         if (--cycleCountdown <= 0) {
             const bool starting = motorGateTarget < 0.5f;
-            motorGateTarget = starting ? 1.0f : 0.12f;
+            motorGateTarget = starting ? 1.0f : 0.4f;
             cycleCountdown = int(sr * (starting ? 14.0 + 20.0 * random() : 8.0 + 14.0 * random()));
             Schedule clunk { Kind::clunk, 0, 0, starting ? 1.0f : 0.7f, 0.5f };
             spawn(clunk);

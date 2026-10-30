@@ -65,10 +65,10 @@ Profile makeGarage() {
     r.firstMs = 4.0f; r.spacingMs = 5.0f; r.reflectionDecay = 0.88f; r.reflectionLevel = 0.85f; r.width = 0.4f;
     r.lowCutHz = 30.0f; r.highCutHz = 3000.0f;
     auto& c = p.colour;   // heavy low-mid boom, a concrete box resonance, dull top, close and narrow
-    c.highPassHz = 32.0f; c.lowPassHz = 2000.0f; c.lowPassQ = 0.8f; c.steep = true;
+    c.highPassHz = 32.0f; c.lowPassHz = 2400.0f; c.lowPassQ = 0.8f; c.steep = true;
     c.peakHz = 165.0f; c.peakQ = 0.8f; c.peakDb = 10.0f; c.peak2Hz = 330.0f; c.peak2Q = 1.5f; c.peak2Db = 4.0f;
     c.combHz = 118.0f; c.comb2Hz = 157.0f; c.combFeedback = 0.6f; c.combMix = 0.25f; c.combDamp = 0.6f;
-    c.width = 0.25f; c.dryDb = -10.0f;
+    c.width = 0.55f; c.dryDb = -10.0f;
     auto& e = p.echo;     // the far wall of the bay
     e.leftMs = 101.0f; e.rightMs = 107.0f; e.feedback = 0.25f; e.level = 0.3f; e.lowPassHz = 1400.0f; e.highPassHz = 70.0f; e.pingPong = false;
     p.wetDb = -1.0f;
@@ -83,7 +83,7 @@ Profile makePool() {
     r.firstMs = 18.0f; r.spacingMs = 12.0f; r.reflectionDecay = 0.85f; r.reflectionLevel = 0.6f; r.width = 1.4f;
     r.lowCutHz = 110.0f; r.highCutHz = 15000.0f;
     auto& c = p.colour;   // bright, glassy, spacious
-    c.highPassHz = 220.0f; c.shelfHz = 3500.0f; c.shelfDb = 11.0f; c.peakHz = 3200.0f; c.peakQ = 1.0f; c.peakDb = 3.0f;
+    c.highPassHz = 220.0f; c.shelfHz = 3500.0f; c.shelfDb = 12.0f; c.peakHz = 3200.0f; c.peakQ = 1.0f; c.peakDb = 3.0f;
     c.width = 1.6f; c.dryDb = -4.0f;
     auto& e = p.echo;     // distinct echoes off the far tiled wall
     e.leftMs = 173.0f; e.rightMs = 291.0f; e.feedback = 0.5f; e.level = 0.55f; e.lowPassHz = 9000.0f; e.highPassHz = 250.0f;
@@ -98,7 +98,7 @@ Profile makeHotel() {
     r.firstMs = 9.0f; r.spacingMs = 9.0f; r.reflectionDecay = 0.6f; r.reflectionLevel = 0.25f; r.width = 0.8f;
     r.lowCutHz = 60.0f; r.highCutHz = 1800.0f;
     auto& c = p.colour;   // heard through a wall from the next room: muffled, warm, worn tape
-    c.highPassHz = 70.0f; c.lowPassHz = 850.0f; c.lowPassQ = 0.6f; c.steep = true;
+    c.highPassHz = 70.0f; c.lowPassHz = 700.0f; c.lowPassQ = 0.6f; c.steep = true;
     c.peak2Hz = 240.0f; c.peak2Q = 0.9f; c.peak2Db = 4.0f;
     c.wowHz = 0.4f; c.wowCents = 6.0f; c.flutterHz = 7.5f; c.flutterCents = 2.5f;
     c.drive = 0.45f; c.width = 0.75f; c.dryDb = 1.0f;
@@ -111,16 +111,16 @@ Profile makeSubway() {
     auto& r = p.room;   // a tiled platform opening into tunnels: reflections run away down the tube
     r.rt60Low = 4.5f; r.rt60High = 2.2f; r.crossoverHz = 1000.0f; r.size = 2.0f; r.preDelayMs = 25.0f;
     r.diffusion = 0.5f; r.modulation = 0.25f; r.pattern = Space::Pattern::tunnel; r.reflections = 14;
-    r.firstMs = 12.0f; r.spacingMs = 18.0f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.6f; r.width = 1.1f;
+    r.firstMs = 12.0f; r.spacingMs = 18.0f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.6f; r.width = 0.6f;
     r.lowCutHz = 35.0f; r.highCutHz = 6000.0f;
     auto& c = p.colour;   // a bass resonance, metallic ringing, pitch that sometimes sags
-    c.highPassHz = 40.0f; c.lowPassHz = 6500.0f; c.peakHz = 72.0f; c.peakQ = 1.3f; c.peakDb = 11.0f;
-    c.peak2Hz = 900.0f; c.peak2Q = 0.8f; c.peak2Db = -5.0f;
+    c.highPassHz = 40.0f; c.lowPassHz = 7500.0f; c.peakHz = 72.0f; c.peakQ = 1.3f; c.peakDb = 11.0f;
+    c.peak2Hz = 2600.0f; c.peak2Q = 1.2f; c.peak2Db = 6.0f;
     c.combHz = 412.0f; c.comb2Hz = 587.0f; c.combFeedback = 0.86f; c.combMix = 0.4f; c.combDamp = 0.12f;
     c.driftCents = 16.0f; c.wowHz = 0.09f; c.wowCents = 6.0f;
-    c.width = 1.25f; c.dryDb = -3.0f;
+    c.width = 0.4f; c.dryDb = -4.0f;
     auto& e = p.echo;     // the long tunnel echo, metallic, wavering
-    e.leftMs = 520.0f; e.rightMs = 610.0f; e.feedback = 0.52f; e.level = 0.55f; e.lowPassHz = 3200.0f; e.highPassHz = 380.0f; e.pingPong = false;
+    e.leftMs = 520.0f; e.rightMs = 610.0f; e.feedback = 0.52f; e.level = 0.75f; e.lowPassHz = 3200.0f; e.highPassHz = 380.0f; e.pingPong = false;
     e.modHz = 0.21f; e.modMs = 1.2f;
     p.wetDb = 1.0f;
     p.ambienceTrim = 0.8f;
@@ -137,11 +137,11 @@ Profile makeSupermarket() {
     c.highPassHz = 480.0f; c.lowPassHz = 5200.0f; c.peakHz = 1700.0f; c.peakQ = 1.2f; c.peakDb = 4.0f;
     c.chorusHz = 0.62f; c.chorusCents = 6.0f; c.chorusMix = 0.4f; c.wowHz = 0.3f; c.wowCents = 3.0f;
     c.tremoloHz = 100.0f; c.tremoloDepth = 0.35f;
-    c.width = 1.05f; c.dryDb = -1.0f;
+    c.width = 1.05f; c.dryDb = 2.5f;
     auto& e = p.echo;     // shelving and cold cases: a bright, short repeat
     e.leftMs = 63.0f; e.rightMs = 71.0f; e.feedback = 0.2f; e.level = 0.2f; e.lowPassHz = 6000.0f; e.highPassHz = 600.0f;
     p.wetDb = -1.0f;
-    p.ambienceTrim = 0.8f;
+    p.ambienceTrim = 1.0f;
     return p;
 }
 Profile makeOffice() {
@@ -149,13 +149,14 @@ Profile makeOffice() {
     auto& r = p.room;   // the same bay of ceiling tiles forever: repeating reflections, no edges
     r.rt60Low = 3.4f; r.rt60High = 3.0f; r.crossoverHz = 2000.0f; r.size = 1.5f; r.preDelayMs = 40.0f;
     r.diffusion = 1.0f; r.modulation = 0.9f; r.pattern = Space::Pattern::grid; r.reflections = 16;
-    r.firstMs = 20.0f; r.spacingMs = 23.0f; r.reflectionDecay = 0.97f; r.reflectionLevel = 0.3f; r.width = 1.5f;
+    r.firstMs = 20.0f; r.spacingMs = 23.0f; r.reflectionDecay = 0.97f; r.reflectionLevel = 0.3f; r.width = 1.6f;
     r.lowCutHz = 220.0f; r.highCutHz = 4500.0f;
     auto& c = p.colour;   // soft, distant, synthetic: moving spectral notches and a slow wash
-    c.highPassHz = 130.0f; c.lowPassHz = 3400.0f; c.shelfHz = 2000.0f; c.shelfDb = -4.0f;
+    c.highPassHz = 300.0f; c.lowPassHz = 3800.0f; c.peak2Hz = 750.0f; c.peak2Q = 0.6f; c.peak2Db = -10.0f;
+    c.shelfHz = 3000.0f; c.shelfDb = 2.0f;
     c.combHz = 640.0f; c.combMix = 0.9f; c.notch = true; c.combSweepHz = 0.07f; c.combSweep = 0.5f;
     c.chorusHz = 0.21f; c.chorusCents = 10.0f; c.chorusMix = 0.55f;
-    c.width = 1.35f; c.dryDb = -8.0f;
+    c.width = 1.8f; c.dryDb = 3.0f;
     auto& e = p.echo;     // a modulated, smeared delay
     e.leftMs = 330.0f; e.rightMs = 445.0f; e.feedback = 0.5f; e.level = 0.45f; e.lowPassHz = 2400.0f; e.highPassHz = 300.0f;
     e.modHz = 0.33f; e.modMs = 5.0f; e.diffuse = 0.6f;
@@ -169,23 +170,25 @@ Profile makeImpossible() {
     r.rt60Low = 11.0f; r.rt60High = 8.0f; r.crossoverHz = 1500.0f; r.size = 2.3f; r.preDelayMs = 45.0f;
     r.diffusion = 0.9f; r.modulation = 1.0f; r.pattern = Space::Pattern::sparse; r.reflections = 12;
     r.firstMs = 30.0f; r.spacingMs = 26.0f; r.reflectionDecay = 1.14f; r.reflectionLevel = 0.12f; r.width = 1.6f;
-    r.lowCutHz = 80.0f; r.highCutHz = 9000.0f;
+    r.lowCutHz = 40.0f; r.highCutHz = 12000.0f;
     auto& c = p.colour;   // dissonant: every partial shifted off the harmonic series; the image will not stay still
-    c.highPassHz = 90.0f; c.lowPassHz = 8000.0f; c.peakHz = 1480.0f; c.peakQ = 6.0f; c.peakDb = 6.0f;
+    c.highPassHz = 30.0f; c.lowPassHz = 12000.0f; c.peakHz = 1480.0f; c.peakQ = 6.0f; c.peakDb = 6.0f;
+    c.peak2Hz = 90.0f; c.peak2Q = 0.9f; c.peak2Db = 9.0f; c.shelfHz = 5000.0f; c.shelfDb = 4.0f;
     c.shiftHz = -17.0f; c.shiftMix = 0.45f;
     c.combHz = 233.0f; c.comb2Hz = 329.6f; c.combFeedback = 0.75f; c.combMix = 0.2f; c.combDamp = 0.3f;
     c.combSweepHz = 0.05f; c.combSweep = 0.15f;
     c.driftCents = 8.0f; c.wanderPan = 0.85f;
-    c.width = 1.4f; c.dryDb = -6.0f;
+    c.width = 1.4f; c.dryDb = -9.0f;
     auto& e = p.echo;     // each echo comes back a tritone higher
     e.leftMs = 410.0f; e.rightMs = 590.0f; e.feedback = 0.55f; e.level = 0.45f; e.lowPassHz = 3500.0f; e.highPassHz = 200.0f;
     e.shiftSemis = 6.0f; e.modHz = 0.13f; e.modMs = 2.0f;
-    p.wetDb = 3.0f;
+    p.wetDb = -1.0f;
     p.shimmerSemis = 12.0f; p.shimmerFeedback = 0.3f;
     p.ambienceTrim = 1.0f;
     return p;
 }
-const std::array<Profile, placeCount> profiles { makeHospital(), makeMall(), makeSchool(), makeGarage(), makePool() };
+const std::array<Profile, placeCount> profiles { makeHospital(), makeMall(), makeSchool(), makeGarage(), makePool(),
+                                                makeHotel(), makeSubway(), makeSupermarket(), makeOffice(), makeImpossible() };
 
 // Delay-line swing (samples) for a sinusoidal pitch wobble of `cents` at `hz`.
 float swing(float cents, float hz, double sr) {

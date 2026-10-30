@@ -26,7 +26,7 @@ namespace liminal::dsp {
 
 // The order is the saved parameter index: append only.
 enum class Place { hospital, mall, school, garage, pool, hotel, subway, supermarket, office, impossible };
-inline constexpr int placeCount = 5;
+inline constexpr int placeCount = 10;
 
 struct Profile {
     const char* name;      // shown in the interface

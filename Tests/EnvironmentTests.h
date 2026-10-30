@@ -194,6 +194,9 @@ void testEnvironments(Suite& s) {
         s.metric(name + " phrase tail (0.6-1.6 s after the chord vs the chord)", c.tail, " dB");
         s.metric(name + " phrase L/R correlation", c.width);
         s.metric(name + " phrase level flicker (echoes, wobble)", c.flicker, " dB");
+        std::string toneText;
+        for (const double b : c.tone) toneText += num(b, 0) + " ";
+        std::cout << "  [metric] " << name << " phrase octave profile 31 Hz..16 kHz (dB of total): " << toneText << "\n";
         s.check(finite(x) && peak(x) < 0.9f, name + ": the phrase is finite and unclipped", num(peak(x), 2));
     }
     {

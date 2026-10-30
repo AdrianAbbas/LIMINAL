@@ -106,11 +106,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
             const char* names[] { "Off", "Piano", "Synth", "Glass", "Choir", "Music Box", "Drone" };
             return juce::String(names[std::clamp(v, 0, instrumentCount)]);
         })));
-    // Environment. Milestone 2b appends five more places to the end of this list (the
-    // saved value is the index, so existing choices keep their meaning).
+    // Environment. Append only: the saved value is the index, so existing choices keep
+    // their meaning (2a had the first five; 2b appended the rest).
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { environment, 1 }, "Environment",
-        juce::StringArray { "Vacant Hospital", "Empty Shopping Mall", "Abandoned School", "Underground Parking Garage", "Abandoned Indoor Pool" }, 0));
+        juce::StringArray { "Vacant Hospital", "Empty Shopping Mall", "Abandoned School", "Underground Parking Garage", "Abandoned Indoor Pool",
+                            "Empty Hotel", "Deserted Subway Station", "Empty Supermarket", "Endless Office", "Impossible Room" }, 0));
     layout.add(amount(environmentAmount, "Environment Amount", 1.0f));
     return layout;
 }
