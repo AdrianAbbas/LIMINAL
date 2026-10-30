@@ -42,9 +42,45 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 };
 
-// Milestone 1a's instrument drawer: slides over the right of the scene. Three rows (on/off
-// and level per instrument), tabs to pick which one is edited, and its six controls (plus
-// Glide for the synth). The full INSTRUMENTS page with artwork comes with 1b / Milestone 4.
+// A strip button that opens a drawer: an icon and a word in a frosted pill, brighter on
+// hover, filled while its drawer is open, with a pointing-hand cursor.
+class DrawerButton final : public juce::Button {
+public:
+    enum class Icon { instruments, environment };
+    DrawerButton(const juce::String& text, Icon);
+    void paintButton(juce::Graphics&, bool highlighted, bool down) override;
+
+private:
+    Icon icon;
+};
+
+// The instruments that are on, as clickable names ("PIANO + GLASS"): clicking a name
+// solos it, clicking it again (or another) changes or clears the solo.
+class ActiveInstruments final : public juce::Component {
+public:
+    explicit ActiveInstruments(juce::AudioProcessorValueTreeState&);
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    bool refresh();   // true if what it shows changed
+    juce::String text() const;
+    void clickName(int instrument);   // as a click on that name (tests)
+
+private:
+    struct Name { int index; juce::Rectangle<float> area; };
+    void layout();
+    int nameAt(juce::Point<float>) const;
+    juce::AudioProcessorValueTreeState& state;
+    std::array<bool, params::instrumentCount> on {};
+    int solo = 0, hover = -1;
+    std::vector<Name> names;
+};
+
+// The instrument drawer: slides over the right of the scene. Six rows (on/off and level
+// per instrument), tabs to pick which one is edited, and its controls. The full
+// INSTRUMENTS page with artwork comes with Milestone 4.
 class InstrumentDrawer final : public juce::Component {
 public:
     explicit InstrumentDrawer(juce::AudioProcessorValueTreeState&);
@@ -52,7 +88,7 @@ public:
     void resized() override;
     void focus(int index);
     int focused() const { return current; }
-    static constexpr int count = 3;
+    static constexpr int count = params::instrumentCount;
 
 private:
     struct Page {
@@ -61,7 +97,7 @@ private:
         std::unique_ptr<LevelControl> level;
         juce::TextButton tab;
         std::vector<std::unique_ptr<LevelControl>> controls;
-        std::unique_ptr<juce::ToggleButton> glide;
+        std::unique_ptr<juce::ToggleButton> glide;   // the synth only
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> glideAttachment;
     };
     std::array<Page, count> pages;
@@ -76,9 +112,11 @@ public:
     void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 
-    static constexpr int defaultWidth = 920, defaultHeight = 580;
+    static constexpr int defaultWidth = 920, defaultHeight = 620;
     void showInstruments(bool show);
     InstrumentDrawer& instrumentDrawer() { return drawer; }
+    ActiveInstruments& activeInstruments() { return active; }
+    juce::Button& instrumentsToggle() { return instrumentsButton; }
     const ui::FrameGovernor& governor() const { return frames; }
 
 private:
@@ -86,9 +124,8 @@ private:
     juce::Rectangle<int> recArea() const { return { 30, 26, 70, 22 }; }
     juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
     juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
-    juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(92); }
-    juce::Rectangle<int> drawerArea() const { return { getWidth() - 376, 78, 358, stripArea().getY() - 78 - 12 }; }
-    juce::String instrumentCaption() const;
+    juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(108); }
+    juce::Rectangle<int> drawerArea() const { return { getWidth() - 418, 78, 400, stripArea().getY() - 78 - 12 }; }
 
     LiminalProcessor& processor;
     ViewfinderLook look;
@@ -97,9 +134,9 @@ private:
     juce::ToggleButton power;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttachment;
     LevelControl master, instrument, ambience, space;
-    juce::TextButton instrumentsButton { "INSTRUMENTS" };
+    DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
+    ActiveInstruments active;
     InstrumentDrawer drawer;
-    juce::String caption;
 
     ui::FrameGovernor frames;
     double paintStarted = 0, clock = 0;

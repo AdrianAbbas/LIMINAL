@@ -31,6 +31,31 @@ LiminalProcessor::LiminalProcessor()
     slots[2].distance = raw(params::glassDistance);
     const char* glassIds[] { params::glassFragility, params::glassBrightness, params::glassResonance, params::glassDetune, params::glassDecay };
     for (int i = 0; i < 5; ++i) glassSettings[i] = raw(glassIds[i]);
+    slots[3].instrument = &choir;
+    slots[3].on = raw(params::choirOn);
+    slots[3].level = raw(params::choirLevel);
+    const char* choirIds[] { params::choirBreath, params::choirFormant, params::choirDetune, params::choirWidth, params::choirDarkness, params::choirRelease };
+    for (int i = 0; i < 6; ++i) choirSettings[i] = raw(choirIds[i]);
+    slots[4].instrument = &box;
+    slots[4].on = raw(params::boxOn);
+    slots[4].level = raw(params::boxLevel);
+    slots[4].distance = raw(params::boxDistance);
+    const char* boxIds[] { params::boxWear, params::boxDrift, params::boxMechanism, params::boxBrightness, params::boxDecay };
+    for (int i = 0; i < 5; ++i) boxSettings[i] = raw(boxIds[i]);
+    slots[5].instrument = &drone;
+    slots[5].on = raw(params::droneOn);
+    slots[5].level = raw(params::droneLevel);
+    const char* droneIds[] { params::droneDensity, params::droneInstability, params::droneHarmonics, params::droneSub,
+                             params::droneMovement, params::droneRelease, params::droneAttack };
+    for (int i = 0; i < 7; ++i) droneSettings[i] = raw(droneIds[i]);
+    soloParam = raw(params::solo);
+}
+
+// A soloed instrument that is on mutes every other one; soloing one that is off does nothing.
+void LiminalProcessor::updateSolo() {
+    const int solo = int(std::lround(soloParam->load()));
+    const bool valid = solo >= 1 && solo <= instrumentCount && slots[std::size_t(solo - 1)].enabled();
+    for (int i = 0; i < instrumentCount; ++i) slots[std::size_t(i)].muted = valid && i != solo - 1;
 }
 
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -41,6 +66,7 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     updateSettings();
+    updateSolo();
     for (auto& slot : slots) {
         slot.instrument->prepare(sampleRate);
         slot.stage.setAmount(slot.distance != nullptr ? slot.distance->load() : 0.0f);
@@ -116,6 +142,30 @@ void LiminalProcessor::updateSettings() {
     g.detune = glassSettings[3]->load();
     g.decay = glassSettings[4]->load();
     glass.setSettings(g);
+    dsp::EmptyChoir::Settings c;
+    c.breath = choirSettings[0]->load();
+    c.formant = choirSettings[1]->load();
+    c.detune = choirSettings[2]->load();
+    c.width = choirSettings[3]->load();
+    c.darkness = choirSettings[4]->load();
+    c.release = choirSettings[5]->load();
+    choir.setSettings(c);
+    dsp::LostMusicBox::Settings b;
+    b.wear = boxSettings[0]->load();
+    b.drift = boxSettings[1]->load();
+    b.mechanism = boxSettings[2]->load();
+    b.brightness = boxSettings[3]->load();
+    b.decay = boxSettings[4]->load();
+    box.setSettings(b);
+    dsp::HollowDrone::Settings d;
+    d.density = droneSettings[0]->load();
+    d.instability = droneSettings[1]->load();
+    d.harmonics = droneSettings[2]->load();
+    d.sub = droneSettings[3]->load();
+    d.movement = droneSettings[4]->load();
+    d.release = droneSettings[5]->load();
+    d.attack = droneSettings[6]->load();
+    drone.setSettings(d);
 }
 
 void LiminalProcessor::renderSegment(float* left, float* right, int n) {
@@ -183,6 +233,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     ambienceGain.target = params::levelGain(ambienceLevel->load());
     spaceMix.target = space->load();
     updateSettings();
+    updateSolo();
     for (auto& slot : slots) {
         slot.gain.target = slot.targetGain();
         if (slot.distance != nullptr) slot.stage.setAmount(slot.distance->load());

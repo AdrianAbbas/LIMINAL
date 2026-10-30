@@ -139,7 +139,7 @@ jobs:
       - name: Processor tests (full suite)
         run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs\
       - name: Listening render (each instrument, in the corridor, then dry)
-        run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m1a-instruments.wav
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m1b-instruments.wav
       - name: Upload test logs, editor snapshot and listening render
         if: always()
         uses: actions/upload-artifact@v4

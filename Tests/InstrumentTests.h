@@ -79,7 +79,7 @@ double centsBetween(double a, double b) { return 1200.0 * std::log2(a / b); }
 
 // Only one instrument on, every control at its default.
 void solo(Rig& rig, const char* onId) {
-    for (const char* id : { params::pianoOn, params::synthOn, params::glassOn })
+    for (const char* id : { params::pianoOn, params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn })
         rig.set(id, std::strcmp(id, onId) == 0 ? 1.0f : 0.0f);
     dry(rig);
 }
@@ -450,18 +450,199 @@ void testGlass(Suite& s) {
 }
 
 // The three together: distinct with no room at all, levels that match, safe to combine.
+// A rig with only one instrument on (dry), with some of its controls set.
+std::unique_ptr<Rig> soloRig(const char* onId, std::initializer_list<std::pair<const char*, float>> settings = {}) {
+    auto rig = std::make_unique<Rig>(48000.0);
+    solo(*rig, onId);
+    for (const auto& [id, value] : settings) rig->set(id, value);
+    rig->render(0.05);
+    return rig;
+}
+std::string num(double x, int places = 1) { return juce::String(x, places).toStdString(); }
+
+void testChoir(Suite& s) {
+    s.section("choir (Empty Choir)");
+    const double rate = 48000.0;
+    const auto note = [&](std::initializer_list<std::pair<const char*, float>> settings, int key = 57, double hold = 2.0, double tail = 0.2) {
+        auto rig = soloRig(params::choirOn, settings);
+        return playNote(*rig, key, 100, hold, tail);
+    };
+    {
+        auto rig = soloRig(params::choirOn);
+        const auto a3 = playNote(*rig, 57, 100, 2.0, 7.0);
+        const double f = pitchAt(a3, rate, 0.25, 0.45);
+        s.check(std::abs(centsBetween(f, 220.0)) < 10.0, "A3 in tune (within 10 cents: detuned singers)", num(f, 2) + " Hz");
+        s.check(finite(a3) && peak(a3) < 0.9f, "output finite and unclipped", num(peak(a3), 2));
+        const double rise = windowDb(a3, rate, 0.8, 1.2) - windowDb(a3, rate, 0.0, 0.05);
+        s.check(rise > 8.0, "slow attack: 8 dB or more louder at 1 s than in the first 50 ms", num(rise) + " dB");
+        s.check(windowDb(a3, rate, 1.6, 2.0) - windowDb(a3, rate, 0.8, 1.2) > -3.0, "a held note sustains");
+        const double tail = windowDb(a3, rate, 3.0, 3.3) - windowDb(a3, rate, 1.6, 2.0);
+        s.check(tail < -6.0 && tail > -50.0, "default release (2.5 s): still audible 1 s after key-up, fading", num(tail) + " dB");
+        s.check(rig->p->meters.voices.load() == 0, "the voice ends after its release");
+    }
+    const auto centroid = [&](const Signal& x) { return Spectrum(monoOf(x, rate, 0.8, 1.8), rate).centroid(); };
+    {
+        const auto oo = note({ { params::choirFormant, 0.0f } }), ah = note({ { params::choirFormant, 0.5f } }), ee = note({ { params::choirFormant, 1.0f } });
+        const auto f2 = [&](const Signal& x) { const Spectrum q(monoOf(x, rate, 0.8, 1.8), rate); return q.bandDb(1800, 2600) - q.bandDb(200, 1000); };
+        s.check(centroid(ah) > centroid(oo) * 1.3, "Formant moves the vowel: 'ah' brighter than 'oo'", num(centroid(oo), 0) + " -> " + num(centroid(ah), 0) + " Hz");
+        s.check(f2(ee) > f2(oo) + 10.0, "and 'ee' has its high second formant (1.8-2.6 kHz)", num(f2(oo)) + " -> " + num(f2(ee)) + " dB");
+    }
+    const auto band = [&](const Signal& x, double lo, double hi) { return Spectrum(monoOf(x, rate, 0.8, 1.8), rate).bandDb(lo, hi) - Spectrum(monoOf(x, rate, 0.8, 1.8), rate).bandDb(100, 1000); };
+    const double airLo = band(note({ { params::choirBreath, 0.0f } }), 4000, 9000), airHi = band(note({ { params::choirBreath, 1.0f } }), 4000, 9000);
+    s.check(airHi > airLo + 6.0, "Breath adds air above 4 kHz", num(airLo) + " -> " + num(airHi) + " dB");
+    // Darkness, measured above the first formant (the centroid is pinned by F1).
+    const double light = band(note({ { params::choirDarkness, 0.0f } }), 1500, 6000), dark = band(note({ { params::choirDarkness, 1.0f } }), 1500, 6000);
+    s.check(dark < light - 10.0, "Darkness darkens (less energy at 1.5-6 kHz)", num(light) + " -> " + num(dark) + " dB");
+    const double narrow = correlation(note({ { params::choirWidth, 0.0f } }), rate, 0.8, 1.8), wide = correlation(note({ { params::choirWidth, 1.0f } }), rate, 0.8, 1.8);
+    s.check(wide < narrow - 0.15, "Width spreads the singers (L/R correlation falls)", num(narrow, 2) + " -> " + num(wide, 2));
+    const double still = wobbleDb(note({ { params::choirDetune, 0.0f } }), rate, 0.8, 1.8, 0.02), beating = wobbleDb(note({ { params::choirDetune, 1.0f } }), rate, 0.8, 1.8, 0.02);
+    s.check(beating > still * 1.3, "Detune makes the singers beat against each other", num(still, 2) + " -> " + num(beating, 2) + " dB");
+    {
+        auto rig = soloRig(params::choirOn, { { params::choirRelease, 0.1f } });
+        playNote(*rig, 57, 100, 1.0, 1.0);
+        s.check(rig->p->meters.voices.load() == 0, "a short Release ends the note quickly");
+    }
+}
+
+// The strongest spectral peak near `nominal` (the music box's 6.27 x mode misleads the
+// autocorrelation pitch detector).
+double spectralPitch(const Signal& x, double rate, double from, double to, double nominal) {
+    return Spectrum(monoOf(x, rate, from, to), rate, 1 << 17).peakNear(nominal, 120).first;
+}
+
+void testBox(Suite& s) {
+    s.section("box (Lost Music Box)");
+    const double rate = 48000.0;
+    {
+        auto rig = soloRig(params::boxOn, { { params::boxWear, 0.0f }, { params::boxDrift, 0.0f } });
+        const auto a5 = playNote(*rig, 81, 100, 0.3, 2.7);
+        const double f = spectralPitch(a5, rate, 0.1, 0.5, 880.0);
+        s.check(std::abs(centsBetween(f, 880.0)) < 3.0, "A5 in tune with Wear and Pitch Drift at 0", num(f, 2) + " Hz");
+        const double early = spectralPitch(a5, rate, 0.0, 0.08, 880.0);
+        s.check(std::abs(centsBetween(early, f)) < 5.0, "no pitch glide: the pluck starts on its pitch", num(centsBetween(early, f), 2) + " cents");
+        s.check(windowDb(a5, rate, 1.8, 2.0) - windowDb(a5, rate, 0.05, 0.15) < -12.0, "a short metallic pluck: it decays while held");
+        s.check(finite(a5) && peak(a5) < 0.9f, "output finite and unclipped", num(peak(a5), 2));
+        rig->render(4.0);
+        s.check(rig->p->meters.voices.load() == 0, "the note rings out and ends");
+        const Spectrum sp(monoOf(a5, rate, 0.01, 0.3), rate, 1 << 16);
+        const double beam = toDb(sp.peakNear(880.0 * 6.267, 25).second / std::max(1e-12, sp.peakNear(880.0 * 6.0, 15).second));
+        s.check(beam > 10.0, "the tooth's 2nd bending mode (6.27 x) stands out, not the 6th harmonic", num(beam) + " dB");
+    }
+    {   // Wear mistunes the teeth, each by its own fixed amount.
+        const auto spread = [&](float wear) {
+            double sum = 0;
+            for (int key = 72; key < 84; ++key) {
+                auto rig = soloRig(params::boxOn, { { params::boxWear, wear }, { params::boxDrift, 0.0f } });
+                const auto x = playNote(*rig, key, 100, 0.3, 0.0);
+                const double c = centsBetween(spectralPitch(x, rate, 0.02, 0.3, dsp::noteHz(float(key))), dsp::noteHz(float(key)));
+                sum += c * c;
+            }
+            return std::sqrt(sum / 12.0);
+        };
+        const double worn = spread(1.0f), fresh = spread(0.0f);
+        s.check(worn > 6.0 && fresh < 2.0, "Wear puts the teeth out of tune with each other", num(fresh, 2) + " -> " + num(worn, 2) + " cents RMS");
+    }
+    {   // Pitch Drift: the spring motor wanders.
+        const auto wander = [&](float drift) {
+            auto rig = soloRig(params::boxOn, { { params::boxWear, 0.0f }, { params::boxDrift, drift } });
+            std::vector<double> c;
+            for (int i = 0; i < 8; ++i) {
+                const auto x = playNote(*rig, 81, 100, 0.25, 0.25);
+                c.push_back(centsBetween(spectralPitch(x, rate, 0.02, 0.25, 880.0), 880.0));
+            }
+            const auto [lo, hi] = std::minmax_element(c.begin(), c.end());
+            return *hi - *lo;
+        };
+        const double steady = wander(0.0f), drifting = wander(1.0f);
+        s.check(drifting > 4.0 && steady < 1.0, "Pitch Drift makes the notes wander over time", num(steady, 2) + " -> " + num(drifting, 2) + " cents range");
+    }
+    const auto play = [&](std::initializer_list<std::pair<const char*, float>> settings) {
+        auto rig = soloRig(params::boxOn, settings);
+        return playNote(*rig, 76, 100, 0.2, 1.8);
+    };
+    const auto centroid = [&](const Signal& x) { return Spectrum(monoOf(x, rate, 0.0, 0.12), rate).centroid(); };
+    const double dull = centroid(play({ { params::boxBrightness, 0.0f } })), bright = centroid(play({ { params::boxBrightness, 1.0f } }));
+    s.check(bright > dull * 1.3, "Brightness brings out the upper modes", num(dull, 0) + " -> " + num(bright, 0) + " Hz");
+    const auto shortRing = play({ { params::boxDecay, 0.0f } }), longRing = play({ { params::boxDecay, 1.0f } });
+    s.check(windowDb(longRing, rate, 1.0, 1.4) - windowDb(shortRing, rate, 1.0, 1.4) > 15.0, "Decay lengthens the ring");
+    const auto quiet = play({ { params::boxMechanism, 0.0f } }), noisy = play({ { params::boxMechanism, 1.0f } });
+    const double click = Spectrum(monoOf(noisy, rate, 0.0, 0.02), rate).bandDb(6000, 10500) - Spectrum(monoOf(quiet, rate, 0.0, 0.02), rate).bandDb(6000, 10500);
+    s.check(click > 3.0, "Mechanism adds the pin's click", num(click) + " dB");
+    const auto near = play({ { params::boxDistance, 0.0f } }), far = play({ { params::boxDistance, 1.0f } });
+    s.check(toDb(rms(far)) < toDb(rms(near)) - 2.0 && centroid(far) < centroid(near), "Distance: quieter and duller");
+}
+
+void testDrone(Suite& s) {
+    s.section("drone (Hollow Drone)");
+    const double rate = 48000.0;
+    {
+        auto rig = soloRig(params::droneOn, { { params::droneDensity, 0.0f }, { params::droneInstability, 0.0f }, { params::droneSub, 0.0f } });
+        const auto a3 = playNote(*rig, 57, 100, 4.0, 0.1);
+        const double f = pitchAt(a3, rate, 2.5, 3.0);
+        s.check(std::abs(centsBetween(f, 220.0)) < 6.0, "A3 in tune (Density, Instability and Sub at 0)", num(f, 2) + " Hz");
+        const double rise = windowDb(a3, rate, 2.5, 3.0) - windowDb(a3, rate, 0.0, 0.1);
+        s.check(rise > 12.0, "long default attack (1.2 s): swells in", num(rise) + " dB");
+    }
+    {
+        auto rig = soloRig(params::droneOn);
+        const auto c3 = playNote(*rig, 48, 100, 4.0, 2.0);
+        s.check(finite(c3) && peak(c3) < 0.9f, "output finite and unclipped", num(peak(c3), 2));
+        s.check(windowDb(c3, rate, 3.5, 4.0) - windowDb(c3, rate, 2.5, 3.0) > -3.0, "a held note sustains");
+        const double tail = windowDb(c3, rate, 5.0, 5.5) - windowDb(c3, rate, 3.5, 4.0);
+        s.check(tail > -25.0 && tail < -2.0, "long default release (4 s): still sounding a second after key-up", num(tail) + " dB");
+        rig->render(16.0);
+        s.check(rig->p->meters.voices.load() == 0, "the voice ends after its release");
+    }
+    const auto hold = [&](std::initializer_list<std::pair<const char*, float>> settings, int key = 45) {
+        auto rig = soloRig(params::droneOn, settings);
+        return playNote(*rig, key, 100, 5.0, 0.0);
+    };
+    const auto spectrum = [&](const Signal& x) { return Spectrum(monoOf(x, rate, 3.0, 5.0), rate, 1 << 17); };
+    {
+        const auto none = spectrum(hold({ { params::droneSub, 0.0f } })), lots = spectrum(hold({ { params::droneSub, 1.0f } }));
+        const double gain = toDb(lots.peakNear(55.0, 40).second) - toDb(none.peakNear(55.0, 40).second);
+        s.check(gain > 15.0, "Sub adds the octave below (and two below)", num(gain) + " dB at 55 Hz");
+    }
+    {
+        const double lo = spectrum(hold({ { params::droneHarmonics, 0.0f } })).centroid(), hi = spectrum(hold({ { params::droneHarmonics, 1.0f } })).centroid();
+        s.check(hi > lo * 1.5, "Harmonics opens the filter and adds upper partials", num(lo, 0) + " -> " + num(hi, 0) + " Hz");
+    }
+    {
+        const double still = correlation(hold({ { params::droneMovement, 0.0f } }), rate, 3.0, 5.0), moving = correlation(hold({ { params::droneMovement, 1.0f } }), rate, 3.0, 5.0);
+        s.check(moving < still - 0.1, "Movement widens and moves the stereo image", num(still, 2) + " -> " + num(moving, 2));
+    }
+    {
+        // Energy beside the fundamental (4-25 cents off) against energy on it (A3, 220 Hz).
+        const auto spread = [&](float density) {
+            const auto q = spectrum(hold({ { params::droneDensity, density }, { params::droneInstability, 0.0f } }, 57));
+            const double f = 220.0;
+            const auto c = [&](double x) { return f * std::exp2(x / 1200.0); };
+            return 10.0 * std::log10(std::pow(10.0, q.bandDb(c(-25), c(-4)) / 10.0) + std::pow(10.0, q.bandDb(c(4), c(25)) / 10.0)) - q.bandDb(c(-3), c(3));
+        };
+        const double thin = spread(0.0f), thick = spread(1.0f);
+        s.check(thick > thin + 6.0, "Density stacks detuned oscillators around the pitch", num(thin) + " -> " + num(thick) + " dB beside the fundamental");
+    }
+    {
+        auto rig = soloRig(params::droneOn, { { params::droneAttack, 0.01f }, { params::droneRelease, 0.1f } });
+        const auto x = playNote(*rig, 45, 100, 1.0, 1.0);
+        s.check(windowDb(x, rate, 0.05, 0.15) - windowDb(x, rate, 0.8, 1.0) > -3.0 && rig->p->meters.voices.load() == 0, "short Attack and Release: immediate and quick");
+    }
+}
+
 void testInstruments(Suite& s) {
-    s.section("instruments (all of Milestone 1a)");
+    s.section("instruments (all six)");
     const double rate = 48000.0;
     struct Item { const char* on; const char* name; };
-    const Item items[] { { params::pianoOn, "piano" }, { params::synthOn, "synth" }, { params::glassOn, "glass" } };
+    const Item items[] { { params::pianoOn, "piano" }, { params::synthOn, "synth" }, { params::glassOn, "glass" },
+                         { params::choirOn, "choir" }, { params::boxOn, "music box" }, { params::droneOn, "drone" } };
     {
         Rig rig(rate);
-        s.check(rig.p->parameters.getRawParameterValue(params::pianoOn)->load() > 0.5f && rig.p->parameters.getRawParameterValue(params::synthOn)->load() < 0.5f &&
-                    rig.p->parameters.getRawParameterValue(params::glassOn)->load() < 0.5f,
-                "by default the Forgotten Piano is on, the others off");
+        bool others = false;
+        for (const char* id : { params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn })
+            others |= rig.p->parameters.getRawParameterValue(id)->load() > 0.5f;
+        s.check(rig.p->parameters.getRawParameterValue(params::pianoOn)->load() > 0.5f && !others, "by default the Forgotten Piano is on, the others off");
     }
-    struct Features { double sustain, inharmonic, centroid, melody; };
+    struct Features { double sustain, inharmonic, centroid, melody, held; };
     std::vector<Features> f;
     for (const auto& item : items) {
         Rig rig(rate);
@@ -471,7 +652,7 @@ void testInstruments(Suite& s) {
         const double fund = sp.peakNear(261.63).second;
         // How much sits at the glass's 1.86 mode versus at the octave.
         const double inharmonic = toDb(sp.peakNear(261.63 * 1.86, 30).second / std::max(1e-12, sp.peakNear(261.63 * 2.0, 30).second));
-        Features q { windowDb(x, rate, 1.9, 2.1) - windowDb(x, rate, 0.1, 0.3), inharmonic, sp.centroid(), 0 };
+        Features q { windowDb(x, rate, 1.9, 2.1) - windowDb(x, rate, 0.1, 0.3), inharmonic, sp.centroid(), 0, windowDb(x, rate, 1.0, 2.0) };
         juce::ignoreUnused(fund);
         // A mezzo-forte phrase, as in the levels test.
         const double t = rig.time;
@@ -494,8 +675,30 @@ void testInstruments(Suite& s) {
             juce::String(f[0].sustain, 1).toStdString() + " / " + juce::String(f[1].sustain, 1).toStdString() + " / " + juce::String(f[2].sustain, 1).toStdString() + " dB");
     s.check(f[2].inharmonic > 15.0 && f[0].inharmonic < -10.0 && f[1].inharmonic < -10.0, "only the glass is inharmonic (strong 1.86 mode, weak octave)",
             juce::String(f[0].inharmonic, 1).toStdString() + " / " + juce::String(f[1].inharmonic, 1).toStdString() + " / " + juce::String(f[2].inharmonic, 1).toStdString() + " dB");
-    s.check(std::abs(f[1].melody - f[0].melody) < 5.0 && std::abs(f[2].melody - f[0].melody) < 5.0, "each instrument's phrase within 5 dB of the piano's",
-            juce::String(f[0].melody, 1).toStdString() + " / " + juce::String(f[1].melody, 1).toStdString() + " / " + juce::String(f[2].melody, 1).toStdString() + " dBFS");
+    {
+        // The slow pads (choir, drone) never reach full level in a quick phrase: their held
+        // note is compared with the piano's phrase instead.
+        std::string levels;
+        bool close = true;
+        for (std::size_t i = 0; i < f.size(); ++i) {
+            const bool pad = i == 3 || i == 5;
+            const double level = pad ? f[i].held : f[i].melody;
+            close &= std::abs(level - f[0].melody) < 6.0;
+            levels += (i ? " / " : "") + num(level) + (pad ? " (held)" : "");
+        }
+        s.check(close, "each instrument within 6 dB of the piano's phrase", levels + " dBFS");
+    }
+    {   // The six are told apart by sustain, inharmonicity and brightness together.
+        double nearest = 1e9;
+        std::string pair;
+        for (std::size_t a = 0; a < f.size(); ++a)
+            for (std::size_t b = a + 1; b < f.size(); ++b) {
+                const double d = std::abs(f[a].sustain - f[b].sustain) / 6.0 + std::abs(f[a].inharmonic - f[b].inharmonic) / 10.0
+                               + std::abs(std::log2(f[a].centroid / f[b].centroid)) / 0.5;
+                if (d < nearest) { nearest = d; pair = std::string(items[a].name) + " vs " + items[b].name; }
+            }
+        s.check(nearest > 1.0, "every pair of instruments differs clearly (sustain / inharmonicity / brightness)", "closest: " + pair + " " + num(nearest, 2));
+    }
 
     {   // All three at once: chords, the pedal, bends, a storm; nothing stuck, nothing clipped.
         Rig rig(rate);
@@ -513,9 +716,30 @@ void testInstruments(Suite& s) {
         events.push_back({ t + 1.5, juce::MidiMessage::pitchWheel(1, 8192) });
         events.push_back({ t + 2.5, pedal(false) });
         const auto out = rig.render(4.0, events);
-        s.check(finite(out) && peak(out) < 1.0f, "all three together through a 200-note storm: finite and unclipped", juce::String(peak(out), 2).toStdString());
-        rig.render(9.0);
-        s.check(rig.p->meters.voices.load() == 0, "every voice of all three has ended afterwards (no stuck notes)", std::to_string(rig.p->meters.voices.load()));
+        s.check(finite(out) && peak(out) <= 1.0f, "all six together through a 200-note storm: finite, held under 0 dBFS by the safety limiter", juce::String(peak(out), 2).toStdString());
+        rig.render(20.0);
+        s.check(rig.p->meters.voices.load() == 0, "every voice of all six has ended afterwards (no stuck notes)", std::to_string(rig.p->meters.voices.load()));
+    }
+    {   // Solo: only the soloed instrument is heard; soloing one that is off changes nothing.
+        const auto level = [&](float soloValue, bool glassOn) {
+            Rig rig(rate);
+            dry(rig);
+            rig.set(params::glassOn, glassOn ? 1.0f : 0.0f);
+            rig.set(params::pianoOn, 1.0f);
+            rig.set(params::solo, soloValue);
+            rig.render(0.1);
+            return playNote(rig, 72, 100, 0.6, 0.0);
+        };
+        const auto both = level(0, true), glassOnly = level(3, true), pianoOnly = level(1, true), offSolo = level(3, false);
+        Rig ref(rate);
+        solo(ref, params::glassOn);
+        ref.render(0.1);   // same start time as the others (the control clock runs from the start)
+        const auto glassRef = playNote(ref, 72, 100, 0.6, 0.0);
+        double diff = 0;
+        for (std::size_t i = 4800; i < glassOnly.first.size(); ++i) diff = std::max(diff, double(std::abs(glassOnly.first[i] - glassRef.first[i])));
+        s.check(diff < 1.0e-4, "soloing the glass: exactly the glass alone (piano muted)", num(diff * 1e6, 1) + " e-6");
+        s.check(rms(pianoOnly) < rms(both) && rms(pianoOnly) > 0.0, "soloing the piano mutes the glass");
+        s.check(std::abs(toDb(rms(offSolo)) - toDb(rms(level(0, false)))) < 0.01, "soloing an instrument that is off changes nothing");
     }
     {   // Switching an instrument off fades it and stops it.
         Rig rig(rate);
@@ -557,7 +781,7 @@ void testInstruments(Suite& s) {
             midi.clear();
         }
         const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-        s.check(allocationProbe::calls == 0, "processBlock never allocates with all three instruments (16 notes each)", std::to_string(allocationProbe::calls));
-        s.metric("CPU, 16 notes on all three instruments + ambience, % of one core at 48 kHz (report-only)", 100.0 * seconds / 10.0, " %");
+        s.check(allocationProbe::calls == 0, "processBlock never allocates with all six instruments (16 notes each)", std::to_string(allocationProbe::calls));
+        s.metric("CPU, 16 notes on all six instruments + ambience, % of one core at 48 kHz (report-only)", 100.0 * seconds / 10.0, " %");
     }
 }

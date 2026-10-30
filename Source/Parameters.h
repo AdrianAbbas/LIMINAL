@@ -44,6 +44,42 @@ inline constexpr const char* glassDetune = "glass_detune";
 inline constexpr const char* glassDecay = "glass_decay";
 inline constexpr const char* glassDistance = "glass_distance";
 
+// Empty Choir (Milestone 1b)
+inline constexpr const char* choirOn = "choir_on";
+inline constexpr const char* choirLevel = "choir_level";
+inline constexpr const char* choirBreath = "choir_breath";
+inline constexpr const char* choirFormant = "choir_formant";
+inline constexpr const char* choirDetune = "choir_detune";
+inline constexpr const char* choirWidth = "choir_width";
+inline constexpr const char* choirDarkness = "choir_darkness";
+inline constexpr const char* choirRelease = "choir_release";
+
+// Lost Music Box (Milestone 1b)
+inline constexpr const char* boxOn = "box_on";
+inline constexpr const char* boxLevel = "box_level";
+inline constexpr const char* boxWear = "box_wear";
+inline constexpr const char* boxDrift = "box_drift";
+inline constexpr const char* boxMechanism = "box_mechanism";
+inline constexpr const char* boxBrightness = "box_brightness";
+inline constexpr const char* boxDecay = "box_decay";
+inline constexpr const char* boxDistance = "box_distance";
+
+// Hollow Drone (Milestone 1b)
+inline constexpr const char* droneOn = "drone_on";
+inline constexpr const char* droneLevel = "drone_level";
+inline constexpr const char* droneDensity = "drone_density";
+inline constexpr const char* droneInstability = "drone_instability";
+inline constexpr const char* droneHarmonics = "drone_harmonics";
+inline constexpr const char* droneSub = "drone_sub";
+inline constexpr const char* droneMovement = "drone_movement";
+inline constexpr const char* droneRelease = "drone_release";
+inline constexpr const char* droneAttack = "drone_attack";
+
+// Solo (Milestone 1b): 0 = none, 1..6 = only that instrument is heard (piano, synth,
+// glass, choir, music box, drone). Ignored while the soloed instrument is off.
+inline constexpr const char* solo = "solo";
+inline constexpr int instrumentCount = 6;
+
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence
 inline constexpr float maxDb = 6.0f;
 

@@ -496,7 +496,7 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                     worst = std::max(worst, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
                     fine = fine && shot.isValid();
                     if (snapshot.isNotEmpty()) {
-                        const char* names[] { "piano", "synth", "glass" };
+                        const char* names[] { "piano", "synth", "glass", "choir", "box", "drone" };
                         juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile(juce::String("editor-") + names[k] + ".png");
                         file.deleteFile();
                         juce::FileOutputStream out(file);
@@ -504,9 +504,28 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                     }
                 }
                 s.check(fine, "the Instruments drawer opens and shows each instrument's page");
-                s.metric("full 2x repaint with the drawer open (worst of three)", worst, " ms");
+                s.check(lm->instrumentsToggle().getToggleState(), "the INSTRUMENTS button is lit while its drawer is open");
+                s.metric("full 2x repaint with the drawer open (worst of six)", worst, " ms");
                 lm->instrumentDrawer().focus(0);
                 lm->showInstruments(false);
+                s.check(!lm->instrumentsToggle().getToggleState(), "and unlit when it closes");
+                // The strip names the instruments that are on; clicking a name solos it.
+                auto& active = lm->activeInstruments();
+                s.check(active.text() == "PIANO", "the strip shows the active instrument (PIANO by default)", active.text().toStdString());
+                p.parameters.getParameter(params::glassOn)->setValueNotifyingHost(1.0f);
+                active.refresh();
+                s.check(active.text() == "PIANO + GLASS", "and every instrument that is on (PIANO + GLASS)", active.text().toStdString());
+                active.clickName(2);
+                s.check(std::lround(p.parameters.getRawParameterValue(params::solo)->load()) == 3, "clicking GLASS solos the glass");
+                if (snapshot.isNotEmpty()) {
+                    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile("editor-solo.png");
+                    file.deleteFile();
+                    juce::FileOutputStream out(file);
+                    juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                }
+                active.clickName(2);
+                s.check(std::lround(p.parameters.getRawParameterValue(params::solo)->load()) == 0, "clicking it again clears the solo");
+                p.parameters.getParameter(params::glassOn)->setValueNotifyingHost(0.0f);
             }
         }
         s.metric("editor open + first 2x paint", ms, " ms");
@@ -524,13 +543,13 @@ void testEditor(Suite& s, const juce::String& snapshot) {
     s.check(g.frameInterval() > 1, "governor: expensive frames are spaced out");
 }
 
-// Each Milestone 1a instrument plays the same phrase and chord: first in the corridor
+// Each of the six instruments plays the same phrase and chord: first in the corridor
 // (default Space and ambience), then completely dry. Listening aid; CI uploads it.
 int renderPhrase(const juce::String& path) {
     Rig rig;
     rig.render(1.0);
     Signal out;
-    const char* ons[] { params::pianoOn, params::synthOn, params::glassOn };
+    const char* ons[] { params::pianoOn, params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn };
     for (int pass = 0; pass < 2; ++pass) {
         if (pass == 1) dry(rig);
         for (const char* which : ons) {
@@ -591,6 +610,9 @@ int main(int argc, char** argv) {
     if (run("piano")) testPiano(s);
     if (run("synth")) testSynth(s);
     if (run("glass")) testGlass(s);
+    if (run("choir")) testChoir(s);
+    if (run("box")) testBox(s);
+    if (run("drone")) testDrone(s);
     if (run("instruments")) testInstruments(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);

@@ -72,6 +72,40 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     layout.add(amount(glassDetune, "Glass Detune", 0.2f));
     layout.add(amount(glassDecay, "Glass Decay", 0.6f));
     layout.add(amount(glassDistance, "Glass Distance", 0.0f));
+    // Empty Choir
+    layout.add(toggle(choirOn, "Choir On", false));
+    layout.add(level(choirLevel, "Choir Level", 0.0f));
+    layout.add(amount(choirBreath, "Choir Breath", 0.3f));
+    layout.add(amount(choirFormant, "Choir Formant", 0.3f));
+    layout.add(amount(choirDetune, "Choir Detune", 0.35f));
+    layout.add(amount(choirWidth, "Choir Width", 0.6f));
+    layout.add(amount(choirDarkness, "Choir Darkness", 0.4f));
+    layout.add(seconds(choirRelease, "Choir Release", 0.05f, 10.0f, 1.5f, 2.5f));
+    // Lost Music Box
+    layout.add(toggle(boxOn, "Music Box On", false));
+    layout.add(level(boxLevel, "Music Box Level", 0.0f));
+    layout.add(amount(boxWear, "Music Box Wear", 0.4f));
+    layout.add(amount(boxDrift, "Music Box Pitch Drift", 0.3f));
+    layout.add(amount(boxMechanism, "Music Box Mechanism", 0.4f));
+    layout.add(amount(boxBrightness, "Music Box Brightness", 0.5f));
+    layout.add(amount(boxDecay, "Music Box Decay", 0.5f));
+    layout.add(amount(boxDistance, "Music Box Distance", 0.0f));
+    // Hollow Drone
+    layout.add(toggle(droneOn, "Drone On", false));
+    layout.add(level(droneLevel, "Drone Level", 0.0f));
+    layout.add(amount(droneDensity, "Drone Density", 0.5f));
+    layout.add(amount(droneInstability, "Drone Instability", 0.35f));
+    layout.add(amount(droneHarmonics, "Drone Harmonics", 0.4f));
+    layout.add(amount(droneSub, "Drone Sub", 0.4f));
+    layout.add(amount(droneMovement, "Drone Movement", 0.4f));
+    layout.add(seconds(droneRelease, "Drone Release", 0.05f, 20.0f, 3.0f, 4.0f));
+    layout.add(seconds(droneAttack, "Drone Attack", 0.005f, 12.0f, 1.0f, 1.2f));
+    layout.add(std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { solo, 1 }, "Solo", 0, instrumentCount, 0,
+        juce::AudioParameterIntAttributes().withStringFromValueFunction([](int v, int) {
+            const char* names[] { "Off", "Piano", "Synth", "Glass", "Choir", "Music Box", "Drone" };
+            return juce::String(names[std::clamp(v, 0, instrumentCount)]);
+        })));
     return layout;
 }
 

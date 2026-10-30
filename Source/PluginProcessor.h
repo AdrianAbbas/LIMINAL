@@ -5,6 +5,9 @@
 #include "DSP/FadedSynth.h"
 #include "DSP/ForgottenPiano.h"
 #include "DSP/GlassMemories.h"
+#include "DSP/EmptyChoir.h"
+#include "DSP/LostMusicBox.h"
+#include "DSP/HollowDrone.h"
 #include "Parameters.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
@@ -64,10 +67,12 @@ private:
         dsp::Distance stage;
         Smooth gain;
         bool running = false;
+        bool muted = false;   // another instrument is soloed
         bool enabled() const { return on->load() > 0.5f; }
-        float targetGain() const { return enabled() ? params::levelGain(level->load()) : 0.0f; }
+        float targetGain() const { return enabled() && !muted ? params::levelGain(level->load()) : 0.0f; }
     };
-    static constexpr int instrumentCount = 3;
+    static constexpr int instrumentCount = params::instrumentCount;
+    void updateSolo();
     void handleMidi(const juce::MidiMessage&);
     void updateSettings();
     void renderSegment(float* left, float* right, int n);
@@ -86,6 +91,13 @@ private:
     std::atomic<float>* synthSettings[8] {};
     dsp::GlassMemories glass;
     std::atomic<float>* glassSettings[5] {};
+    dsp::EmptyChoir choir;
+    std::atomic<float>* choirSettings[6] {};
+    dsp::LostMusicBox box;
+    std::atomic<float>* boxSettings[5] {};
+    dsp::HollowDrone drone;
+    std::atomic<float>* droneSettings[7] {};
+    std::atomic<float>* soloParam = nullptr;
     dsp::RoomTone roomTone;
     dsp::Space room;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;

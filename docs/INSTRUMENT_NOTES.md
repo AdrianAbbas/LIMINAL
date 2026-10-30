@@ -119,7 +119,61 @@ Dartmouth Math 5 problem set (https://math.dartmouth.edu/~m5f11/7.pdf).
 
 ---
 
-## Distance (Piano and Glass)
+## Milestone 1b instruments (quick versions)
+
+The developer's direction for 1b: functional, distinct and musically usable, not polished —
+most instruments will later be replaced or layered with the developer's own samples
+(Milestone 8), and the environment is meant to be the main source of sound transformation.
+So these three use well-known textbook models with sensible numbers and no deep research.
+
+### Empty Choir
+
+Source-filter synthesis: four sawtooth "singers" per note (PolyBLEP, one-pole spectral
+tilt of roughly -6 dB/oct above 0.9–2.7 kHz depending on velocity, plus breath noise) into
+four band-pass formants per ear. Formant table (Hz / bandwidth Hz / level dB), alto-ish,
+after the commonly quoted Peterson & Barney averages and the Csound manual's vowel
+formant table *(ref; levels adjusted by ear-free judgement, estimate)*:
+
+| vowel | F1 | F2 | F3 | F4 |
+|---|---|---|---|---|
+| oo | 350/60/0 | 600/80/-10 | 2400/120/-28 | 3300/150/-32 |
+| oh | 450/70/0 | 800/80/-6 | 2830/100/-24 | 3500/130/-30 |
+| ah | 800/80/0 | 1150/90/-4 | 2900/120/-20 | 3900/130/-30 |
+| eh | 400/60/0 | 1600/80/-10 | 2700/120/-12 | 3300/150/-20 |
+| ee | 300/50/0 | 2000/100/-10 | 2900/120/-10 | 3500/130/-16 |
+
+Vibrato 4.6–5.4 Hz, 5 cents, starting after 0.5 s (choral vibrato is typically 5–6 Hz;
+a choir's blend makes it shallow) *(estimate)*. Right-ear formants 2 % higher (a different
+throat per side). No speech, no consonants.
+
+### Lost Music Box
+
+A comb tooth is a clamped-free (cantilever) bar: Euler–Bernoulli bending modes at
+1 : 6.267 : 17.55 of the fundamental *(ref: standard beam result, β·L = 1.875, 4.694,
+7.855)*. Real teeth carry a lead tip mass and are tuned, so the upper ratios vary
+*(ref, qualitative)*; here they vary ±1.5 % per tooth with Wear. A faint 2nd and 3rd
+harmonic (7 % and 2.5 %) stand for the large-amplitude nonlinearity *(estimate)*. Ring
+0.5–6 s around A5, shorter for higher modes (t60 ∝ ratio^-0.6 / ^-0.7) *(estimate)*.
+Wear: a fixed mistuning per tooth (up to ±28 cents), a few "dead" teeth (short, dull),
+uneven levels and a slowly beating doublet (a bent tooth). Pitch Drift: the spring motor —
+one shared slow wander (±18 cents x amount, about 0.2 Hz) plus a small 2.5 Hz flutter.
+Mechanism: the pin's click (15 ms band-passed noise) and the clockwork's irregular ticks.
+Teeth have no dampers here: a note rings out whether the key is held or not.
+
+### Hollow Drone
+
+Subtractive: 2–7 free-running oscillators (Density, the last fading in), each morphing
+from a near-sine to a PolyBLEP sawtooth (Harmonics), spread up to ±18 cents, each with its
+own slow drift (Instability, up to ±23 cents); a fifth and an octave above come in with
+Harmonics; a sine an octave below and, above Sub 50 %, two octaves below. A resonant
+state-variable low-pass per ear (cutoff 1.5–15.5x the note, Q 1.2–4.2) sweeps up to ±1.2
+octaves with Movement, which also circles each oscillator through the stereo field.
+Attack 5 ms–12 s (default 1.2 s), release 50 ms–20 s (default 4 s). Level normalised by
+1/sqrt(stack) so Density makes it fuller rather than much louder.
+
+---
+
+## Distance (Piano, Glass and Music Box)
 
 `dsp::Distance`: direct sound down to -7 dB, two one-pole low-passes from 18 kHz down to
 900 Hz, four early reflections (7–17 ms, cross-fed, 30 %) and up to 2.5x more send to the

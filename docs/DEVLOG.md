@@ -6,14 +6,14 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 ## Progress checklist
 
 - [x] **0 — Audit, WORLDBUILDER-derived pipeline, skeleton** (2026-10-30) — confirmed by the developer in GarageBand: loads, plays, layout looks good
-- [x] **1a — Forgotten Piano, Faded Synth, Glass Memories** (2026-10-30) — *waiting for the developer's GarageBand listening check*
+- [x] **1a — Forgotten Piano, Faded Synth, Glass Memories** (2026-10-30) — tested by the developer in GarageBand
   - [x] Research and `docs/INSTRUMENT_NOTES.md` (all three)
   - [x] Shared instrument layer (`DSP/Instrument.h`), Distance stage, processor routing, Forgotten Piano + tests
   - [x] Faded Synth + tests
   - [x] Glass Memories + tests, cross-instrument tests
   - [x] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
-- [ ] 1b — Empty Choir, Lost Music Box, Hollow Drone
-- [ ] 2a — Five environments
+- [x] **1b — Empty Choir, Lost Music Box, Hollow Drone** (2026-10-30) — quick versions by request; strip/solo/INSTRUMENTS button
+- [ ] 2a — Five environments (hospital, mall, school, garage, pool)
 - [ ] 2b — Five environments
 - [ ] 3 — Per-instrument effects with environment influence
 - [ ] 4a — Viewfinder shell + 3 environments (prototype, then stop for approval)
@@ -24,6 +24,11 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 - [ ] 8 — Samples from `AdrianAbbas/Samples`
 
 ### Requests from the developer for later milestones
+
+- **Priority change (2026-10-30, with 1b/2a):** most instruments will be replaced by the
+  developer's own samples (Milestone 8), so don't spend long perfecting instrument
+  synthesis. **The environment is the main source of sound transformation:** changing
+  environment must change how every instrument sounds more than any instrument control.
 
 - **Milestone 4 — more realism in the scenes** (asked 2026-10-30, after the M0 check):
   interactive lights — fluorescent tubes that flicker, buzz visually, and brighten or
@@ -283,3 +288,68 @@ minimum** to hear them dry. The Linux job's artifact also has `m1a-instruments.w
 
 Milestone 1b: Empty Choir, Lost Music Box, Hollow Drone, the INSTRUMENTS page with six
 cards (artwork in Milestone 4), and adjustments from the developer's listening notes.
+
+---
+
+## Milestone 1b — Empty Choir, Lost Music Box, Hollow Drone (2026-10-30)
+
+The developer tested 1a in GarageBand and asked for 1b *quickly*: functional, distinct and
+musically usable, not polished (samples will replace most instruments later). Plus three
+interface requests: a clearly clickable INSTRUMENTS button, the active instruments shown
+in the strip ("PIANO + GLASS"), and click-a-name-to-solo.
+
+### What changed
+
+| | |
+|---|---|
+| `DSP/EmptyChoir` | Formant (source-filter) choir: four detuned sawtooth singers + breath noise into four band-pass formants per ear, vowel morph oo-oh-ah-eh-ee with a slow per-note vowel wander, late gentle vibrato, slow attack. Breath / Formant / Detune / Width / Darkness / Release. 8 notes + 4 fading. |
+| `DSP/LostMusicBox` | Modal comb tooth (clamped-free beam modes 1 : 6.27 : 17.55, faint 2nd/3rd harmonics), pin click, clockwork ticks. Wear (fixed per-tooth mistuning, dead teeth, uneven levels, bent-tooth beating) / Pitch Drift (spring motor wander) / Mechanism / Brightness / Decay / Distance. No dampers: notes ring out. 20 notes + 6 fading. |
+| `DSP/HollowDrone` | 2–7 stacked drifting oscillators (sine-to-saw), fifth + octave with Harmonics, sub-octave and two-octaves-down sines, resonant SVF low-pass per ear sweeping with Movement, oscillators circling the stereo field. Density / Instability / Harmonics / Sub / Movement / Release, plus Attack (the spec asks for very long attack options). 8 notes + 4 fading. |
+| `DSP/Filters.h` | Shared one-pole, TPT state-variable filter, RBJ biquad, PolyBLEP saw, fast sine. |
+| Parameters | Appended: per new instrument On, Level, six controls (+ `drone_attack`); `solo` (0 = off, 1..6). Defaults off, so a new instance still sounds like 1a. |
+| Processor | Six slots. Solo: a soloed instrument that is on mutes the others (they keep playing silently, so un-soloing mid-note is seamless); soloing an instrument that is off does nothing. |
+| Editor | Window 920 x 620. **INSTRUMENTS** is now a frosted pill with a keyboard icon and a chevron, brighter with a thicker outline on hover, filled (light) while the drawer is open, pointing-hand cursor. The strip's top line shows **PLAYING  PIANO + GLASS**; each name is clickable (hover underline + hand cursor) and solos that instrument (amber tag, others dimmed, hint "click again to hear all"). The drawer holds all six (rows, tabs, a three-column control grid). |
+| Tests | Groups `choir`, `box`, `drone`; `instruments` now covers all six (levels, distinctness, storm, block-size identity, allocation, solo). Listening render `m1b-instruments.wav` (all six, in the corridor then dry). |
+
+### Tested (Linux, this container) — 182 checks pass, 0 fail
+
+- **Choir**: A3 within 10 cents; 22 dB swell over the first second; sustains; release
+  2.5 s still audible a second after key-up, then ends; Formant moves the vowel ('oo' 471 Hz
+  centroid → 'ah' 792 Hz; 'ee' gains its 2 kHz second formant); Breath +20 dB of air above
+  4 kHz; Darkness -14 dB at 1.5–6 kHz; Width L/R correlation 0.98 → 0.45; Detune makes
+  the singers beat; short Release ends quickly.
+- **Music box**: A5 in tune at Wear/Drift 0 (spectral peak; the 6.27x mode misleads the
+  autocorrelation detector, so these checks use the spectrum); decays while held; the
+  6.27x beam mode stands far above the 6th harmonic; Wear spreads 12 teeth to about 30
+  cents RMS (0 at Wear 0); Pitch Drift 0 → 12 cents range over 8 notes; Brightness
+  centroid 667 → 1154 Hz (first 120 ms); Decay, Mechanism (click), Distance all measurable.
+- **Drone**: A3 in tune; 20 dB swell (1.2 s attack); sustains; still sounding 1 s after
+  key-up (4 s release), then ends; Sub +138 dB at 55 Hz (from nothing); Harmonics centroid
+  106 → 474 Hz; Movement L/R correlation 0.97 → 0.77; Density spreads energy beside the
+  fundamental; short Attack/Release immediate.
+- **All six**: phrase levels -25.6 / -26.9 / -25.3 / -28.3 (choir, held) / -27.2 / -29.2
+  (drone, held) dBFS, all within 6 dB of the piano; every pair clearly different by
+  sustain / inharmonicity / brightness; 200-note storm on all six finite (the safety
+  limiter holds it under 0 dBFS — six instruments at 0 dB with the pedal down is hot);
+  no stuck notes; identical with 512/64-sample blocks; no allocation; solo exact.
+- Editor: the button lights while open and unlights when closed; the strip reads "PIANO",
+  then "PIANO + GLASS"; clicking GLASS solos it, clicking again clears it. Snapshots
+  (`editor-*.png`, `editor-solo.png`) looked at by eye.
+- Report-only CPU (x86 container, one core): 16 notes on **all six** at once ~39 % (was
+  ~21 % for three). Nobody would play 16 notes on six instruments at once; the drone's
+  nine oscillators per note are the next thing to trim if the MacBook Air struggles.
+
+### Not verified here
+
+Everything macOS (CI runs it on the final push of this session) and **listening**: no one
+has heard the three new instruments; the numbers prove behaviour, not beauty.
+
+### Decisions (recorded instead of asking)
+
+- **Quick models** on purpose (the developer's priority change); the choir and music box
+  are obvious candidates for the developer's voice/kalimba samples in Milestone 8.
+- **Solo is a parameter** (`solo`), so it is saved with the song and can be automated;
+  muted instruments keep running so un-soloing never cuts or restarts notes.
+- **Drone Attack** added as a seventh control (spec: "very long attack and release
+  options"; its six named controls have no attack).
+- **Music box notes ignore key-up** (a comb has no dampers); they end by decay.
