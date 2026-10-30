@@ -129,7 +129,7 @@ Profile makeSubway() {
 Profile makeSupermarket() {
     Profile p { "EMPTY SUPERMARKET", "AISLE 7, FROZEN FOODS", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a low ceiling grid over hard floors: regular, artificial reflections
-    r.rt60Low = 1.8f; r.rt60High = 1.4f; r.crossoverHz = 2500.0f; r.size = 1.1f; r.preDelayMs = 8.0f;
+    r.rt60Low = 1.0f; r.rt60High = 0.8f; r.crossoverHz = 2500.0f; r.size = 0.9f; r.preDelayMs = 8.0f;
     r.diffusion = 0.25f; r.modulation = 0.0f; r.pattern = Space::Pattern::grid; r.reflections = 12;
     r.firstMs = 9.0f; r.spacingMs = 17.0f; r.reflectionDecay = 0.9f; r.reflectionLevel = 0.55f; r.width = 1.0f;
     r.lowCutHz = 300.0f; r.highCutHz = 9000.0f;
@@ -178,7 +178,7 @@ Profile makeImpossible() {
     c.combHz = 233.0f; c.comb2Hz = 329.6f; c.combFeedback = 0.75f; c.combMix = 0.2f; c.combDamp = 0.3f;
     c.combSweepHz = 0.05f; c.combSweep = 0.15f;
     c.driftCents = 8.0f; c.wanderPan = 0.85f;
-    c.width = 1.4f; c.dryDb = -9.0f;
+    c.width = 1.4f; c.dryDb = -6.5f;
     auto& e = p.echo;     // each echo comes back a tritone higher
     e.leftMs = 410.0f; e.rightMs = 590.0f; e.feedback = 0.55f; e.level = 0.45f; e.lowPassHz = 3500.0f; e.highPassHz = 200.0f;
     e.shiftSemis = 6.0f; e.modHz = 0.13f; e.modMs = 2.0f;
@@ -345,6 +345,7 @@ void Colour::process(float* left, float* right, int n) {
     for (int i = 0; i < n; ++i) {
         if (clock == 0) {   // control rate: filters follow the amount, the drift and the image wander
             if (std::abs(amount - filtersAt) > 0.0005f) updateFilters();
+            nearness = std::pow(10.0f, c.dryDb * amount / 20.0f);
             driftNow = drift.tick(rng, 0.3f, float(32.0 / sr));
             panNow = pan.tick(rng, 0.25f, float(32.0 / sr));
             clock = 32;
@@ -454,8 +455,8 @@ void Colour::process(float* left, float* right, int n) {
             l *= gl;
             r *= gr;
         }
-        left[i] = l;
-        right[i] = r;
+        left[i] = l * nearness;
+        right[i] = r * nearness;
     }
 }
 
@@ -548,16 +549,14 @@ Stereo Echo::tick(Stereo in, float amount) {
 //==============================================================================
 void EnvironmentChain::prepare(double sampleRate) {
     sr = sampleRate;
-    dryColour.prepare(sr);
-    sendColour.prepare(sr);
     echo.prepare(sr);
     room.prepare(sr);
     ambience.prepare(sr);
     shimmer.prepare(sr);
-    bufL.assign(1024, 0.0f);
-    bufR.assign(1024, 0.0f);
     sbufL.assign(1024, 0.0f);
     sbufR.assign(1024, 0.0f);
+    ebufL.assign(1024, 0.0f);
+    ebufR.assign(1024, 0.0f);
     amountCoef = float(1.0 - std::exp(-1.0 / (0.02 * sr)));
     liveCoef = float(1.0 - std::exp(-1.0 / (0.03 * sr)));
     ambienceCoef = float(1.0 - std::exp(-1.0 / (0.6 * sr)));   // about 2 s to fade across
@@ -569,8 +568,6 @@ void EnvironmentChain::prepare(double sampleRate) {
 void EnvironmentChain::configure(Place place, unsigned seed) {
     current = place;
     p = &profile(place);
-    dryColour.configure(p->colour, seed);
-    sendColour.configure(p->colour, seed);   // same seed: both paths wobble together
     echo.configure(p->echo);
     room.configure(p->room, seed + unsigned(place) * 7919u);
     room.reset();
@@ -585,37 +582,33 @@ void EnvironmentChain::configure(Place place, unsigned seed) {
     outFade = 1;
 }
 
-void EnvironmentChain::process(const float* instL, const float* instR, const float* sendL, const float* sendR, const float* ambienceGain,
+void EnvironmentChain::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
                                const float* space, float* outL, float* outR, float* ambienceOut, int n) {
-    n = std::min(n, int(bufL.size()));
+    n = std::min(n, int(sbufL.size()));
     for (int i = 0; i < n; ++i) {
         live += liveCoef * (liveTarget - live);
-        bufL[std::size_t(i)] = instL[i] * live;
-        bufR[std::size_t(i)] = instR[i] * live;
         sbufL[std::size_t(i)] = sendL[i] * live;
         sbufR[std::size_t(i)] = sendR[i] * live;
+        ebufL[std::size_t(i)] = echoInL[i] * live;
+        ebufR[std::size_t(i)] = echoInR[i] * live;
     }
-    dryColour.process(bufL.data(), bufR.data(), n);
-    sendColour.process(sbufL.data(), sbufR.data(), n);
-    const float dryTarget = p->colour.dryDb;
     for (int i = 0; i < n; ++i) {
         amount += amountCoef * (amountTarget - amount);
         if (std::abs(amountTarget - amount) < 1.0e-3f) amount = amountTarget;
         ambienceFade += ambienceCoef * (liveTarget - ambienceFade);
         if (killing) outFade = std::max(0.0f, outFade - killStep);
-        const float dry = dbGain(dryTarget * amount);
         const float ag = ambienceGain[i] * ambienceFade;
         const auto amb = ambience.tick();
         const Stereo send { sbufL[std::size_t(i)], sbufR[std::size_t(i)] };
-        const Stereo echoed = echo.tick(send, amount);
+        const Stereo echoed = echo.tick({ ebufL[std::size_t(i)], ebufR[std::size_t(i)] }, 1.0f);
         const Stereo wet = room.tick({ send.l + 0.5f * echoed.l + amb.send.l * ag + shimmerIn, send.r + 0.5f * echoed.r + amb.send.r * ag + shimmerIn });
         if (p->shimmerFeedback > 0.0f)   // the tail, shifted up, fed back in: it climbs as it fades
             shimmerIn = p->shimmerFeedback * amount * shimmer.tick(0.5f * (wet.l + wet.r));
         const float sp = space[i];
         const float keep = 1.0f - 0.45f * sp;
         const float ambL = amb.dry.l * ag, ambR = amb.dry.r * ag;
-        const float l = (keep * (bufL[std::size_t(i)] * dry + ambL) + echoed.l + sp * wetGain * wet.l) * outFade;
-        const float r = (keep * (bufR[std::size_t(i)] * dry + ambR) + echoed.r + sp * wetGain * wet.r) * outFade;
+        const float l = (keep * ambL + echoed.l + sp * wetGain * wet.l) * outFade;
+        const float r = (keep * ambR + echoed.r + sp * wetGain * wet.r) * outFade;
         outL[i] += l;
         outR[i] += r;
         ambienceOut[i] += 0.5f * (ambL * ambL + ambR * ambR);
@@ -670,10 +663,10 @@ void Environments::start(Place place) {
     active = other;
 }
 
-void Environments::process(const float* instL, const float* instR, const float* sendL, const float* sendR, const float* ambienceGain,
+void Environments::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
                            const float* space, float* outL, float* outR, float* ambienceOut, int n) {
     for (int c = 0; c < 2; ++c)
-        if (running[std::size_t(c)]) chains[std::size_t(c)].process(instL, instR, sendL, sendR, ambienceGain, space, outL, outR, ambienceOut, n);
+        if (running[std::size_t(c)]) chains[std::size_t(c)].process(sendL, sendR, echoInL, echoInR, ambienceGain, space, outL, outR, ambienceOut, n);
     const int other = 1 - active;
     auto& old = chains[std::size_t(other)];
     if (running[std::size_t(other)] && (old.silent() || old.killed())) running[std::size_t(other)] = false;

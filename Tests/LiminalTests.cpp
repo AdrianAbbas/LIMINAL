@@ -170,6 +170,7 @@ double frequency(const std::vector<float>& x, double rate) {
 
 #include "InstrumentTests.h"
 #include "EnvironmentTests.h"
+#include "EffectsTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -693,6 +694,7 @@ int main(int argc, char** argv) {
     if (run("drone")) testDrone(s);
     if (run("instruments")) testInstruments(s);
     if (run("environments")) testEnvironments(s);
+    if (run("effects")) testEffects(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

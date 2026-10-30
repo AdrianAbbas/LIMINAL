@@ -85,6 +85,53 @@ inline constexpr int instrumentCount = 6;
 inline constexpr const char* environment = "environment";
 inline constexpr const char* environmentAmount = "env_amount";
 
+// Per-instrument effects (Milestone 3): "<instrument>_fx_<name>", e.g. piano_fx_echo_time.
+// Every instrument has the same set. Appended after everything above; never renamed.
+inline constexpr const char* instrumentKeys[] { "piano", "synth", "glass", "choir", "box", "drone" };
+inline constexpr const char* instrumentLabels[] { "Piano", "Synth", "Glass", "Choir", "Music Box", "Drone" };
+namespace fx {
+inline constexpr const char* mix = "mix";               // effects dry/wet (0 = the dry instrument)
+inline constexpr const char* influence = "influence";   // how much the place shapes this instrument
+inline constexpr const char* order = "order";           // effect order (choice)
+inline constexpr const char* driftOn = "drift_on";
+inline constexpr const char* drift = "drift";
+inline constexpr const char* driftRate = "drift_rate";
+inline constexpr const char* tapeOn = "tape_on";
+inline constexpr const char* tape = "tape";
+inline constexpr const char* tapeTone = "tape_tone";
+inline constexpr const char* tapeHiss = "tape_hiss";
+inline constexpr const char* tapeDropouts = "tape_dropouts";
+inline constexpr const char* reverbOn = "reverb_on";
+inline constexpr const char* reverb = "reverb";
+inline constexpr const char* echoOn = "echo_on";
+inline constexpr const char* echo = "echo";
+inline constexpr const char* echoTime = "echo_time";
+inline constexpr const char* echoSync = "echo_sync";
+inline constexpr const char* echoFeedback = "echo_feedback";
+inline constexpr const char* echoTone = "echo_tone";
+inline constexpr const char* chorusOn = "chorus_on";
+inline constexpr const char* chorus = "chorus";
+inline constexpr const char* chorusRate = "chorus_rate";
+inline constexpr const char* filterOn = "filter_on";
+inline constexpr const char* filter = "filter";
+inline constexpr const char* filterLow = "filter_lp";
+inline constexpr const char* filterHigh = "filter_hp";
+inline constexpr const char* filterRes = "filter_res";
+inline constexpr const char* grainOn = "grain_on";
+inline constexpr const char* grain = "grain";
+inline constexpr const char* grainSize = "grain_size";
+inline constexpr const char* grainSpread = "grain_spread";
+inline constexpr const char* grainFreeze = "grain_freeze";
+inline constexpr const char* all[] { mix, influence, order, driftOn, drift, driftRate, tapeOn, tape, tapeTone, tapeHiss, tapeDropouts,
+                                     reverbOn, reverb, echoOn, echo, echoTime, echoSync, echoFeedback, echoTone, chorusOn, chorus, chorusRate,
+                                     filterOn, filter, filterLow, filterHigh, filterRes, grainOn, grain, grainSize, grainSpread, grainFreeze };
+inline constexpr int count = int(sizeof(all) / sizeof(all[0]));
+inline const char* syncNames[] { "Free", "1/16", "1/8", "1/8 dotted", "1/4", "1/4 dotted", "1/2", "1 bar" };
+inline constexpr float syncBeats[] { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 4.0f };
+inline const char* orderNames[] { "Standard", "Texture first", "Echo into texture" };
+} // namespace fx
+inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
+
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence
 inline constexpr float maxDb = 6.0f;
 

@@ -19,6 +19,8 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Part 2: Empty Hotel, Deserted Subway Station, Empty Supermarket, Endless Office, Impossible Room (+ PLACE drawer), all ten tuned apart (271 checks pass; piano closest pair mall / subway 3.79 > piano Distance 3.35)
   - [x] Part 3: listening render through all ten places; DEVLOG section; push **without** `[skip ci]`
 - [ ] **3 — Per-instrument effects with environment defaults and Environment influence** (push without `[skip ci]` when done)
+  - [x] Part 1: effects engine (`DSP/Effects`: per-instrument rack, 7 modules, place defaults, Influence), 192 parameters, processor routing, tests group `effects` (296 checks pass)
+  - [ ] Part 2: EFFECTS drawer in the editor, `docs/EFFECTS.md`, DEVLOG section, push without `[skip ci]`
 - [ ] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (push without `[skip ci]`)
 - [ ] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (push without `[skip ci]`)
 - [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)

@@ -1,6 +1,7 @@
 #pragma once
 #include "DSP/Environment.h"
 #include "DSP/Distance.h"
+#include "DSP/Effects.h"
 #include "DSP/FadedSynth.h"
 #include "DSP/ForgottenPiano.h"
 #include "DSP/GlassMemories.h"
@@ -56,7 +57,11 @@ private:
     struct Smooth {
         float current = 0, target = 0, coef = 0.01f;
         void reset(float v) { current = target = v; }
-        float next() { return current += coef * (target - current); }
+        float next() {
+            current += coef * (target - current);
+            if (std::abs(target - current) < 1.0e-6f) current = target;
+            return current;
+        }
     };
     // One playable instrument with its on/off, level and distance (before the room).
     struct Slot {
@@ -65,6 +70,8 @@ private:
         std::atomic<float>* level = nullptr;
         std::atomic<float>* distance = nullptr;   // optional
         dsp::Distance stage;
+        dsp::EffectRack rack;                                           // Milestone 3
+        std::array<std::atomic<float>*, params::fx::count> fx {};      // in params::fx::all order
         Smooth gain;
         bool running = false;
         bool muted = false;   // another instrument is soloed
@@ -75,6 +82,8 @@ private:
     void updateSolo();
     void handleMidi(const juce::MidiMessage&);
     void updateSettings();
+    dsp::EffectSettings effectSettings(const Slot&) const;
+    double hostBpm = 120.0;
     void renderSegment(float* left, float* right, int n);
     static constexpr int chunk = 256;
 
@@ -105,7 +114,8 @@ private:
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
     float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};
     float ambienceGains[chunk] {}, spaces[chunk] {}, mixL[chunk] {}, mixR[chunk] {}, ambiencePower[chunk] {};
-    float slotL[chunk] {}, slotR[chunk] {}, slotSendL[chunk] {}, slotSendR[chunk] {};
+    float slotL[chunk] {}, slotR[chunk] {}, slotSendL[chunk] {}, slotSendR[chunk] {}, slotEchoL[chunk] {}, slotEchoR[chunk] {};
+    float echoInL[chunk] {}, echoInR[chunk] {};
     double instrumentSum = 0, ambienceSum = 0, outputSum = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiminalProcessor)

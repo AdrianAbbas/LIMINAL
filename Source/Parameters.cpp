@@ -113,6 +113,68 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
         juce::StringArray { "Vacant Hospital", "Empty Shopping Mall", "Abandoned School", "Underground Parking Garage", "Abandoned Indoor Pool",
                             "Empty Hotel", "Deserted Subway Station", "Empty Supermarket", "Endless Office", "Impossible Room" }, 0));
     layout.add(amount(environmentAmount, "Environment Amount", 1.0f));
+    // Per-instrument effects (Milestone 3). Amounts are the player's own, added on top of
+    // what the place brings (scaled by Environment Influence); toggles bypass a module.
+    for (int i = 0; i < instrumentCount; ++i) {
+        const juce::String who = instrumentLabels[i];
+        const auto id = [&](const char* n) { return fxId(i, n); };
+        const auto pct = [&](const char* n, const juce::String& name, float v) {
+            layout.add(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { id(n), 1 }, who + " " + name, juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), v,
+                juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
+        };
+        const auto onOff = [&](const char* n, const juce::String& name, bool v) {
+            layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { id(n), 1 }, who + " " + name, v));
+        };
+        const auto hz = [&](const char* n, const juce::String& name, float lo, float hi, float v) {
+            juce::NormalisableRange<float> range(lo, hi, 0.1f);
+            range.setSkewForCentre(std::sqrt(lo * hi));
+            layout.add(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { id(n), 1 }, who + " " + name, range, v,
+                juce::AudioParameterFloatAttributes().withLabel("Hz").withStringFromValueFunction([](float x, int) {
+                    return x >= 1000.0f ? juce::String(x / 1000.0f, 1) + " k" : juce::String(juce::roundToInt(x));
+                })));
+        };
+        pct(fx::mix, "Effects Mix", 1.0f);
+        pct(fx::influence, "Environment Influence", 1.0f);
+        layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { id(fx::order), 1 }, who + " Effect Order",
+                                                                juce::StringArray(fx::orderNames, 3), 0));
+        onOff(fx::driftOn, "Drift On", true);
+        pct(fx::drift, "Drift", 0.0f);
+        pct(fx::driftRate, "Drift Rate", 0.3f);
+        onOff(fx::tapeOn, "Tape On", true);
+        pct(fx::tape, "Tape", 0.0f);
+        pct(fx::tapeTone, "Tape Tone", 0.5f);
+        pct(fx::tapeHiss, "Tape Hiss", 0.3f);
+        pct(fx::tapeDropouts, "Tape Dropouts", 0.0f);
+        onOff(fx::reverbOn, "Reverb On", true);
+        pct(fx::reverb, "Reverb", 0.5f);
+        onOff(fx::echoOn, "Echo On", true);
+        pct(fx::echo, "Echo", 0.0f);
+        {
+            juce::NormalisableRange<float> range(20.0f, 1500.0f, 1.0f);
+            range.setSkewForCentre(300.0f);
+            layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { id(fx::echoTime), 1 }, who + " Echo Time", range, 375.0f,
+                                                                   juce::AudioParameterFloatAttributes().withLabel("ms")));
+        }
+        layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { id(fx::echoSync), 1 }, who + " Echo Sync",
+                                                                juce::StringArray(fx::syncNames, 8), 0));
+        pct(fx::echoFeedback, "Echo Feedback", 0.35f);
+        pct(fx::echoTone, "Echo Tone", 0.5f);
+        onOff(fx::chorusOn, "Chorus On", true);
+        pct(fx::chorus, "Chorus", 0.0f);
+        pct(fx::chorusRate, "Chorus Rate", 0.3f);
+        onOff(fx::filterOn, "Filter On", true);
+        pct(fx::filter, "Filter", 1.0f);
+        hz(fx::filterLow, "Low-pass", 200.0f, 20000.0f, 20000.0f);
+        hz(fx::filterHigh, "High-pass", 20.0f, 2000.0f, 20.0f);
+        pct(fx::filterRes, "Resonance", 0.1f);
+        onOff(fx::grainOn, "Granular On", true);
+        pct(fx::grain, "Granular", 0.0f);
+        pct(fx::grainSize, "Grain Size", 0.4f);
+        pct(fx::grainSpread, "Grain Spread", 0.5f);
+        onOff(fx::grainFreeze, "Granular Freeze", false);
+    }
     return layout;
 }
 

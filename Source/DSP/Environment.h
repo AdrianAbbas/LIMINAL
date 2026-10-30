@@ -103,6 +103,7 @@ public:
     void configure(const Profile::Colour&, unsigned seed);
     void reset();
     void setAmount(float a) { amountTarget = std::clamp(a, 0.0f, 1.0f); }
+    float currentAmount() const { return amount; }
     void snapAmount() { amount = amountTarget; updateFilters(); }
     void process(float* left, float* right, int n);
 
@@ -123,7 +124,7 @@ private:
     FrequencyShift shiftL, shiftR;
     Random rng;
     Wander drift, pan;
-    float driftNow = 0, panNow = 0;
+    float driftNow = 0, panNow = 0, nearness = 1;
     bool bypassed = false;
 };
 
@@ -148,18 +149,19 @@ private:
     PitchShift shiftL, shiftR;
 };
 
-// One place, complete: what the processor renders for it.
+// One place's shared part: its echo, room and ambience (the instruments' own processing by
+// the place lives in each instrument's EffectRack, DSP/Effects).
 class EnvironmentChain {
 public:
     void prepare(double sampleRate);
     void configure(Place, unsigned seed);   // resets everything
     Place place() const { return current; }
-    // Adds into out (instrument dry + echo + room + ambience); `instGain`/`ambGain`
-    // fade this chain's inputs (used for cross-fades between places).
-    void process(const float* instL, const float* instR, const float* sendL, const float* sendR, const float* ambienceGain,
+    // Adds into out (echo + room + ambience). `send` feeds the room, `echoIn` the place's
+    // echo; this chain fades its inputs in and out for cross-fades between places.
+    void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
                  const float* space, float* outL, float* outR, float* ambienceOut, int n);
-    void setAmount(float a) { dryColour.setAmount(a); sendColour.setAmount(a); amountTarget = a; }
-    void snapAmount() { dryColour.snapAmount(); sendColour.snapAmount(); amount = amountTarget; }
+    void setAmount(float a) { amountTarget = a; }
+    void snapAmount() { amount = amountTarget; }
     // Fading: 1 = this is the current place; 0 = fading out.
     void setLive(bool on) { liveTarget = on ? 1.0f : 0.0f; }
     void snapLive() { live = ambienceFade = liveTarget; }
@@ -172,18 +174,17 @@ private:
     double sr = 48000.0;
     Place current = Place::hospital;
     const Profile* p = nullptr;
-    Colour dryColour, sendColour;
     Echo echo;
     Space room;
     Ambience ambience;
     PitchShift shimmer;
     float shimmerIn = 0;
-    float dryGain = 1, wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
+    float wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
     float live = 1, liveTarget = 1, liveCoef = 0.001f, ambienceFade = 1, ambienceCoef = 0.0001f;
     int quietFor = 0, quietLimit = 48000;
     bool killing = false;
     float outFade = 1, killStep = 0.001f;
-    std::vector<float> bufL, bufR, sbufL, sbufR;
+    std::vector<float> sbufL, sbufR, ebufL, ebufR;
 };
 
 // Two chains and the cross-fade between them.
@@ -192,7 +193,7 @@ public:
     void prepare(double sampleRate, Place initial);
     void select(Place);         // called once per block with the parameter's value
     void setAmount(float a);
-    void process(const float* instL, const float* instR, const float* sendL, const float* sendR, const float* ambienceGain,
+    void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
                  const float* space, float* outL, float* outR, float* ambienceOut, int n);
     Place place() const { return chains[std::size_t(active)].place(); }
     bool fading() const { return !chains[std::size_t(1 - active)].silent(); }

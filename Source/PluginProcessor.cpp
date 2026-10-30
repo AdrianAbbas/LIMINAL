@@ -48,9 +48,27 @@ LiminalProcessor::LiminalProcessor()
     const char* droneIds[] { params::droneDensity, params::droneInstability, params::droneHarmonics, params::droneSub,
                              params::droneMovement, params::droneRelease, params::droneAttack };
     for (int i = 0; i < 7; ++i) droneSettings[i] = raw(droneIds[i]);
+    for (int i = 0; i < instrumentCount; ++i)
+        for (int k = 0; k < params::fx::count; ++k) slots[std::size_t(i)].fx[std::size_t(k)] = parameters.getRawParameterValue(params::fxId(i, params::fx::all[k]));
     soloParam = raw(params::solo);
     environmentChoice = raw(params::environment);
     environmentAmount = raw(params::environmentAmount);
+}
+
+dsp::EffectSettings LiminalProcessor::effectSettings(const Slot& slot) const {
+    // The pointers are in params::fx::all order.
+    const auto v = [&](int k) { return slot.fx[std::size_t(k)]->load(); };
+    const auto b = [&](int k) { return v(k) > 0.5f; };
+    dsp::EffectSettings s;
+    s.mix = v(0); s.influence = v(1); s.order = int(std::lround(v(2)));
+    s.driftOn = b(3); s.drift = v(4); s.driftRate = v(5);
+    s.tapeOn = b(6); s.tape = v(7); s.tapeTone = v(8); s.tapeHiss = v(9); s.tapeDropouts = v(10);
+    s.reverbOn = b(11); s.reverb = v(12);
+    s.echoOn = b(13); s.echo = v(14); s.echoMs = v(15); s.echoSync = int(std::lround(v(16))); s.echoFeedback = v(17); s.echoTone = v(18);
+    s.chorusOn = b(19); s.chorus = v(20); s.chorusRate = v(21);
+    s.filterOn = b(22); s.filter = v(23); s.filterLow = v(24); s.filterHigh = v(25); s.filterRes = v(26);
+    s.grainOn = b(27); s.grain = v(28); s.grainSize = v(29); s.grainSpread = v(30); s.grainFreeze = b(31);
+    return s;
 }
 
 dsp::Place LiminalProcessor::selectedPlace() const {
@@ -73,10 +91,14 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     updateSettings();
     updateSolo();
-    for (auto& slot : slots) {
+    for (int i = 0; i < instrumentCount; ++i) {
+        auto& slot = slots[std::size_t(i)];
         slot.instrument->prepare(sampleRate);
         slot.stage.setAmount(slot.distance != nullptr ? slot.distance->load() : 0.0f);
         slot.stage.prepare(sampleRate);
+        slot.rack.prepare(sampleRate, i);
+        slot.rack.setSettings(effectSettings(slot), environmentAmount->load(), hostBpm);
+        slot.rack.setPlace(selectedPlace());
         slot.gain.coef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
         slot.gain.reset(slot.targetGain());
         slot.running = slot.enabled();
@@ -102,6 +124,7 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
         auto& in = *slot.instrument;
         if (m.isNoteOn()) {
             if (slot.enabled()) {
+                if (!slot.running) slot.rack.reset();   // starts fresh, on its current settings
                 slot.running = true;
                 in.noteOn(m.getNoteNumber(), m.getFloatVelocity());
             }
@@ -181,6 +204,8 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
     std::fill(ir, ir + n, 0.0f);
     std::fill(sendL, sendL + n, 0.0f);
     std::fill(sendR, sendR + n, 0.0f);
+    std::fill(echoInL, echoInL + n, 0.0f);
+    std::fill(echoInR, echoInR + n, 0.0f);
     for (auto& slot : slots) {
         if (!slot.running) continue;
         std::fill(slotL, slotL + n, 0.0f);
@@ -189,16 +214,27 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         std::fill(slotSendR, slotSendR + n, 0.0f);
         slot.instrument->render(slotL, slotR, n);
         slot.stage.process(slotL, slotR, slotSendL, slotSendR, n);
+        // The instrument's own effects (and the place's processing of it); the rack makes
+        // the room and echo sends. Farther instruments send more to the room.
+        std::fill(slotSendL, slotSendL + n, 0.0f);
+        std::fill(slotSendR, slotSendR + n, 0.0f);
+        std::fill(slotEchoL, slotEchoL + n, 0.0f);
+        std::fill(slotEchoR, slotEchoR + n, 0.0f);
+        const float sendFactor = 1.0f + 1.5f * (slot.distance != nullptr ? slot.distance->load() : 0.0f);
+        slot.rack.process(slotL, slotR, slotSendL, slotSendR, slotEchoL, slotEchoR, sendFactor, n);
         for (int i = 0; i < n; ++i) {
             const float g = slot.gain.next();
             il[i] += slotL[i] * g;
             ir[i] += slotR[i] * g;
             sendL[i] += slotSendL[i] * g;
             sendR[i] += slotSendR[i] * g;
+            echoInL[i] += slotEchoL[i] * g;
+            echoInR[i] += slotEchoR[i] * g;
         }
         // Switched off and faded out: stop it (and forget its notes) until enabled again.
         if (!slot.enabled() && slot.gain.current < 1.0e-5f) {
             slot.instrument->reset();
+            slot.rack.reset();
             slot.running = false;
         }
     }
@@ -208,6 +244,8 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         ir[i] *= ig;
         sendL[i] *= ig;
         sendR[i] *= ig;
+        echoInL[i] *= ig;
+        echoInR[i] *= ig;
         instrumentSum += double(il[i] * il[i] + ir[i] * ir[i]) * 0.5;
         ambienceGains[i] = ambienceGain.next();
         spaces[i] = spaceMix.next();
@@ -216,7 +254,12 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
     std::fill(mixL, mixL + n, 0.0f);
     std::fill(mixR, mixR + n, 0.0f);
     std::fill(ambiencePower, ambiencePower + n, 0.0f);
-    environments.process(il, ir, sendL, sendR, ambienceGains, spaces, mixL, mixR, ambiencePower, n);
+    for (int i = 0; i < n; ++i) {   // the instruments, dry (a little less of them as the room grows)
+        const float keep = 1.0f - 0.45f * spaces[i];
+        mixL[i] = il[i] * keep;
+        mixR[i] = ir[i] * keep;
+    }
+    environments.process(sendL, sendR, echoInL, echoInR, ambienceGains, spaces, mixL, mixR, ambiencePower, n);
     for (int i = 0; i < n; ++i) {
         const float p = powerGain.next(), m = masterGain.next() * p;
         float l = mixL[i] * m;
@@ -249,10 +292,18 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     updateSolo();
     environments.setAmount(environmentAmount->load());
     environments.select(selectedPlace());
+    if (auto* head = getPlayHead())
+        if (const auto position = head->getPosition())
+            if (const auto bpm = position->getBpm()) hostBpm = std::clamp(*bpm, 20.0, 400.0);
     for (auto& slot : slots) {
+        slot.rack.setSettings(effectSettings(slot), environmentAmount->load(), hostBpm);
+        slot.rack.setPlace(selectedPlace());
         slot.gain.target = slot.targetGain();
         if (slot.distance != nullptr) slot.stage.setAmount(slot.distance->load());
-        if (slot.enabled()) slot.running = true;
+        if (slot.enabled() && !slot.running) {
+            slot.rack.reset();
+            slot.running = true;
+        }
     }
 
     float* left = buffer.getWritePointer(0);
