@@ -18,6 +18,7 @@
 #include <numeric>
 #include <new>
 #include <string>
+#include <set>
 #include <vector>
 
 // Count C++ allocations on the calling thread while enabled (from WORLDBUILDER's tests).
@@ -171,6 +172,7 @@ double frequency(const std::vector<float>& x, double rate) {
 #include "InstrumentTests.h"
 #include "EnvironmentTests.h"
 #include "EffectsTests.h"
+#include "CharacterTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -714,6 +716,7 @@ int main(int argc, char** argv) {
     if (run("instruments")) testInstruments(s);
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);
+    if (run("characters")) testCharacters(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

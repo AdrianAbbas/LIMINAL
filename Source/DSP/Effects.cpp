@@ -34,8 +34,18 @@ PlaceEffects basePlace(Place p) {
 }
 } // namespace
 
-PlaceEffects placeEffects(Place p, int instrument) {
+PlaceEffects placeEffects(Place p, int instrument, int characterIndex) {
     PlaceEffects e = basePlace(p);
+    {   // the Character's own defaults
+        const auto& ch = character(int(p), characterIndex);
+        e.drift += ch.fxDrift;
+        e.tape += ch.fxTape;
+        e.chorus += ch.fxChorus;
+        e.grain += ch.fxGrain;
+        e.echo += ch.fxEcho;
+        if (ch.fxEcho > 0.0f && e.echoMs <= 0.0f) e.echoMs = 400.0f;
+        e.reverbBias = std::clamp(e.reverbBias + ch.fxReverb, -1.0f, 1.0f);
+    }
     // How each instrument takes to the place's effects (piano = 1).
     switch (instrument) {
     case 1:   // synth: chorus and tape suit it; less granular
@@ -122,17 +132,19 @@ void EffectRack::reset() {
     echoDelay = echoDelayTarget;
 }
 
-void EffectRack::setPlace(Place p) {
-    if (placeKnown && p == place) return;
-    const unsigned seed = 0x2F6Bu + unsigned(instrument) * 131u + unsigned(p) * 7u;
+void EffectRack::setPlace(Place p, int ch) {
+    if (placeKnown && p == place && ch == characterNow) return;
+    characterNow = ch;
+    const unsigned seed = 0x2F6Bu + unsigned(instrument) * 131u + unsigned(p) * 7u + unsigned(ch) * 3u;
+    const Profile shaped = profileFor(p, ch);
     if (!placeKnown) {   // first time: no fade
         place = p;
         placeKnown = true;
-        colours[std::size_t(activeColour)].configure(profile(p).colour, seed);
+        colours[std::size_t(activeColour)].configure(shaped.colour, seed);
         colours[std::size_t(activeColour)].setAmount(now.colour);
         colours[std::size_t(activeColour)].snapAmount();
         colourFade = 1;
-        setSettings(user, envAmount, bpm);
+        setSettings(user, envAmount, bpm, liveNow);
         now = target;
         echoDelay = echoDelayTarget;
         return;
@@ -141,19 +153,24 @@ void EffectRack::setPlace(Place p) {
     if (colourFade < 1.0f) colourFade = 1.0f;   // a change during a fade: the newest one wins
     activeColour = 1 - activeColour;
     auto& next = colours[std::size_t(activeColour)];
-    next.configure(profile(p).colour, seed);
+    next.configure(shaped.colour, seed);
     next.setAmount(now.colour);
     next.snapAmount();
     colourFade = 0;
-    setSettings(user, envAmount, bpm);
+    setSettings(user, envAmount, bpm, liveNow);
 }
 
-void EffectRack::setSettings(const EffectSettings& s, float environmentAmount, double hostBpm) {
+void EffectRack::setSettings(const EffectSettings& s, float environmentAmount, double hostBpm, const EffectLive& l) {
     user = s;
+    liveNow = l;
     envAmount = std::clamp(environmentAmount, 0.0f, 1.0f);
     bpm = hostBpm > 1.0 ? hostBpm : 120.0;
     const float k = std::clamp(s.influence, 0.0f, 1.0f) * envAmount;   // how much the place counts
-    const PlaceEffects e = placeEffects(place, instrument);
+    PlaceEffects e = placeEffects(place, instrument, characterNow);
+    e.drift += l.drift;
+    e.tape += l.tape;
+    e.grain += l.grain;
+    e.chorus += l.chorus;
     target.colour = k;
     placeGrainSize = e.grainSize * k;
     target.drift = s.driftOn ? std::clamp(s.drift + k * e.drift, 0.0f, 1.0f) : 0.0f;
@@ -176,7 +193,10 @@ void EffectRack::setSettings(const EffectSettings& s, float environmentAmount, d
     }
     target.reverb = s.reverbOn ? std::max(0.0f, 2.0f * s.reverb * (1.0f + k * e.reverbBias)) : 0.0f;
     echoDelayTarget = std::clamp(float(target.echoMs * 0.001 * sr), 1.0f, float(echoLineL.size()) - 4.0f);
-    for (auto& c : colours) c.setAmount(k);
+    for (auto& c : colours) {
+        c.setAmount(k);
+        c.setLive(l.colour);
+    }
 }
 
 float EffectRack::readLine(const std::vector<float>& line, int write, float delay) const {

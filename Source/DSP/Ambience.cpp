@@ -21,7 +21,7 @@ void Ambience::prepare(double sampleRate) {
     configure(place, seed);
 }
 
-void Ambience::configure(Place p, unsigned s) {
+void Ambience::configure(Place p, unsigned s, const Character* ch) {
     place = p;
     seed = s;
     // Defaults: everything off, then each place switches on its own generators.
@@ -154,6 +154,29 @@ void Ambience::configure(Place p, unsigned s) {
         add(Kind::thud, 22.0f, 7.0f, 0.6f, 0.8f);
         break;
     }
+    if (ch != nullptr) {   // the Character: which events, how often, and the bed
+        int kept = 0;
+        for (int i = 0; i < scheduleCount; ++i) {
+            auto sc = schedules[std::size_t(i)];
+            const float w = ch->eventWeight[std::size_t(std::min(i, 4))] * ch->eventRate;
+            if (w <= 0.0f) continue;
+            sc.meanSeconds /= w;
+            sc.minSeconds /= std::max(1.0f, std::sqrt(w));
+            schedules[std::size_t(kept++)] = sc;
+        }
+        scheduleCount = kept;
+        if (ch->extraKind >= 0) add(Kind(ch->extraKind), ch->extraMean / std::max(0.1f, ch->eventRate), ch->extraMean * 0.25f, 0.9f, 0.6f);
+        airLevel *= ch->bed;
+        ductLevel *= ch->bed;
+        lapLevel *= ch->bed;
+        rumbleLevel *= ch->bed;
+        motorLevel *= ch->bed;
+        clusterLevel *= ch->bed;
+        airHz = std::clamp(airHz * ch->bedTone, 80.0f, 6000.0f);
+        humLevel *= ch->hum;
+        buzzLevel *= ch->hum;
+        whineLevel *= ch->hum;
+    }
     mainsStep = mains / sr;
     airL.set(airHz, 0.6f, sr);
     airR.set(airHz * 1.03f, 0.6f, sr);
@@ -212,6 +235,13 @@ void Ambience::reset() {
         auto& s = schedules[std::size_t(i)];
         s.countdown = float(sr) * (s.minSeconds + random() * s.meanSeconds);
     }
+}
+
+void Ambience::disturb() {
+    if (scheduleCount == 0) return;
+    Schedule s = schedules[std::size_t(int(random() * float(scheduleCount)) % scheduleCount)];
+    s.level *= 1.4f;
+    spawn(s);
 }
 
 Ambience::Event* Ambience::spawn(const Schedule& s, int delay) {
@@ -834,7 +864,7 @@ Ambience::Out Ambience::tick() {
     // Incidental events.
     for (int i = 0; i < scheduleCount; ++i) {
         auto& s = schedules[std::size_t(i)];
-        s.countdown -= 1.0f;
+        s.countdown -= activity;
         if (s.countdown <= 0.0f) {
             spawn(s);
             // Exponential gaps (a Poisson process) above a minimum: no fixed rhythm.

@@ -7,12 +7,39 @@ namespace liminal {
 LiminalProcessor::LiminalProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "LIMINAL", params::makeLayout()) {
+    // The mirror (Milestone 5): every parameter the DSP reads, live or morphed between scenes.
+    {
+        const auto& all = getParameters();
+        mirror = std::make_unique<std::atomic<float>[]>(std::size_t(all.size()));
+        for (auto& sc : scenes) sc = std::make_unique<std::atomic<float>[]>(std::size_t(all.size()));
+        for (auto* p : all) {
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(p);
+            const auto id = ranged->getParameterID();
+            const bool discrete = dynamic_cast<juce::AudioParameterBool*>(p) != nullptr || dynamic_cast<juce::AudioParameterChoice*>(p) != nullptr
+                                  || dynamic_cast<juce::AudioParameterInt*>(p) != nullptr;
+            int role = 0;   // 0 morphed, 1 an instrument's On, 2 an instrument's Level, 3 never morphed
+            if (id == params::power || id == params::sceneOn || id == params::sceneMorph) role = 3;
+            for (const char* key : params::instrumentKeys) {
+                if (id == juce::String(key) + "_on") role = 1;
+                if (id == juce::String(key) + "_level") role = 2;
+            }
+            mirrored.push_back({ ranged, parameters.getRawParameterValue(id), discrete, role, -1 });
+        }
+        for (std::size_t i = 0; i < mirrored.size(); ++i) {
+            mirror[i].store(mirrored[i].raw->load());
+            if (mirrored[i].role == 2) {   // a Level morphs with its instrument's On
+                const auto onId = mirrored[i].parameter->getParameterID().upToLastOccurrenceOf("_", false, false) + "_on";
+                for (std::size_t k = 0; k < mirrored.size(); ++k)
+                    if (mirrored[k].parameter->getParameterID() == onId) mirrored[i].partner = int(k);
+            }
+        }
+    }
     power = parameters.getRawParameterValue(params::power);
-    master = parameters.getRawParameterValue(params::master);
-    instrumentLevel = parameters.getRawParameterValue(params::instrument);
-    ambienceLevel = parameters.getRawParameterValue(params::ambience);
-    space = parameters.getRawParameterValue(params::space);
-    const auto raw = [this](const char* id) { return parameters.getRawParameterValue(id); };
+    master = mirrorOf(params::master);
+    instrumentLevel = mirrorOf(params::instrument);
+    ambienceLevel = mirrorOf(params::ambience);
+    space = mirrorOf(params::space);
+    const auto raw = [this](const char* id) { return mirrorOf(id); };
     slots[0].instrument = &piano;
     slots[0].on = raw(params::pianoOn);
     slots[0].level = raw(params::pianoLevel);
@@ -49,11 +76,70 @@ LiminalProcessor::LiminalProcessor()
                              params::droneMovement, params::droneRelease, params::droneAttack };
     for (int i = 0; i < 7; ++i) droneSettings[i] = raw(droneIds[i]);
     for (int i = 0; i < instrumentCount; ++i)
-        for (int k = 0; k < params::fx::count; ++k) slots[std::size_t(i)].fx[std::size_t(k)] = parameters.getRawParameterValue(params::fxId(i, params::fx::all[k]));
+        for (int k = 0; k < params::fx::count; ++k) slots[std::size_t(i)].fx[std::size_t(k)] = mirrorOf(params::fxId(i, params::fx::all[k]));
     soloParam = raw(params::solo);
     environmentChoice = raw(params::environment);
     environmentAmount = raw(params::environmentAmount);
+    characterChoice = raw(params::character);
+    evolutionRate = raw(params::evolution);
+    evolutionFreeze = raw(params::evolutionFreeze);
+    evolutionSeed = raw(params::evolutionSeed);
+    macroParams[0] = raw(params::presence);
+    macroParams[1] = raw(params::scale);
+    macroParams[2] = raw(params::activity);
+    macroParams[3] = raw(params::unreal);
+    sceneOn = parameters.getRawParameterValue(params::sceneOn);
+    sceneMorph = parameters.getRawParameterValue(params::sceneMorph);
 }
+
+std::atomic<float>* LiminalProcessor::mirrorOf(const juce::String& id) {
+    for (std::size_t i = 0; i < mirrored.size(); ++i)
+        if (mirrored[i].parameter->getParameterID() == id) return &mirror[i];
+    jassertfalse;
+    return parameters.getRawParameterValue(id);
+}
+
+// Once per block: the values the DSP will use. With Scene Morph off, the live parameters.
+// With it on, the morph from A to B: continuous parameters interpolate (in their normalised
+// range), discrete ones (place, Character, switches, choices) switch at the half-way point
+// (the place cross-fades; switches fade), and an instrument present in only one scene fades
+// in or out through its level instead of switching. An unstored scene is the live settings.
+void LiminalProcessor::updateMirror() {
+    const bool morphing = sceneOn->load() > 0.5f;
+    const float t = std::clamp(sceneMorph->load(), 0.0f, 1.0f);
+    const auto sceneValue = [&](int which, std::size_t i) {
+        return stored[std::size_t(which)].load() ? scenes[std::size_t(which)][i].load() : mirrored[i].parameter->getValue();
+    };
+    for (std::size_t i = 0; i < mirrored.size(); ++i) {
+        const auto& m = mirrored[i];
+        if (!morphing || m.role == 3) {
+            mirror[i].store(m.raw->load(), std::memory_order_relaxed);
+            continue;
+        }
+        const float a = sceneValue(0, i), b = sceneValue(1, i);
+        float value;
+        if (m.role == 1) {
+            value = a > 0.5f || b > 0.5f ? 1.0f : 0.0f;
+        } else if (m.role == 2 && m.partner >= 0) {
+            const bool onA = sceneValue(0, std::size_t(m.partner)) > 0.5f, onB = sceneValue(1, std::size_t(m.partner)) > 0.5f;
+            const float dbA = onA ? m.parameter->convertFrom0to1(a) : params::minDb, dbB = onB ? m.parameter->convertFrom0to1(b) : params::minDb;
+            value = dbA + t * (dbB - dbA);
+        } else if (m.discrete) {
+            value = m.parameter->convertFrom0to1(t < 0.5f ? a : b);
+        } else {
+            value = m.parameter->convertFrom0to1(a + t * (b - a));
+        }
+        mirror[i].store(value, std::memory_order_relaxed);
+    }
+}
+
+void LiminalProcessor::storeScene(int which) {
+    const auto w = std::size_t(which & 1);
+    for (std::size_t i = 0; i < mirrored.size(); ++i) scenes[w][i].store(mirrored[i].parameter->getValue());
+    stored[w].store(true);
+}
+
+int LiminalProcessor::selectedCharacter() const { return std::clamp(int(std::lround(characterChoice->load())), 0, dsp::characterCount - 1); }
 
 dsp::EffectSettings LiminalProcessor::effectSettings(const Slot& slot) const {
     // The pointers are in params::fx::all order.
@@ -89,6 +175,7 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 }
 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
+    updateMirror();
     updateSettings();
     updateSolo();
     for (int i = 0; i < instrumentCount; ++i) {
@@ -97,18 +184,23 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
         slot.stage.setAmount(slot.distance != nullptr ? slot.distance->load() : 0.0f);
         slot.stage.prepare(sampleRate);
         slot.rack.prepare(sampleRate, i);
-        slot.rack.setSettings(effectSettings(slot), environmentAmount->load(), hostBpm);
-        slot.rack.setPlace(selectedPlace());
+        slot.settings = effectSettings(slot);
+        slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm);
+        slot.rack.setPlace(selectedPlace(), selectedCharacter());
         slot.gain.coef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
         slot.gain.reset(slot.targetGain());
         slot.running = slot.enabled();
     }
     environments.setAmount(environmentAmount->load());
-    environments.prepare(sampleRate, selectedPlace());
+    samplePosition = 0;
+    lastSeed = evolutionSeed->load();
+    environments.prepare(sampleRate, selectedPlace(), selectedCharacter(), unsigned(lastSeed));
     juce::ignoreUnused(samplesPerBlock);
     // 20 ms smoothing for levels; Power fades over about 60 ms.
     const float levelCoef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
-    for (auto* s : { &masterGain, &instrumentGain, &ambienceGain, &spaceMix }) s->coef = levelCoef;
+    for (auto* s : { &masterGain, &instrumentGain, &ambienceGain, &spaceMix, &presenceDry, &presenceRoom }) s->coef = levelCoef;
+    presenceDry.reset(1.0f);
+    presenceRoom.reset(1.0f);
     powerGain.coef = float(1.0 - std::exp(-1.0 / (0.012 * sampleRate)));
     powerGain.reset(power->load() > 0.5f ? 1.0f : 0.0f);
     masterGain.reset(params::levelGain(master->load()));
@@ -197,7 +289,26 @@ void LiminalProcessor::updateSettings() {
     drone.setSettings(d);
 }
 
+// On the fixed 64-sample control grid (counted from prepareToPlay, independent of the host's
+// blocks): the place's housekeeping, the macros and evolution into the chains and the racks.
+void LiminalProcessor::controlTick() {
+    environments.maintain();
+    environments.setLive(liveNow);
+    const auto& chain = environments.current();
+    const auto& evo = chain.evolution();
+    const auto& flavour = dsp::unrealFlavour(int(chain.place()));
+    const float u = liveNow.macros.unreal * dsp::character(int(chain.place()), chain.characterIndex()).unreal;
+    effectLive.drift = u * flavour.drift + 0.15f * std::abs(evo.harmonic());
+    effectLive.tape = u * flavour.tape;
+    effectLive.grain = u * flavour.grain;
+    effectLive.chorus = u * flavour.chorus;
+    effectLive.colour = { u * flavour.shiftMix, u * flavour.wanderPan, u * flavour.wowCents + 3.0f * std::abs(evo.harmonic()), 0.8f * evo.spectral() };
+    for (auto& slot : slots) slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm, effectLive);
+}
+
 void LiminalProcessor::renderSegment(float* left, float* right, int n) {
+    if (samplePosition % controlPeriod == 0) controlTick();
+    samplePosition += std::uint64_t(n);
     float* il = scratchL;
     float* ir = scratchR;
     std::fill(il, il + n, 0.0f);
@@ -242,10 +353,11 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         const float ig = instrumentGain.next();
         il[i] *= ig;
         ir[i] *= ig;
-        sendL[i] *= ig;
-        sendR[i] *= ig;
-        echoInL[i] *= ig;
-        echoInR[i] *= ig;
+        const float roomGain = presenceRoom.next();
+        sendL[i] *= ig * roomGain;
+        sendR[i] *= ig * roomGain;
+        echoInL[i] *= ig * roomGain;   // the place's echo recedes too as the instruments come near
+        echoInR[i] *= ig * roomGain;
         instrumentSum += double(il[i] * il[i] + ir[i] * ir[i]) * 0.5;
         ambienceGains[i] = ambienceGain.next();
         spaces[i] = spaceMix.next();
@@ -255,7 +367,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
     std::fill(mixR, mixR + n, 0.0f);
     std::fill(ambiencePower, ambiencePower + n, 0.0f);
     for (int i = 0; i < n; ++i) {   // the instruments, dry (a little less of them as the room grows)
-        const float keep = 1.0f - 0.45f * spaces[i];
+        const float keep = (1.0f - 0.45f * spaces[i]) * presenceDry.next();
         mixL[i] = il[i] * keep;
         mixR[i] = ir[i] * keep;
     }
@@ -283,6 +395,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
 void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals noDenormals;
     const int total = buffer.getNumSamples();
+    updateMirror();
     powerGain.target = power->load() > 0.5f ? 1.0f : 0.0f;
     masterGain.target = params::levelGain(master->load());
     instrumentGain.target = params::levelGain(instrumentLevel->load());
@@ -291,13 +404,33 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     updateSettings();
     updateSolo();
     environments.setAmount(environmentAmount->load());
-    environments.select(selectedPlace());
+    const auto place = selectedPlace();
+    const int characterIndex = selectedCharacter();
+    environments.select(place, characterIndex);
+    if (evolutionSeed->load() != lastSeed) {   // a new seed: evolution starts again from it
+        lastSeed = evolutionSeed->load();
+        environments.setEvolutionSeed(unsigned(lastSeed));
+        environments.resetEvolution();
+    }
+    if (evolutionResetRequest.exchange(false)) environments.resetEvolution();
     if (auto* head = getPlayHead())
         if (const auto position = head->getPosition())
             if (const auto bpm = position->getBpm()) hostBpm = std::clamp(*bpm, 20.0, 400.0);
+    // The macros (Milestone 5). Presence brings the instruments forward (and the place's
+    // sounds back); Scale, Activity and Unreal act on the place, each in its own way.
+    const dsp::Macros macros { macroParams[0]->load(), macroParams[1]->load(), macroParams[2]->load(), macroParams[3]->load() };
+    const auto& response = dsp::macroResponse(int(place));
+    const float presence = (macros.presence - 0.5f) * response.presence;
+    presenceDry.target = std::pow(10.0f, 12.0f * presence / 20.0f);
+    presenceRoom.target = std::pow(10.0f, -8.0f * presence / 20.0f);
+    liveNow.macros = macros;
+    liveNow.evolutionRate = evolutionRate->load();
+    liveNow.frozen = evolutionFreeze->load() > 0.5f;
+    liveNow.ambienceGain = std::pow(10.0f, -6.0f * presence / 20.0f);
     for (auto& slot : slots) {
-        slot.rack.setSettings(effectSettings(slot), environmentAmount->load(), hostBpm);
-        slot.rack.setPlace(selectedPlace());
+        slot.settings = effectSettings(slot);
+        slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm, effectLive);
+        slot.rack.setPlace(place, characterIndex);
         slot.gain.target = slot.targetGain();
         if (slot.distance != nullptr) slot.stage.setAmount(slot.distance->load());
         if (slot.enabled() && !slot.running) {
@@ -313,7 +446,8 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     auto renderRange = [&](int from, int to) {
         float monoRight[chunk];
         while (from < to) {
-            const int n = std::min(chunk, to - from);
+            // Never across a step of the 64-sample control grid (see controlTick).
+            const int n = std::min({ chunk, to - from, controlPeriod - int(samplePosition % controlPeriod) });
             if (right != nullptr) {
                 renderSegment(left + from, right + from, n);
             } else {
@@ -343,6 +477,8 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         if (slot.running) voices += slot.instrument->activeVoices();
     meters.voices.store(voices, std::memory_order_relaxed);
     meters.place.store(int(environments.place()), std::memory_order_relaxed);
+    meters.character.store(environments.current().characterIndex(), std::memory_order_relaxed);
+    meters.activity.store(environments.current().evolution().movement(), std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* LiminalProcessor::createEditor() { return new LiminalEditor(*this); }
@@ -351,12 +487,32 @@ void LiminalProcessor::getStateInformation(juce::MemoryBlock& destData) {
     auto state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     xml->setAttribute("stateVersion", stateVersion);
+    auto* scenesXml = xml->createNewChildElement("SCENES");   // by parameter ID, so later versions can add parameters
+    for (int w = 0; w < 2; ++w) {
+        if (!stored[std::size_t(w)].load()) continue;
+        auto* scene = scenesXml->createNewChildElement(w == 0 ? "A" : "B");
+        for (std::size_t i = 0; i < mirrored.size(); ++i) scene->setAttribute(mirrored[i].parameter->getParameterID(), double(scenes[std::size_t(w)][i].load()));
+    }
     copyXmlToBinary(*xml, destData);
 }
 
 void LiminalProcessor::setStateInformation(const void* data, int sizeInBytes) {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml == nullptr || !xml->hasTagName(parameters.state.getType())) return;   // not ours: ignore
+    for (int w = 0; w < 2; ++w) stored[std::size_t(w)].store(false);
+    if (auto* scenesXml = xml->getChildByName("SCENES")) {
+        for (int w = 0; w < 2; ++w) {
+            auto* scene = scenesXml->getChildByName(w == 0 ? "A" : "B");
+            if (scene == nullptr) continue;
+            for (std::size_t i = 0; i < mirrored.size(); ++i) {
+                const auto id = mirrored[i].parameter->getParameterID();
+                // A parameter the scene does not know (added later): its default.
+                scenes[std::size_t(w)][i].store(float(scene->getDoubleAttribute(id, double(mirrored[i].parameter->getDefaultValue()))));
+            }
+            stored[std::size_t(w)].store(true);
+        }
+        xml->removeChildElement(scenesXml, true);
+    }
     parameters.replaceState(juce::ValueTree::fromXml(*xml));
 }
 

@@ -113,6 +113,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
         juce::StringArray { "Vacant Hospital", "Empty Shopping Mall", "Abandoned School", "Underground Parking Garage", "Abandoned Indoor Pool",
                             "Empty Hotel", "Deserted Subway Station", "Empty Supermarket", "Endless Office", "Impossible Room" }, 0));
     layout.add(amount(environmentAmount, "Environment Amount", 1.0f));
+    // Milestone 5 (appended after the effects, below).
     // Per-instrument effects (Milestone 3). Amounts are the player's own, added on top of
     // what the place brings (scaled by Environment Influence); toggles bypass a module.
     for (int i = 0; i < instrumentCount; ++i) {
@@ -175,6 +176,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
         pct(fx::grainSpread, "Grain Spread", 0.5f);
         onOff(fx::grainFreeze, "Granular Freeze", false);
     }
+    // Milestone 5: the Character of the place, evolution, the four macros, scenes A/B.
+    layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { character, 1 }, "Character", 0, 2, 0,
+                                                         juce::AudioParameterIntAttributes().withStringFromValueFunction([](int v, int) { return juce::String(v + 1); })));
+    layout.add(amount(evolution, "Evolution Rate", 0.4f));
+    layout.add(toggle(evolutionFreeze, "Evolution Freeze", false));
+    layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { evolutionSeed, 1 }, "Evolution Seed", 1, 9999, 1));
+    layout.add(amount(presence, "Presence", 0.5f));
+    layout.add(amount(scale, "Scale", 0.5f));
+    layout.add(amount(activity, "Activity", 0.5f));
+    layout.add(amount(unreal, "Unreal", 0.0f));
+    layout.add(toggle(sceneOn, "Scene Morph On", false));
+    layout.add(amount(sceneMorph, "Scene Morph", 0.0f));
     return layout;
 }
 

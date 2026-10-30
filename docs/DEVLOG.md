@@ -22,6 +22,8 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Part 1: effects engine (`DSP/Effects`: per-instrument rack, 7 modules, place defaults, Influence), 192 parameters, processor routing, tests group `effects` (296 checks pass)
   - [x] Part 2: EFFECTS drawer in the editor, `docs/EFFECTS.md`, DEVLOG section, push without `[skip ci]`
 - [ ] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (push without `[skip ci]`)
+  - [x] Part 1: `DSP/Characters` (30 Characters, Unreal flavours, macro responses, Evolution), Character/evolution/macro/scene parameters, parameter mirror for scene morphing, 64-sample control grid, tests group `characters` (320 checks pass)
+  - [ ] Part 2: editor (Character choice in the PLACE drawer, PERFORM drawer: macros, evolution, scenes; activity indicator; Character grade), DEVLOG section, push without `[skip ci]`
 - [ ] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (push without `[skip ci]`)
 - [ ] **4 — Viewfinder redesign, all ten environments + Characters, interactive lights/spill/reflections/depth, snapshots in `docs/snapshots/`** (push without `[skip ci]`)
 - [ ] Final handoff: per milestone, what to listen for and look at in GarageBand
@@ -557,7 +559,7 @@ Details: `docs/EFFECTS.md`.
 
 - Influence 0 with no effects: **bit-exact** to Environment Amount 0. Every switch off:
   bit-exact dry. Effects Mix 0: bit-exact dry (even with every effect and the place at full).
-- Drift: a held synth A4 wanders 0.0 → ~7+ cents range; Tape: 10.4 dB less 3–12 kHz relative
+- Drift: a held synth A4 wanders 2.2 → 9.0 cents range (pitch-tracker range over 3 s); Tape: 10.4 dB less 3–12 kHz relative
   to the body, hiss silent when nothing plays; Filter: LP 900 Hz -18.9 dB above 2.5 kHz, HP
   800 Hz -19.5 dB at 60–300 Hz; Chorus: L/R correlation 0.99 → 0.56; Echo: -240 → -46 dBFS a
   second after the chord; **Echo sync 1/4 at 120 BPM lands at 500 ms**; Granular: smears

@@ -35,6 +35,7 @@ public:
     void configure(const Shape&, unsigned seed);   // then reset() for a clean start
     void reset();
     Stereo tick(Stereo in);   // wet only: reflections + tail
+    void setDecayScale(float scale);   // the Scale macro: RT60 x scale, without touching the line lengths
 
 private:
     static constexpr int lines = 8, diffusers = 4, maxTaps = 16;
@@ -60,6 +61,8 @@ private:
     float crossover = 0.1f, modSamples = 0;
     OnePole lowCutL, lowCutR, highCutL, highCutR;
     float lowCutHz = 40.0f, highCutHz = 12000.0f;
+    float decayScale = 1.0f;
+    void updateDecay();
 };
 
 } // namespace liminal::dsp

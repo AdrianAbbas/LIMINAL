@@ -42,15 +42,22 @@ struct PlaceEffects {
     float lowOctaves = 0, highOctaves = 0;   // the filter: low-pass down / high-pass up, in octaves
     float reverbBias = 0;                    // -1..+1: less or more of this instrument in the room
 };
-PlaceEffects placeEffects(Place, int instrument);
+PlaceEffects placeEffects(Place, int instrument, int character = 0);
+
+// Live additions from the macros and evolution (Milestone 5), applied like the place's
+// layer (scaled by Influence and Environment Amount).
+struct EffectLive {
+    float drift = 0, tape = 0, grain = 0, chorus = 0;   // Unreal's share of the effects
+    Colour::Live colour;                                  // Unreal and evolution on the place's processing
+};
 
 class EffectRack {
 public:
     void prepare(double sampleRate, int instrumentIndex);
     void reset();   // also jumps every smoothed setting to its target
     // Once per block. `environmentAmount` is the global Environment Amount; `bpm` the host's.
-    void setSettings(const EffectSettings&, float environmentAmount, double bpm);
-    void setPlace(Place);   // cross-fades the place's processing over 60 ms on a change
+    void setSettings(const EffectSettings&, float environmentAmount, double bpm, const EffectLive& = {});
+    void setPlace(Place, int character = 0);   // cross-fades the place's processing over 60 ms on a change
     // In place. Adds the room send (scaled by `sendFactor`, from Distance) and the place's
     // echo send.
     void process(float* left, float* right, float* roomL, float* roomR, float* echoL, float* echoR, float sendFactor, int n);
@@ -70,6 +77,8 @@ private:
     float envAmount = 1;
     double bpm = 120.0;
     Place place = Place::hospital;
+    int characterNow = 0;
+    EffectLive liveNow;
     bool placeKnown = false;
     Effective target {}, now {};
     float smoothCoef = 0.01f;

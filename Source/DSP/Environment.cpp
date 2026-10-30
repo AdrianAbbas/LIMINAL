@@ -72,7 +72,7 @@ Profile makeGarage() {
     auto& e = p.echo;     // the far wall of the bay
     e.leftMs = 101.0f; e.rightMs = 107.0f; e.feedback = 0.25f; e.level = 0.3f; e.lowPassHz = 1400.0f; e.highPassHz = 70.0f; e.pingPong = false;
     p.wetDb = -1.0f;
-    p.ambienceTrim = 0.3f;
+    p.ambienceTrim = 0.24f;
     return p;
 }
 Profile makePool() {
@@ -199,6 +199,30 @@ float dbGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
 const Profile& profile(Place p) { return profiles[std::size_t(std::clamp(int(p), 0, placeCount - 1))]; }
 
+Profile profileFor(Place place, int index) {
+    Profile p = profile(place);
+    const Character& ch = character(int(place), index);
+    auto& r = p.room;
+    r.rt60Low *= ch.decay;
+    r.rt60High *= ch.decay;
+    r.highCutHz = std::min(18000.0f, r.highCutHz * ch.roomBright);
+    p.wetDb += ch.wetDb;
+    auto& c = p.colour;
+    c.lowPassHz = std::min(22000.0f, c.lowPassHz * ch.lowPass);
+    c.driftCents = std::max(0.0f, c.driftCents + ch.driftCents);
+    c.wowCents = std::max(0.0f, c.wowCents + ch.wowCents);
+    if (ch.chorusMix > 0.0f) c.chorusCents = std::max(c.chorusCents, 8.0f);
+    c.chorusMix = std::clamp(c.chorusMix + ch.chorusMix, 0.0f, 0.9f);
+    if (ch.shiftMix > 0.0f && c.shiftHz == 0.0f) c.shiftHz = 13.0f;
+    c.shiftMix = std::clamp(c.shiftMix + ch.shiftMix, 0.0f, 0.8f);
+    c.wanderPan = std::clamp(c.wanderPan + ch.wanderPan, 0.0f, 1.0f);
+    if (ch.tremolo > 0.0f && c.tremoloHz == 0.0f) c.tremoloHz = 100.0f;
+    c.tremoloDepth = std::clamp(c.tremoloDepth + ch.tremolo, 0.0f, 0.8f);
+    c.dryDb += ch.dryDb;
+    p.ambienceTrim *= ch.bed;
+    return p;
+}
+
 //==============================================================================
 void PitchShift::prepare(double sampleRate) {
     window = float(0.07 * sampleRate);   // 70 ms grains
@@ -311,10 +335,12 @@ void Colour::reset() {
 
 void Colour::updateFilters() {
     const float a = amount;
+    liveLowAt = live.lowOctaves;
+    const double lowPassHz = double(c.lowPassHz) * std::pow(2.0, -double(live.lowOctaves));
     const double nyquistSafe = 0.45 * sr;
     hpL.highPass(10.0 * std::pow(double(c.highPassHz) / 10.0, double(a)), 0.707, sr);
-    lpL.lowPass(std::min(nyquistSafe, 22000.0 * std::pow(double(c.lowPassHz) / 22000.0, double(a))), 0.707 + (c.lowPassQ - 0.707) * a, sr);
-    if (c.steep) lp2L.lowPass(std::min(nyquistSafe, 22000.0 * std::pow(double(c.lowPassHz) / 22000.0, double(a))), 0.707, sr);
+    lpL.lowPass(std::min(nyquistSafe, 22000.0 * std::pow(std::min(1.0, lowPassHz / 22000.0), double(a))), 0.707 + (c.lowPassQ - 0.707) * a, sr);
+    if (c.steep) lp2L.lowPass(std::min(nyquistSafe, 22000.0 * std::pow(std::min(1.0, lowPassHz / 22000.0), double(a))), 0.707, sr);
     else lp2L.identity();
     peakL.peak(c.peakHz, c.peakQ, c.peakDb * a, sr);
     peak2L.peak(c.peak2Hz, c.peak2Q, c.peak2Db * a, sr);
@@ -344,8 +370,13 @@ void Colour::process(float* left, float* right, int n) {
     const float fs = float(sr);
     for (int i = 0; i < n; ++i) {
         if (clock == 0) {   // control rate: filters follow the amount, the drift and the image wander
-            if (std::abs(amount - filtersAt) > 0.0005f) updateFilters();
+            if (std::abs(amount - filtersAt) > 0.0005f || std::abs(live.lowOctaves - liveLowAt) > 0.01f) updateFilters();
             nearness = std::pow(10.0f, c.dryDb * amount / 20.0f);
+            const float k = float(1.0 - std::exp(-32.0 / (0.15 * sr)));
+            live.shiftMix += k * (liveTarget.shiftMix - live.shiftMix);
+            live.wanderPan += k * (liveTarget.wanderPan - live.wanderPan);
+            live.wowCents += k * (liveTarget.wowCents - live.wowCents);
+            live.lowOctaves += k * (liveTarget.lowOctaves - live.lowOctaves);
             driftNow = drift.tick(rng, 0.3f, float(32.0 / sr));
             panNow = pan.tick(rng, 0.25f, float(32.0 / sr));
             clock = 32;
@@ -403,7 +434,7 @@ void Colour::process(float* left, float* right, int n) {
         if (flutterPhase >= 1.0f) flutterPhase -= 1.0f;
         chorusPhase += c.chorusHz / fs;
         if (chorusPhase >= 1.0f) chorusPhase -= 1.0f;
-        const float wow = swing(c.wowCents * a, c.wowHz, sr), flutter = swing(c.flutterCents * a, c.flutterHz, sr),
+        const float wow = swing((c.wowCents + live.wowCents) * a, c.wowHz, sr), flutter = swing(c.flutterCents * a, c.flutterHz, sr),
                     wander = swing(c.driftCents * a, 0.3f, sr);
         const float centre = wow + flutter + wander;
         const float d = centre + wow * sinCycle(wowPhase) + flutter * sinCycle(flutterPhase) + wander * driftNow;
@@ -423,13 +454,14 @@ void Colour::process(float* left, float* right, int n) {
             r = r * (1.0f - 0.45f * m) + cr * 0.65f * m;
         }
         if (++write >= size) write = 0;
-        if (c.shiftMix > 0.0f) {   // a shifted copy: partials no longer in harmonic ratio
-            shiftPhase += c.shiftHz / fs;
+        const float shiftMixNow = std::clamp(c.shiftMix + live.shiftMix, 0.0f, 0.9f);
+        if (shiftMixNow > 0.0f) {   // a shifted copy: partials no longer in harmonic ratio
+            shiftPhase += (c.shiftHz != 0.0f ? c.shiftHz : 13.0f) / fs;
             shiftPhase -= std::floor(shiftPhase);
             float q = shiftPhase + 0.25f;
             if (q >= 1.0f) q -= 1.0f;
             const float cs = sinCycle(q), sn = sinCycle(shiftPhase);
-            const float m = c.shiftMix * a;
+            const float m = shiftMixNow * a;
             l = l * (1.0f - 0.5f * m) + m * shiftL.tick(l, cs, sn);
             r = r * (1.0f - 0.5f * m) + m * shiftR.tick(r, cs, -sn);   // the other way on the right: the sides disagree
         }
@@ -449,8 +481,9 @@ void Colour::process(float* left, float* right, int n) {
         const float mid = 0.5f * (l + r), side = 0.5f * (l - r) * w;
         l = mid + side;
         r = mid - side;
-        if (c.wanderPan > 0.0f) {   // the image will not stay where it is
-            const float p = std::clamp(c.wanderPan * a * panNow * 1.6f, -1.0f, 1.0f);
+        const float wanderNow = std::clamp(c.wanderPan + live.wanderPan, 0.0f, 1.0f);
+        if (wanderNow > 0.0f) {   // the image will not stay where it is
+            const float p = std::clamp(wanderNow * a * panNow * 1.6f, -1.0f, 1.0f);
             const float gl = std::sqrt(0.5f * (1.0f - p)) * 1.41421f, gr = std::sqrt(0.5f * (1.0f + p)) * 1.41421f;
             l *= gl;
             r *= gr;
@@ -483,6 +516,7 @@ void Echo::configure(const Profile::Echo& echo) {
     hpR.setHz(e.highPassHz, sr);
     modSamples = float(std::clamp(e.modMs, 0.0f, 20.0f) * 0.001 * sr);
     apLength = std::clamp(int(0.0173 * sr), 1, int(apLineL.size()) - 1);
+    boostShift = 0;
     shiftL.setSemitones(e.shiftSemis);
     shiftR.setSemitones(e.shiftSemis);
     reset();
@@ -498,6 +532,16 @@ void Echo::reset() {
     write = apWrite = 0;
     modPhase = 0;
     lpL.z = lpR.z = hpL.z = hpR.z = 0;
+}
+
+void Echo::setBoost(float level, float feedback, float shiftSemis) {
+    boostLevel = level;
+    boostFeedback = feedback;
+    if (shiftSemis != boostShift) {
+        boostShift = shiftSemis;
+        shiftL.setSemitones(e.shiftSemis + boostShift);
+        shiftR.setSemitones(e.shiftSemis + boostShift);
+    }
 }
 
 Stereo Echo::tick(Stereo in, float amount) {
@@ -533,12 +577,12 @@ Stereo Echo::tick(Stereo in, float amount) {
         fr = dr - g * vr;
     }
     float backL = fl, backR = fr;
-    if (e.shiftSemis != 0.0f) {   // what comes back is not what was played
+    if (e.shiftSemis + boostShift != 0.0f) {   // what comes back is not what was played
         backL = shiftL.tick(fl);
         backR = shiftR.tick(fr);
     }
-    const float fb = e.feedback;
-    const float level = e.level * amount;
+    const float fb = std::min(0.85f, e.feedback + boostFeedback);
+    const float level = (e.level + boostLevel) * amount;
     const float mono = 0.5f * (in.l + in.r);
     lineL[std::size_t(write)] = (e.pingPong ? mono : in.l) * level + fb * (e.pingPong ? backR : backL);
     lineR[std::size_t(write)] = (e.pingPong ? 0.0f : in.r * level) + fb * (e.pingPong ? backL : backR);
@@ -562,24 +606,55 @@ void EnvironmentChain::prepare(double sampleRate) {
     ambienceCoef = float(1.0 - std::exp(-1.0 / (0.6 * sr)));   // about 2 s to fade across
     killStep = float(1.0 / (0.03 * sr));
     quietLimit = int(sr);
-    configure(current, 1);
+    evo.prepare(sr);
+    configure(current, characterNow, 1, evolutionSeedNow);
 }
 
-void EnvironmentChain::configure(Place place, unsigned seed) {
+void EnvironmentChain::configure(Place place, int characterIndex, unsigned seed, unsigned evolutionSeed) {
     current = place;
-    p = &profile(place);
+    characterNow = std::clamp(characterIndex, 0, characterCount - 1);
+    shaped = profileFor(place, characterNow);
+    p = &shaped;
+    evolutionSeedNow = evolutionSeed;
+    resetEvolution();
+    controlClock = 0;
+    wetLive = wetLiveTarget = 1;
+    ambienceLive = 1;
     echo.configure(p->echo);
     room.configure(p->room, seed + unsigned(place) * 7919u);
     room.reset();
     ambience.trim = p->ambienceTrim;
-    ambience.configure(Ambience::Place(int(place)), seed);
-    shimmer.setSemitones(p->shimmerSemis);
+    ambience.configure(Ambience::Place(int(place)), seed, &character(int(place), characterNow));
+    shimmer.setSemitones(p->shimmerSemis != 0.0f ? p->shimmerSemis : 12.0f);
     shimmer.reset();
     shimmerIn = 0;
     wetGain = dbGain(p->wetDb);
     quietFor = 0;
     killing = false;
     outFade = 1;
+}
+
+void EnvironmentChain::resetEvolution() {
+    controlClock = 0;
+    evo.start(evolutionSeedNow * 2654435761u + unsigned(current) * 97u + unsigned(characterNow) * 13u);
+}
+
+// The macros, Unreal and evolution, applied to the place's shared part once per block.
+void EnvironmentChain::setLive(const Live& l) {
+    liveSettings = l;
+    const auto& r = macroResponse(int(current));
+    const auto& f = unrealFlavour(int(current));
+    const auto& ch = character(int(current), characterNow);
+    const float u = std::clamp(l.macros.unreal, 0.0f, 1.0f) * ch.unreal;
+    // Scale: the room grows or shrinks (decay and level); evolution moves it a little.
+    const float scale = (l.macros.scale - 0.5f) * 2.0f * r.scale;
+    room.setDecayScale(std::pow(2.0f, scale + 0.3f * evo.spatial()));
+    wetLiveTarget = std::pow(10.0f, (4.0f * scale + 1.5f * evo.spatial()) / 20.0f);
+    echo.setBoost(0.8f * u * f.echo, 0.3f * u * f.echo, u * f.echoShift);
+    shimmerExtra = u * f.shimmer;
+    // Activity: more or fewer events; the bed breathes more.
+    ambience.setActivity(std::pow(2.0f, (l.macros.activity - 0.5f) * 3.0f * r.activity));
+    ambienceLive = l.ambienceGain;
 }
 
 void EnvironmentChain::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
@@ -592,23 +667,31 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         ebufL[std::size_t(i)] = echoInL[i] * live;
         ebufR[std::size_t(i)] = echoInR[i] * live;
     }
+    const auto& ch = character(int(current), characterNow);
+    const float activity = std::pow(2.0f, (liveSettings.macros.activity - 0.5f) * 2.0f * macroResponse(int(current)).activity);
     for (int i = 0; i < n; ++i) {
+        if (--controlClock <= 0) {   // the place evolves (64-sample control rate)
+            controlClock = 64;
+            evo.tick(float(64.0 / sr), liveSettings.evolutionRate, ch.evolutionSpeed, ch.evolutionDepth, activity, liveSettings.frozen);
+            if (evo.takeDisturbance() && liveTarget > 0.0f) ambience.disturb();
+        }
+        wetLive += 0.0005f * (wetLiveTarget - wetLive);
         amount += amountCoef * (amountTarget - amount);
         if (std::abs(amountTarget - amount) < 1.0e-3f) amount = amountTarget;
         ambienceFade += ambienceCoef * (liveTarget - ambienceFade);
         if (killing) outFade = std::max(0.0f, outFade - killStep);
-        const float ag = ambienceGain[i] * ambienceFade;
+        const float ag = ambienceGain[i] * ambienceFade * ambienceLive * (1.0f + 0.2f * evo.spectral());
         const auto amb = ambience.tick();
         const Stereo send { sbufL[std::size_t(i)], sbufR[std::size_t(i)] };
         const Stereo echoed = echo.tick({ ebufL[std::size_t(i)], ebufR[std::size_t(i)] }, 1.0f);
         const Stereo wet = room.tick({ send.l + 0.5f * echoed.l + amb.send.l * ag + shimmerIn, send.r + 0.5f * echoed.r + amb.send.r * ag + shimmerIn });
-        if (p->shimmerFeedback > 0.0f)   // the tail, shifted up, fed back in: it climbs as it fades
-            shimmerIn = p->shimmerFeedback * amount * shimmer.tick(0.5f * (wet.l + wet.r));
+        if (p->shimmerFeedback + shimmerExtra > 0.0f)   // the tail, shifted up, fed back in: it climbs as it fades
+            shimmerIn = std::min(0.6f, p->shimmerFeedback + shimmerExtra) * amount * shimmer.tick(0.5f * (wet.l + wet.r));
         const float sp = space[i];
         const float keep = 1.0f - 0.45f * sp;
         const float ambL = amb.dry.l * ag, ambR = amb.dry.r * ag;
-        const float l = (keep * ambL + echoed.l + sp * wetGain * wet.l) * outFade;
-        const float r = (keep * ambR + echoed.r + sp * wetGain * wet.r) * outFade;
+        const float l = (keep * ambL + echoed.l + sp * wetGain * wetLive * wet.l) * outFade;
+        const float r = (keep * ambR + echoed.r + sp * wetGain * wetLive * wet.r) * outFade;
         outL[i] += l;
         outR[i] += r;
         ambienceOut[i] += 0.5f * (ambL * ambL + ambR * ambR);
@@ -617,16 +700,18 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
 }
 
 //==============================================================================
-void Environments::prepare(double sampleRate, Place initial) {
+void Environments::prepare(double sampleRate, Place initial, int character, unsigned seed) {
+    evolutionSeed = seed;
     for (auto& c : chains) c.prepare(sampleRate);
     changes = 0;
     active = 0;
     pending = -1;
-    chains[0].configure(initial, 1);
+    chains[0].configure(initial, character, 1, evolutionSeed);
     chains[0].setAmount(amount);
     chains[0].snapAmount();
     chains[0].setLive(true);
     chains[0].snapLive();
+    chains[0].setLive(liveNow);
     chains[1].setLive(false);
     chains[1].snapLive();
     running = { true, false };
@@ -637,27 +722,36 @@ void Environments::setAmount(float a) {
     for (auto& c : chains) c.setAmount(amount);
 }
 
-void Environments::select(Place place) {
-    if (pending >= 0) { pending = int(place); return; }   // starts once the other chain is clear
-    if (place == chains[std::size_t(active)].place()) return;
+void Environments::setLive(const EnvironmentChain::Live& l) {
+    liveNow = l;
+    for (int c = 0; c < 2; ++c)
+        if (running[std::size_t(c)]) chains[std::size_t(c)].setLive(l);
+}
+
+void Environments::select(Place place, int character) {
+    if (pending >= 0) { pending = int(place); pendingCharacter = character; return; }   // starts once the other chain is clear
+    const auto& now = chains[std::size_t(active)];
+    if (place == now.place() && character == now.characterIndex()) return;
     const int other = 1 - active;
     if (running[std::size_t(other)] && !chains[std::size_t(other)].silent()) {
         chains[std::size_t(other)].kill();   // still ringing from an earlier change: fade it quickly first
         pending = int(place);
+        pendingCharacter = character;
         return;
     }
-    start(place);
+    start(place, character);
 }
 
-void Environments::start(Place place) {
+void Environments::start(Place place, int character) {
     const int other = 1 - active;
     auto& next = chains[std::size_t(other)];
-    next.configure(place, ++changes + 1);
+    next.configure(place, character, ++changes + 1, evolutionSeed);
     next.setAmount(amount);
     next.snapAmount();
     next.setLive(false);
     next.snapLive();
     next.setLive(true);   // fades in
+    next.setLive(liveNow);
     chains[std::size_t(active)].setLive(false);   // stops hearing the instruments; its tail rings out
     running[std::size_t(other)] = true;
     active = other;
@@ -667,13 +761,18 @@ void Environments::process(const float* sendL, const float* sendR, const float* 
                            const float* space, float* outL, float* outR, float* ambienceOut, int n) {
     for (int c = 0; c < 2; ++c)
         if (running[std::size_t(c)]) chains[std::size_t(c)].process(sendL, sendR, echoInL, echoInR, ambienceGain, space, outL, outR, ambienceOut, n);
+}
+
+// Retiring a faded chain and starting a waiting place happen only here, on the processor's
+// fixed control grid, so they land on the same sample whatever the host's block size.
+void Environments::maintain() {
     const int other = 1 - active;
     auto& old = chains[std::size_t(other)];
     if (running[std::size_t(other)] && (old.silent() || old.killed())) running[std::size_t(other)] = false;
     if (pending >= 0 && !running[std::size_t(other)]) {
         const auto place = Place(pending);
         pending = -1;
-        if (place != chains[std::size_t(active)].place()) start(place);
+        if (place != chains[std::size_t(active)].place() || pendingCharacter != chains[std::size_t(active)].characterIndex()) start(place, pendingCharacter);
     }
 }
 

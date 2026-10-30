@@ -8,6 +8,7 @@
 //
 // `tick` returns the dry sound and, separately, what goes into the room (distant events
 // are mostly room). Deterministic for a given seed; fixed storage, no allocation.
+#include "DSP/Characters.h"
 #include "DSP/Filters.h"
 #include "DSP/Instrument.h"
 #include <array>
@@ -21,7 +22,9 @@ public:
                       elevator, murmur, rail, gust, clunk, seek, chirp, swell, phantom };
 
     void prepare(double sampleRate);
-    void configure(Place, unsigned seed);   // also resets
+    void configure(Place, unsigned seed, const Character* = nullptr);   // also resets
+    void setActivity(float rate) { activity = std::clamp(rate, 0.1f, 8.0f); }   // events x rate (Activity macro)
+    void disturb();   // an evolution disturbance: one of the place's events, now, louder
     void reset();
     struct Out { Stereo dry, send; };
     Out tick();
@@ -94,7 +97,8 @@ private:
     std::array<Wander, clusterTones> clusterWander {};
     float bedSend = 0.3f;
 
-    std::array<Schedule, 5> schedules {};
+    float activity = 1;
+    std::array<Schedule, 6> schedules {};
     int scheduleCount = 0;
     std::array<Event, 12> events {};
 };

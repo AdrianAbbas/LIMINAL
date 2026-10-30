@@ -17,6 +17,7 @@
 // while the new one fades in. Buffers are allocated in prepare(); switching never
 // allocates.
 #include "DSP/Ambience.h"
+#include "DSP/Characters.h"
 #include "DSP/Filters.h"
 #include "DSP/Space.h"
 #include <array>
@@ -67,6 +68,8 @@ struct Profile {
 };
 
 const Profile& profile(Place);
+// The place as a Character changes it (Milestone 5).
+Profile profileFor(Place, int character);
 
 // A granular pitch shifter: two read heads sweeping a short delay with crossfading windows.
 class PitchShift {
@@ -106,9 +109,14 @@ public:
     float currentAmount() const { return amount; }
     void snapAmount() { amount = amountTarget; updateFilters(); }
     void process(float* left, float* right, int n);
+    // Live changes on top of the profile (Unreal, evolution), scaled by the amount like the rest.
+    struct Live { float shiftMix = 0, wanderPan = 0, wowCents = 0, lowOctaves = 0; };
+    void setLive(const Live& l) { liveTarget = l; }
 
 private:
     void updateFilters();
+    Live live, liveTarget;   // `live` glides to the target (~150 ms) so nothing jumps
+    float liveLowAt = 0;
     double sr = 48000.0;
     Profile::Colour c;
     float amount = 0, amountTarget = 0, amountCoef = 0.001f, filtersAt = -1;
@@ -136,8 +144,11 @@ public:
     void configure(const Profile::Echo&);
     void reset();
     Stereo tick(Stereo in, float amount);
+    // Unreal: louder, longer, pitch-shifted repeats on top of the profile.
+    void setBoost(float level, float feedback, float shiftSemis);
 
 private:
+    float boostLevel = 0, boostFeedback = 0, boostShift = 0;
     double sr = 48000.0;
     Profile::Echo e;
     std::vector<float> lineL, lineR;
@@ -154,8 +165,20 @@ private:
 class EnvironmentChain {
 public:
     void prepare(double sampleRate);
-    void configure(Place, unsigned seed);   // resets everything
+    void configure(Place, int character, unsigned seed, unsigned evolutionSeed);   // resets everything
     Place place() const { return current; }
+    int characterIndex() const { return characterNow; }
+    // Per block: the macros, the evolution settings, Unreal (Milestone 5).
+    struct Live {
+        Macros macros;
+        float evolutionRate = 0.4f;
+        bool frozen = false;
+        float ambienceGain = 1;   // Presence: the place's sounds recede as the instruments come near
+    };
+    void setLive(const Live&);
+    void resetEvolution();
+    void resetEvolution(unsigned seed) { evolutionSeedNow = seed; resetEvolution(); }
+    const Evolution& evolution() const { return evo; }
     // Adds into out (echo + room + ambience). `send` feeds the room, `echoIn` the place's
     // echo; this chain fades its inputs in and out for cross-fades between places.
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
@@ -173,12 +196,19 @@ public:
 private:
     double sr = 48000.0;
     Place current = Place::hospital;
-    const Profile* p = nullptr;
+    int characterNow = 0;
+    Profile shaped;              // the place as its Character shapes it
+    const Profile* p = &shaped;
+    Live liveSettings;
+    Evolution evo;
+    unsigned evolutionSeedNow = 1;
+    int controlClock = 0;
+    float wetLive = 1, wetLiveTarget = 1, ambienceLive = 1;
     Echo echo;
     Space room;
     Ambience ambience;
     PitchShift shimmer;
-    float shimmerIn = 0;
+    float shimmerIn = 0, shimmerExtra = 0;
     float wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
     float live = 1, liveTarget = 1, liveCoef = 0.001f, ambienceFade = 1, ambienceCoef = 0.0001f;
     int quietFor = 0, quietLimit = 48000;
@@ -190,8 +220,13 @@ private:
 // Two chains and the cross-fade between them.
 class Environments {
 public:
-    void prepare(double sampleRate, Place initial);
-    void select(Place);         // called once per block with the parameter's value
+    void prepare(double sampleRate, Place initial, int character = 0, unsigned evolutionSeed = 1);
+    void select(Place, int character = 0);   // called once per block with the parameters' values
+    void setLive(const EnvironmentChain::Live&);
+    void maintain();   // call on a fixed control grid (between process calls)
+    void resetEvolution() { chains[std::size_t(active)].resetEvolution(evolutionSeed); }
+    void setEvolutionSeed(unsigned s) { evolutionSeed = s; }
+    const EnvironmentChain& current() const { return chains[std::size_t(active)]; }
     void setAmount(float a);
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
                  const float* space, float* outL, float* outR, float* ambienceOut, int n);
@@ -199,13 +234,15 @@ public:
     bool fading() const { return !chains[std::size_t(1 - active)].silent(); }
 
 private:
-    void start(Place);
     std::array<EnvironmentChain, 2> chains;
     std::array<bool, 2> running { true, false };
     int active = 0;
     int pending = -1;   // a place waiting for the other chain to finish its quick fade
+    int pendingCharacter = 0;
     float amount = 1;
-    unsigned changes = 0;
+    unsigned changes = 0, evolutionSeed = 1;
+    EnvironmentChain::Live liveNow;
+    void start(Place, int character);
 };
 
 } // namespace liminal::dsp

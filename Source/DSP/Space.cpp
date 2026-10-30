@@ -26,9 +26,6 @@ void Space::configure(const Shape& s, unsigned seed) {
     for (int i = 0; i < lines; ++i) {
         auto& d = delays[std::size_t(i)];
         d.length = std::clamp(int(lengthsMs[i] * size * 0.001 * sr), 8, int(d.data.size()) - 4);
-        const double seconds = double(d.length) / sr;
-        d.gLow = float(std::pow(10.0, -3.0 * seconds / std::max(0.1f, s.rt60Low)));
-        d.gHigh = float(std::pow(10.0, -3.0 * seconds / std::max(0.05f, s.rt60High)));
         d.rate = 0.13f + 0.07f * float(i);
         d.phase = float(i) / float(lines);
     }
@@ -36,6 +33,7 @@ void Space::configure(const Shape& s, unsigned seed) {
         auto& a = diffuse[std::size_t(i)];
         a.length = std::clamp(int(diffuserMs[i] * std::sqrt(size) * 0.001 * sr), 2, int(a.data.size()) - 1);
     }
+    updateDecay();
     diffuseCoef = 0.75f * std::clamp(s.diffusion, 0.0f, 1.0f);
     crossover = float(1.0 - std::exp(-6.283185307 * s.crossoverHz / sr));
     modSamples = float(std::clamp(s.modulation, 0.0f, 1.0f) * 0.0012 * sr);   // up to 1.2 ms
@@ -84,6 +82,21 @@ void Space::configure(const Shape& s, unsigned seed) {
     lowCutR.setHz(lowCutHz, sr);
     highCutL.setHz(highCutHz, sr);
     highCutR.setHz(highCutHz, sr);
+}
+
+void Space::updateDecay() {
+    for (auto& d : delays) {
+        const double seconds = double(d.length) / sr;
+        d.gLow = float(std::pow(10.0, -3.0 * seconds / std::max(0.1f, shape.rt60Low * decayScale)));
+        d.gHigh = float(std::pow(10.0, -3.0 * seconds / std::max(0.05f, shape.rt60High * decayScale)));
+    }
+}
+
+void Space::setDecayScale(float scale) {
+    scale = std::clamp(scale, 0.25f, 4.0f);
+    if (std::abs(scale - decayScale) < 0.005f * decayScale) return;
+    decayScale = scale;
+    updateDecay();
 }
 
 void Space::reset() {

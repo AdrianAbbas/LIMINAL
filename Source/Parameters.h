@@ -130,6 +130,17 @@ inline const char* syncNames[] { "Free", "1/16", "1/8", "1/8 dotted", "1/4", "1/
 inline constexpr float syncBeats[] { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 4.0f };
 inline const char* orderNames[] { "Standard", "Texture first", "Echo into texture" };
 } // namespace fx
+// Milestone 5: Character, evolution, macros, scenes.
+inline constexpr const char* character = "character";              // 0..2: the place's three Characters
+inline constexpr const char* evolution = "evolution";              // evolution rate
+inline constexpr const char* evolutionFreeze = "evolution_freeze";
+inline constexpr const char* evolutionSeed = "evolution_seed";
+inline constexpr const char* presence = "macro_presence";
+inline constexpr const char* scale = "macro_scale";
+inline constexpr const char* activity = "macro_activity";
+inline constexpr const char* unreal = "macro_unreal";
+inline constexpr const char* sceneOn = "scene_on";                 // play the morph between scenes A and B
+inline constexpr const char* sceneMorph = "scene_morph";           // 0 = A, 1 = B
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
 
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence

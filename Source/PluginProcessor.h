@@ -49,9 +49,19 @@ public:
         std::atomic<float> instrument { 0 }, ambience { 0 }, output { 0 }; // RMS, linear
         std::atomic<int> voices { 0 };
         std::atomic<int> place { 0 };   // the environment being heard
+        std::atomic<int> character { 0 };
+        std::atomic<float> activity { 0 };   // evolution movement + events (0..1), for the interface
+        std::atomic<int> events { 0 };      // counts up on each ambience disturbance
     } meters;
 
-    static constexpr int stateVersion = 1;
+    // Scenes A/B (Milestone 5). Storing is done on the message thread; the audio thread
+    // reads the stored values (one atomic per parameter).
+    void storeScene(int which);              // the current settings become scene A (0) or B (1)
+    bool sceneStored(int which) const { return stored[std::size_t(which & 1)].load(); }
+    void requestEvolutionReset() { evolutionResetRequest.store(true); }
+    const dsp::EnvironmentChain& placeNow() const { return environments.current(); }   // audio-thread state (tests)
+
+    static constexpr int stateVersion = 2;   // 2: scenes A/B saved alongside the parameters
 
 private:
     struct Smooth {
@@ -71,6 +81,7 @@ private:
         std::atomic<float>* distance = nullptr;   // optional
         dsp::Distance stage;
         dsp::EffectRack rack;                                           // Milestone 3
+        dsp::EffectSettings settings;
         std::array<std::atomic<float>*, params::fx::count> fx {};      // in params::fx::all order
         Smooth gain;
         bool running = false;
@@ -85,6 +96,11 @@ private:
     dsp::EffectSettings effectSettings(const Slot&) const;
     double hostBpm = 120.0;
     void renderSegment(float* left, float* right, int n);
+    void controlTick();
+    static constexpr int controlPeriod = 64;
+    std::uint64_t samplePosition = 0;
+    dsp::EnvironmentChain::Live liveNow;
+    dsp::EffectLive effectLive;
     static constexpr int chunk = 256;
 
     std::atomic<float>* power = nullptr;
@@ -111,6 +127,26 @@ private:
     std::atomic<float>* environmentChoice = nullptr;
     std::atomic<float>* environmentAmount = nullptr;
     dsp::Place selectedPlace() const;
+    int selectedCharacter() const;
+    // Every parameter the DSP reads goes through this mirror: the live value, or, while Scene
+    // Morph is on, the morph between the stored scenes.
+    std::atomic<float>* mirrorOf(const juce::String& id);
+    void updateMirror();
+    struct Mirrored { juce::RangedAudioParameter* parameter; std::atomic<float>* raw; bool discrete; int role; int partner; };
+    std::vector<Mirrored> mirrored;
+    std::unique_ptr<std::atomic<float>[]> mirror;
+    std::array<std::unique_ptr<std::atomic<float>[]>, 2> scenes;
+    std::array<std::atomic<bool>, 2> stored { false, false };
+    std::atomic<float>* sceneOn = nullptr;
+    std::atomic<float>* sceneMorph = nullptr;
+    std::atomic<float>* characterChoice = nullptr;
+    std::atomic<float>* evolutionRate = nullptr;
+    std::atomic<float>* evolutionFreeze = nullptr;
+    std::atomic<float>* evolutionSeed = nullptr;
+    std::atomic<float>* macroParams[4] {};
+    std::atomic<bool> evolutionResetRequest { false };
+    float lastSeed = -1;
+    Smooth presenceDry, presenceRoom;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
     float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};
     float ambienceGains[chunk] {}, spaces[chunk] {}, mixL[chunk] {}, mixR[chunk] {}, ambiencePower[chunk] {};
