@@ -140,8 +140,8 @@ jobs:
         run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs
       - name: Listening render (each instrument, in the corridor, then dry)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m1b-instruments.wav
-      - name: Listening render (the same phrase in each environment)
-        run: build/LiminalTests_artefacts/Release/LiminalTests --render-places build/test-logs/m2a-environments.wav
+      - name: Listening render (the same phrase through all ten environments)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render-places build/test-logs/m2b-environments.wav
       - name: Upload test logs, editor snapshot and listening render
         if: always()
         uses: actions/upload-artifact@v4

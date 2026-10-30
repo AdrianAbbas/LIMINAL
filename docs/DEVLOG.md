@@ -14,10 +14,10 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
   - [x] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
 - [x] **1b — Empty Choir, Lost Music Box, Hollow Drone** (2026-10-30) — quick versions by request; strip/solo/INSTRUMENTS button
 - [x] **2a — Five environments: hospital, mall, school, garage, pool** (2026-10-30) — *waiting for the developer's GarageBand listening check*
-- [ ] **2b — Wider differences between places, five more environments, ten-place listening render** (2026-10-30)
+- [x] **2b — Wider differences between places, five more environments, ten-place listening render** (2026-10-30)
   - [x] Part 1: stronger processing signature per place (resonators, notches, frequency/pitch shifting, tremolo, wandering image, modulated/diffused/pitched echoes, tunnel and grid reflections); the first five widened and re-measured (pushed `[skip ci]`)
   - [x] Part 2: Empty Hotel, Deserted Subway Station, Empty Supermarket, Endless Office, Impossible Room (+ PLACE drawer), all ten tuned apart (271 checks pass; piano closest pair mall / subway 3.79 > piano Distance 3.35)
-  - [ ] Part 3: listening render through all ten places; DEVLOG section; push **without** `[skip ci]`
+  - [x] Part 3: listening render through all ten places; DEVLOG section; push **without** `[skip ci]`
 - [ ] **3 — Per-instrument effects with environment defaults and Environment influence** (push without `[skip ci]` when done)
 - [ ] **5 — 30 Characters (clearly audible), evolution, Scene A/B morphing, four macros** (push without `[skip ci]`)
 - [ ] **6 — Preset browser + factory presets, MIDI performance details, WAV export, Eco/Standard/High quality, complete state** (push without `[skip ci]`)
@@ -451,3 +451,82 @@ each place's own sounds should fade in over a couple of seconds. Try **Environme
 Amount** at 0 to hear the instrument untouched. For 1b: open **INSTRUMENTS**, switch on
 the Empty Choir, Lost Music Box and Hollow Drone; the strip's top line lists what is on —
 click a name to solo it, click again to hear all.
+
+---
+
+## Milestone 2b — wider differences, five more places, ten-place render (2026-10-30)
+
+Developer's request: switching place must change an instrument more than any instrument
+control, for **every** pair of places (including hospital vs garage); each place gets a
+stronger, more characteristic signature (filtering, resonances, pitch, echoes, room,
+width, distance) so they can be told apart blind; then the remaining five places, and
+a listening render through all ten. Every number per place: `docs/ENVIRONMENTS.md`.
+
+### What changed
+
+| | |
+|---|---|
+| `DSP/Environment` | New processing stages: steep low-pass, a second resonance, tuned comb resonators (or a moving notch comb), single-sideband frequency shifter (`FrequencyShift`, Hilbert allpass pair), mains tremolo, a wandering stereo image; echoes that waver, smear (allpass in the loop) or come back pitch-shifted (`PitchShift`, two-grain); room shimmer (the tail pitch-shifted back into the room). The first five places re-voiced and pushed apart; five new profiles. |
+| `DSP/Space` | Two reflection patterns: **tunnel** (ever later, drifting towards one side) and **grid** (exactly even, repeating); reflections may grow (`reflectionDecay` > 1, the impossible room). Reflection window 160 → 400 ms. |
+| `DSP/Ambience` | Hotel (lift with relay clunks and spin-up, voices murmuring through a wall, muffled doors), subway (singing rails passing with a far rumble, tunnel gusts, rectifier hum, relay clicks), supermarket (a compressor that cycles itself on and off, cold-case fan tone, till beeps, cart rattles), office (120 Hz transformer hum, coil whine, drive seeks, electronic chirps), impossible room (a cluster of inharmonic tones whose balance never settles, reversed swells, phantom beating tones). The old five places' event sequences are unchanged (new generators only draw random numbers where used). |
+| Parameters | `environment` gains five entries at the end (indices 0–4 keep their meaning). |
+| Editor | The PLACE drawer lists all ten in compact rows (name + two-word summary); the hovered (or selected) place's description sits under the list. Colour casts for the five new places. |
+| Tests | Place-vs-control now covers **all six instruments and all their controls** (enforced for the piano; reported for the others — `MET`/`MISS` lines, `scripts/run-tests-parallel.sh` prints them). Each place's phrase octave profile is printed. Editor snapshots `editor-place-1..10.png`. |
+| Listening render | `m2b-environments.wav` (CI step renamed): the same piano + quiet choir phrase through all ten places in order (12 s each), then place changes while a chord rings: hospital → pool → garage → impossible room (134 s). |
+
+### Tested (Linux, this container) — 271 checks pass, 0 fail
+
+- **Closest pair, piano (same metric as 2a):** 2a's closest pair was hospital / garage
+  **2.84**. Now, with ten places, the closest pair is **mall / subway 3.79**; hospital /
+  garage is **5.41**. Piano controls swept end to end (in the hospital): Distance 3.35 (the
+  strongest), the rest lower. **Every one of the 45 pairs changes the piano more than any
+  piano control** (enforced).
+- **Other instruments (closest pair vs that instrument's strongest control):**
+  synth pool / office 3.89 vs Warmth 3.56 — **met**; glass school / subway 2.86 vs
+  Brightness 4.07; choir supermarket / office 3.29 vs Breath 4.79; music box school /
+  supermarket 3.05 vs Decay 5.66; drone pool / impossible 2.55 vs Harmonics 6.14 — **missed,
+  report-only**. These controls are drastic by design (sine → saw, a pluck → a long ring,
+  no breath → all breath); the *average* pair of places still beats them, and every pair
+  of places is clearly different for every instrument (closest 2.55, where 1 = clearly
+  audible). Two rounds of tuning on the first five plus several on all ten; kept
+  report-only per the working rules.
+- The phrase's level across the ten places: -29.8 .. -24.2 dBFS (within 6 dB: loudness
+  is not the difference). Tail one second after the chord ranges from -65 dB (hotel) to
+  -7 dB (impossible room); L/R correlation from 0.98 (hotel) to -0.19 (impossible room).
+- **Ambience, 30 s each:** -38.2 .. -43.9 dBFS; never drops out; events in every place
+  (2–25 onsets); envelope repetition at 2–12 s ≤ 0.53 (no loops); closest pair of ambience
+  spectra pool / impossible 3.1 dB RMS across octaves (test needs > 3).
+- Switching 16 times while playing: no allocation, no clicks; block-size difference within
+  -80 dB in all ten places; Environment Amount 0 still transparent.
+- Report-only CPU (x86 container, one core): 16 piano notes during a change of place
+  ~16 %; 16 notes on all six instruments ~26 %.
+- Listening render measured, **not listened to**: 134 s, peak -6.0 dBFS, the ten 12 s
+  sections between -32.3 and -27.0 dBFS RMS.
+- Editor: drawer snapshot with ten places looked at by eye.
+
+### Not verified here
+
+Everything macOS (this push runs CI) and listening. The numbers say the places are far
+apart; whether each *sounds like* its place is the developer's call.
+
+### Decisions (recorded instead of asking)
+
+- **Same distance metric as 2a**, so "2.8 → 3.8 with twice as many places" compares like
+  for like. No new dimensions were added to make numbers pass.
+- **Controls measured in the hospital** (as in 2a). A heavily filtered place shrinks what
+  brightness controls do; that is the environment dominating, as asked.
+- **School is mono and hotel nearly mono** (narrow hallway; through a wall); the mall and
+  impossible room are the widest. Width is one of the four things that keep ten places apart.
+- **Impossible room**: the left and right channels are frequency-shifted in opposite
+  directions (they disagree about pitch), echoes climb by tritones, the tail shimmers an
+  octave up, reflections grow instead of fading.
+- The supermarket's mains tremolo (100 Hz, 35 %) is a "low electrical modulation"
+  roughness, not a rhythmic tremolo.
+
+### Known limitations
+
+- The report-only misses above.
+- The impossible room's freq-shifted, shimmering tail is long (RT 11 s) — with Space high it
+  can build up under dense playing; Space or Environment Amount tame it.
+- Hotel is very muffled (700 Hz, 24 dB/oct) on purpose; Environment Amount brings the
+  instrument back towards clear.

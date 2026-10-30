@@ -612,8 +612,9 @@ int renderPhrase(const juce::String& path) {
     return 0;
 }
 
-// The same phrase (piano, then the piano with the choir) in each place, ambience on,
-// 12 s per place, with a place change mid-phrase at the end. Listening aid; CI uploads it.
+// The same phrase (piano with a quiet choir) through all ten places in order, ambience on,
+// 12 s per place, then place changes while a chord rings (hospital -> pool -> garage ->
+// impossible room). Listening aid; CI uploads it.
 int renderPlaces(const juce::String& path) {
     Signal out;
     for (int place = 0; place < dsp::placeCount; ++place) {
@@ -625,21 +626,23 @@ int renderPlaces(const juce::String& path) {
         out.first.insert(out.first.end(), part.first.begin(), part.first.end());
         out.second.insert(out.second.end(), part.second.begin(), part.second.end());
     }
-    {   // Changing place while a chord rings: hospital -> pool -> garage.
+    {   // Changing place while a chord rings: hospital -> pool -> garage -> impossible room.
         auto rig = rigIn(0);
         const double t = rig->time;
         std::vector<Event> events;
         for (int note : { 48, 55, 60, 64 }) {
             events.push_back({ t + 0.2, on(note, 80) });
-            events.push_back({ t + 5.0, off(note) });
+            events.push_back({ t + 7.0, off(note) });
         }
         events.push_back({ t + 0.2, pedal(true) });
         const auto a = rig->render(2.0, events);
         setPlace(*rig, 4);
         const auto b = rig->render(3.0, events);
         setPlace(*rig, 3);
-        const auto c = rig->render(5.0, events);
-        for (const auto* part : { &a, &b, &c }) {
+        const auto c = rig->render(3.0, events);
+        setPlace(*rig, 9);
+        const auto d = rig->render(6.0, events);
+        for (const auto* part : { &a, &b, &c, &d }) {
             out.first.insert(out.first.end(), part->first.begin(), part->first.end());
             out.second.insert(out.second.end(), part->second.begin(), part->second.end());
         }
