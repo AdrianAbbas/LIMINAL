@@ -25,6 +25,12 @@ LiminalProcessor::LiminalProcessor()
     const char* synthIds[] { params::synthDetune, params::synthWarmth, params::synthDrift, params::synthAttack,
                              params::synthRelease, params::synthWidth, params::synthGlide, params::synthGlideTime };
     for (int i = 0; i < 8; ++i) synthSettings[i] = raw(synthIds[i]);
+    slots[2].instrument = &glass;
+    slots[2].on = raw(params::glassOn);
+    slots[2].level = raw(params::glassLevel);
+    slots[2].distance = raw(params::glassDistance);
+    const char* glassIds[] { params::glassFragility, params::glassBrightness, params::glassResonance, params::glassDetune, params::glassDecay };
+    for (int i = 0; i < 5; ++i) glassSettings[i] = raw(glassIds[i]);
 }
 
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -103,6 +109,13 @@ void LiminalProcessor::updateSettings() {
     f.glide = synthSettings[6]->load() > 0.5f;
     f.glideTime = synthSettings[7]->load();
     synth.setSettings(f);
+    dsp::GlassMemories::Settings g;
+    g.fragility = glassSettings[0]->load();
+    g.brightness = glassSettings[1]->load();
+    g.resonance = glassSettings[2]->load();
+    g.detune = glassSettings[3]->load();
+    g.decay = glassSettings[4]->load();
+    glass.setSettings(g);
 }
 
 void LiminalProcessor::renderSegment(float* left, float* right, int n) {

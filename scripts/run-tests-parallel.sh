@@ -9,8 +9,8 @@ logs="${2:-build/test-logs}"
 mkdir -p "$logs"
 
 "$tests" --only parameters,smoke,power,state > "$logs/1-core.txt" 2>&1 &
-"$tests" --only midi,piano,synth > "$logs/2-midi.txt" 2>&1 &
-"$tests" --only levels,rates,determinism > "$logs/3-levels.txt" 2>&1 &
+"$tests" --only midi,piano,synth,glass > "$logs/2-midi.txt" 2>&1 &
+"$tests" --only levels,rates,determinism,instruments > "$logs/3-levels.txt" 2>&1 &
 "$tests" --only editor --snapshot "$logs/editor.png" > "$logs/4-editor.txt" 2>&1 &
 wait
 "$tests" --only realtime > "$logs/5-cpu.txt" 2>&1

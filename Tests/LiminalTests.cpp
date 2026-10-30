@@ -552,6 +552,8 @@ int main(int argc, char** argv) {
     if (run("determinism")) testDeterminism(s);
     if (run("piano")) testPiano(s);
     if (run("synth")) testSynth(s);
+    if (run("glass")) testGlass(s);
+    if (run("instruments")) testInstruments(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

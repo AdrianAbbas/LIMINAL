@@ -63,6 +63,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     layout.add(amount(synthWidth, "Synth Width", 0.5f));
     layout.add(toggle(synthGlide, "Synth Glide", false));
     layout.add(seconds(synthGlideTime, "Synth Glide Time", 0.01f, 2.0f, 0.2f, 0.12f));
+    // Glass Memories
+    layout.add(toggle(glassOn, "Glass On", false));
+    layout.add(level(glassLevel, "Glass Level", 0.0f));
+    layout.add(amount(glassFragility, "Glass Fragility", 0.4f));
+    layout.add(amount(glassBrightness, "Glass Brightness", 0.5f));
+    layout.add(amount(glassResonance, "Glass Resonance", 0.3f));
+    layout.add(amount(glassDetune, "Glass Detune", 0.2f));
+    layout.add(amount(glassDecay, "Glass Decay", 0.6f));
+    layout.add(amount(glassDistance, "Glass Distance", 0.0f));
     return layout;
 }
 

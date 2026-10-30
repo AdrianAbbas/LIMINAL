@@ -34,6 +34,16 @@ inline constexpr const char* synthWidth = "synth_width";
 inline constexpr const char* synthGlide = "synth_glide";          // off by default
 inline constexpr const char* synthGlideTime = "synth_glidetime";
 
+// Glass Memories (Milestone 1a)
+inline constexpr const char* glassOn = "glass_on";
+inline constexpr const char* glassLevel = "glass_level";
+inline constexpr const char* glassFragility = "glass_fragility";
+inline constexpr const char* glassBrightness = "glass_brightness";
+inline constexpr const char* glassResonance = "glass_resonance";
+inline constexpr const char* glassDetune = "glass_detune";
+inline constexpr const char* glassDecay = "glass_decay";
+inline constexpr const char* glassDistance = "glass_distance";
+
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence
 inline constexpr float maxDb = 6.0f;
 

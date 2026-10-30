@@ -89,3 +89,40 @@ and "best VC drive approach" (https://synth-diy.org/pipermail/synth-diy/2022-Feb
 Analogue Systems RS-100 manual (https://www.analoguesystems.co.uk/images/AS_manuals/RS100S.pdf);
 SoundForce Chorus 6 (https://modulargrid.net/e/soundforce-chorus-6-); Feedback Chorus
 (https://www.pluginboutique.com/products/17837-Feedback-Chorus).
+
+---
+
+## Glass Memories
+
+**Model** (`dsp::GlassMemories`): modal synthesis of a struck glass, with an optional
+rubbed-rim layer.
+
+| Aspect | What the model does | Basis |
+|---|---|---|
+| Mode ratios | (2,0) … (7,0) bending modes at **1 : 1.86 : 3.25 : 4.95 : 7.0 : 9.35** of the played pitch | A modal struck-glass model uses 1206, 2240, 3919, 5965 Hz = 1 : 1.86 : 3.25 : 4.95 *(web: ChucK book listing 7.10, via search summary; the page itself is blocked here)*. Rossing's glass harmonica: the (5,0) mode at 5997 Hz sits next to the 5th harmonic of (2,0) (5990 Hz), and (6,0) at 8423 Hz next to its 7th (8380 Hz), i.e. (5,0) ≈ 5.0 and (6,0) ≈ 7.04 x (2,0) *(web: Rossing, "Acoustics of the glass harmonica", JASA 95(2) 1994, 1106–1111, via summary)* — consistent with 4.95 and 7.0. The (7,0) value 9.35 is extrapolated from the spacing *(estimate)*. WORLDBUILDER's table (1 : 2.32 : 4.25 : 6.63, from a Csound table, unverified) was **not** used: it disagrees with both sources. "The ratios of the resonance frequencies are different for every glass" *(web: BU GK-12 wine glass page)* — hence the per-strike irregularity with Fragility. Test: measured 1.860, 3.250, 4.951. |
+| Doublets | Every mode is two modes 0.08–1.5 Hz apart (scaled by `sqrt(f / 1 kHz)` and Fragility^2), panned apart | Real glasses are not perfectly round; the degenerate mode pairs split and beat *(ref: Rossing; web: "frequency matching of orthogonal wineglass modes", IUCC; WORLDBUILDER notes on singing-bowl doublets)*; split values *(estimate)* |
+| Strike | Raised-cosine pulse 4 ms (soft mallet) to 0.16 ms (hard tick), from Brightness and velocity; spectrum `1/sqrt(1 + (1.5 f T)^4)`; plus a few ms of high-passed noise (the tick) with Brightness x Fragility | "Tapping excites a number of vibrational modes" while rubbing excites (2,0) *(web: Terwagne & Bush, singing-bowl paper, arXiv 1106.5657)*; raised-cosine strike from WORLDBUILDER's modal objects; numbers *(estimate)* |
+| Ring | Lowest mode T60 1.2–20 s (Decay; default ~7 s around A5, `(880/f)^0.3` by pitch), upper modes `ratio^-0.8` shorter | Glass has very high Q: a 1 s decay is ~0.3 Hz bandwidth *(web: Dartmouth problem set; Q ≈ π f τ)*; values *(estimate)* |
+| Release | Key up: a finger on the rim, ring x0.4 (at least 0.4 s); the pedal keeps it ringing | *(estimate)*; long tails stay musical in sparse melodies without smearing fast ones |
+| Resonance | While held, the rubbed-rim sound swells in (~0.35 s): the lowest mode and its 2nd and 3rd harmonics (1 / 0.22 / 0.08), doublets, with a 3 Hz stick-slip unevenness; fades 0.8 s after release. Also lengthens the lowest mode's ring up to 2x | "Rubbing with a wet finger tends to excite only the (2,0) mode and its harmonics through a stick-slip process" *(web: BU wine glass page; Terwagne & Bush)* |
+| Fragility | Wider doublets (shimmer), +/-30 % strike-to-strike mode strengths, +/-0.6 % per mode in ratio, a louder tick, and two short "crack" partials (2.4–2.7x and 5.6–6.2x) | *(estimate)* — the "fragile" character |
+| Detune | Each strike off by up to +/-15 cents (random, fixed for the note), then a +/-6 cent wander at ~0.4 Hz; never a slide | Brief: adjustable pitch instability, no forced glides |
+| Polyphony | 16 + 6 fading; a restruck note fades in 40 ms | |
+
+**Sources (web):** Rossing, *Acoustics of the glass harmonica*, JASA 95 (1994)
+(summary; ASA press-room lay version: https://acoustics.org/pressroom/httpdocs/147th/Rossing_Harmonicas1.htm);
+BU GK-12, *Wine glass* (https://www.bu.edu/gk12/miked/wineglass.html); Terwagne & Bush,
+*Tibetan singing bowls* (https://arxiv.org/pdf/1106.5657); Arane et al., *Coupling between two
+singing wineglasses* (https://arxiv.org/pdf/0901.0656); ChucK, *Programming for Musicians and
+Digital Artists*, listing 7.10 (https://chuck.cs.princeton.edu/doc/examples/book/digital-artists/chapter7/Listing7.10.ck — summary only);
+Dartmouth Math 5 problem set (https://math.dartmouth.edu/~m5f11/7.pdf).
+
+---
+
+## Distance (Piano and Glass)
+
+`dsp::Distance`: direct sound down to -7 dB, two one-pole low-passes from 18 kHz down to
+900 Hz, four early reflections (7–17 ms, cross-fed, 30 %) and up to 2.5x more send to the
+room. Air absorbs high frequencies more with distance *(ref)*; in an empty building the
+far source is also heard around corners and through doors, which is why it darkens far
+more than open air would *(estimate)*. Transparent at 0.

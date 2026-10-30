@@ -63,7 +63,7 @@ void FadedSynth::noteOn(int note, float velocity) {
     v.amp = v.filterEnv = 0;
     v.attacking = v.filterAttacking = true;
     v.velocity = velocity;
-    v.velocityGain = 0.25f * (0.12f + 0.88f * std::pow(velocity, 1.5f));
+    v.velocityGain = 0.35f * (0.12f + 0.88f * std::pow(velocity, 1.5f));
     const float side = (id % 2 == 0 ? 1.0f : -1.0f) * (0.1f + 0.5f * settings.width) * (0.5f + 0.5f * rng.uniform());
     const auto g = panGains(side);
     v.panL = g.l;

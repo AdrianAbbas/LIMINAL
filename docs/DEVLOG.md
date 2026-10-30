@@ -7,10 +7,10 @@ Read `LIMINAL_CLAUDE_BRIEF.md` first (it wins over everything else), then
 
 - [x] **0 — Audit, WORLDBUILDER-derived pipeline, skeleton** (2026-10-30) — confirmed by the developer in GarageBand: loads, plays, layout looks good
 - [ ] **1a — Forgotten Piano, Faded Synth, Glass Memories** (in progress, 2026-10-30)
-  - [x] Research and `docs/INSTRUMENT_NOTES.md` (piano, synth sections)
+  - [x] Research and `docs/INSTRUMENT_NOTES.md` (all three)
   - [x] Shared instrument layer (`DSP/Instrument.h`), Distance stage, processor routing, Forgotten Piano + tests
   - [x] Faded Synth + tests
-  - [ ] Glass Memories + tests
+  - [x] Glass Memories + tests, cross-instrument tests
   - [ ] Instruments drawer in the editor, DEVLOG handoff, final push without `[skip ci]`
 - [ ] 1b — Empty Choir, Lost Music Box, Hollow Drone
 - [ ] 2a — Five environments
