@@ -137,8 +137,8 @@ jobs:
           ccache --show-stats
       # The full processor suite in parallel shards, then the CPU-measuring group alone.
       - name: Processor tests (full suite)
-        run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs
-      - name: Listening render (each instrument: in the corridor, then dry)
+        run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs\
+      - name: Listening render (each instrument, in the corridor, then dry)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m1a-instruments.wav
       - name: Upload test logs, editor snapshot and listening render
         if: always()
