@@ -34,6 +34,7 @@ the checklist below.
   - [x] Part 1 — audio: risers/whooshes/noise waves removed; all ten beds, acoustics and rare events rebuilt to Sections 1–2; default Activity 25 % (rare); Far Away (mall PA / hotel wall); listening render (phrase through ten rooms + 60 s of each bed) — pushed `[skip ci]`
   - [x] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — pushed without `[skip ci]`; **waiting for the developer's approval of the look**
   - [ ] Part 3 (after approval) — the other seven places and the Character variants
+- [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
 
@@ -1006,3 +1007,117 @@ Character regrades it. Lights should swell gently with your notes, stutter now a
 with Unreal above ~35 % the picture slips like tape. Drag the window corner (85–150 %).
 Please report anything clipped, overlapping or sluggish on the MacBook Air — and whether
 the painted style is the right direction before it gets more detail.
+
+---
+
+## Hotfix (2026-10-31): the scene flickered blank, and the pool's water was yellow
+
+**Developer report (GarageBand, MacBook Air):** the scene alternated between the render and
+nothing (only the viewfinder overlay and controls) many times a second; the renders looked
+right when they showed. Later, mid-session: the pool's water turned "piss yellow" as soon as
+the pool was clicked.
+
+### Cause (one bug, both symptoms)
+
+On macOS JUCE has no 24-bit native image: `juce::Image(Image::RGB, ...)` is created as a
+CoreGraphics **ARGB** image (`juce_CoreGraphicsContext_mac.mm`: `format == Image::RGB ?
+Image::ARGB : format`), byte order B, G, R, A. The compositor (`UI/PhotoScene`) wrote each
+pixel with `PixelRGB` indices, and on macOS `PixelRGB` is R, G, B (indexR = 0). So:
+
+- **red and blue were swapped**: turquoise water (R 90, G 150, B 140) came out as
+  (140, 150, 90), yellow. The film strip's thumbnail is a properly decoded JPEG, so the pool
+  only went yellow when you clicked it and the live composite replaced the thumbnail;
+- **the alpha byte was never written**: every composite was a freshly allocated 6 MB image
+  (`clearImage = false`), so its alpha was whatever the memory held: zero for fresh pages
+  (a transparent picture: blank), old opaque pixels for reused memory (the picture shows).
+  That is the flicker. The frosted strip was made from the same picture.
+
+On Linux `Image::RGB` really is 3 bytes in R/B order matching ARGB's, which is why every test
+and snapshot here looked right.
+
+The other suspects were checked: the editor's partial repaints already redrew the whole scene
+under every changed region (it draws the full picture, clipped); the hand-over between the
+compositing thread and paint was already behind a lock and gave paint a separate image (no
+half-finished frames); there are no opaque-flag mistakes (only `MainView` is opaque, and it
+paints everything). They are hardened anyway (below).
+
+### What changed
+
+| | |
+|---|---|
+| `UI/PhotoScene` | **Triple-buffered**: three opaque ARGB pictures allocated once per scene (not per frame). The worker composites into the back picture, then swaps it with "ready" under the short `handoff` lock; `take()` swaps "ready" with the front picture the editor draws. paint() always draws the last complete frame, and the worker never writes into a picture the editor holds. Pixels are written in the **destination's own byte order** with **alpha 255**. Worker capped at **30 composites a second**. Cheaper composite: changed passes added in one fused sweep, the per-pixel finish split into simple loops, the film grain (identical every frame) made once per scene, pass decoding reads bytes directly. |
+| Editor (`MainView`) | Every repaint fills a base colour, then draws the scene, then the overlay, so a missing picture can never show as "nothing". **A new composite is only requested when a light's level really moves** (over 2 % of its level; the swell stops at 1 %), and the pool's caustic phase moves in two steps per caustic frame instead of every tick. The frosted strip is made opaque explicitly. Test hooks: `tick()`, `lastRepaint()`, `paintedPicture()`, `sceneArea()`, composite counters. |
+| Tests | New group **`frames`** (`Tests/FrameTests.h`, its own shard in `scripts/run-tests-parallel.sh`). Details below. |
+
+### Tested (Linux, this container): 411 checks pass, 0 fail (full suite, on exactly this commit)
+
+`frames` group: **240 consecutive editor frames in real time at 30 fps**. Each frame is the
+editor's own timer tick (frame governor, compositing thread running alongside), then only the
+regions it asked for are painted into a persistent "screen" whose dirty regions start black
+(what a host hands a view). Meanwhile notes play through `processBlock` (one every 200 ms),
+the failing tube flickers (every 5 frames), the place's events fire, and it switches through
+hospital, pool, office (photographs) and garage, hotel (painted), with Character changes and
+Unreal's tape slip. Checked every frame against the settled picture of the same place and
+Character on a 12 x 8 grid of tiles:
+- no frame on screen is blank or partly blank (no tile under 30 % of its settled brightness or
+  near black, the whole scene never under half): **0 of 240** (darkest tile 43-52 %, the
+  failing tube going dark);
+- the same for a full repaint: **0 of 240**;
+- the picture the editor drew is fully opaque: **0 of 240** with any transparent pixel;
+- the pool's water is turquoise in the composite (R 90, G 149, B 141);
+- the compositor alone, pushed every 4 ms with the lights flickering hard: every picture
+  handed out is complete and opaque, and **none changed while held** (double-buffering);
+  rate stays at or under 30 a second.
+
+**The test catches the bug.** On the previous commit, with the picture forced to ARGB as macOS
+does (Linux can't reproduce the swapped red/blue, but the missing alpha it can): **154 of 240
+frames transparent, 120 full repaints blank and 34 partly blank**, every compositor picture
+bad. On the fix: all zero.
+
+**Editor CPU, before and after** (this container, 4 x86 cores, JUCE's software renderer; the
+process's CPU time minus the audio's and the test's own analysis, % of one core, during the
+240-frame script above: a deliberately heavy scenario with a light changing almost every frame
+and ten place switches in 8 s):
+
+| | Before (previous commit) | After |
+|---|---|---|
+| Editor CPU | 71-73 % | 67-70 % |
+| Composites a second | 19.7-19.9 | 15-18 |
+| One composite, one light changed (single thread) | 19.2 ms | 10.6-13.4 ms |
+| Paint per painted frame | 6.2-6.8 ms | 6.5-7.1 ms |
+| Picture allocations per composite | one 6 MB image | none |
+
+What the numbers mean: the composite itself is ~40 % cheaper and runs less often, but in this
+script the lights really do change on most frames, and each of the ten place switches decodes a
+scene (~150-210 ms) or draws a painted one, so the total falls only a little. In normal playing
+(one place, notes now and then) composites stop whenever the lights are still. Not measurable
+here: macOS no longer page-faults a fresh 6 MB image 15-20 times a second, and CoreGraphics
+draws much faster than this software renderer.
+
+### Not verified here
+
+macOS itself: that GarageBand now shows a steady picture and turquoise water. The byte-order
+reasoning is from JUCE 8.0.16's source (`PixelRGB` vs `PixelARGB` indices on macOS, and the
+RGB-to-ARGB native image); the fix writes whatever order the destination reports, so it is
+right on both, but nobody has looked at it on a Mac yet. CPU on the MacBook Air.
+
+### Decisions (recorded instead of asking)
+
+- **Three pictures, not two**: with two, the worker would have to wait for paint to let go of
+  the front picture; with three it never waits and paint never sees a half-made frame.
+- **2 % of a light's level** as "really changed": below it a whole light group's change is not
+  visible; above it the note swells and the hum's flicker still animate smoothly.
+- The **painted scenes** (`UI/SceneArt`) also use `Image::RGB` but are drawn with `Graphics`
+  onto an opaque black fill and touched per pixel only in channel-symmetric ways, so they were
+  correct on macOS; left as they are.
+- `docs/snapshots/` not regenerated: the composite is the same picture (looked at by eye).
+
+### For the developer's GarageBand check
+
+Install **LIMINAL-macOS-Universal** from the Actions run of this commit (`bash install-mac.sh`),
+open LIMINAL. The hospital should be steady: no blank frames, the picture always there behind
+the overlay. Play notes (the near panels swell), set **Activity** to 100 % (the failing panel
+stutters with the hum). Click **POOL**: the water should stay **turquoise** when the live
+picture replaces the thumbnail, the light on the ceiling drifting slowly. Click **OFFICE**,
+then a painted place (e.g. GARAGE) and back. Please report any blank or flashing frame, any
+wrong colour, and whether the MacBook Air stays cool with the window open.
