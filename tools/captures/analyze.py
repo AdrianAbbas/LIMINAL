@@ -159,7 +159,8 @@ def glitches(x, start, stop, residual=None, thresh=25.0):
             continue
         med = np.median(d2[:nb * blk].reshape(nb, blk), axis=1)
         scale = signal.medfilt(med, 9)
-        scale = np.maximum(np.repeat(scale, blk), 1e-7)
+        floor = max(1e-7, 1e-5 * float(np.abs(seg).max()))   # ignore anything 100 dB below the peak
+        scale = np.maximum(np.repeat(scale, blk), floor)
         scale = np.concatenate([scale, np.full(len(d2) - len(scale), scale[-1])])
         hits = np.flatnonzero(d2 > thresh * scale)
         found += _group(hits + start + 1, "click", name)
@@ -360,8 +361,9 @@ def echoes(h, max_s=2.0):
             break
         w = m[a:b]
         lv = to_db(np.sqrt(np.mean(band(w, 1000) ** 2)))   # 1 kHz octave: the loop's filters barely act here
-        lo_b = to_db(np.sqrt(np.mean(band(w, 500) ** 2)))
-        hi_b = to_db(np.sqrt(np.mean(band(w, 4000) ** 2)))
+        # Spot tilt (1/6-octave bands): a whole octave drifts toward its lower edge as repeats darken.
+        lo_b = to_db(np.sqrt(np.mean(band(w, 500, 1 / 6) ** 2)))
+        hi_b = to_db(np.sqrt(np.mean(band(w, 4000, 1 / 6) ** 2)))
         pk = a + int(np.argmax(np.abs(signal.hilbert(w))))
         reps.append((pk, lv, hi_b - lo_b))
     reps = [r for r in reps if r[1] > reps[0][1] - 50]
@@ -587,6 +589,9 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
     meas["eq_third_octave_db_re_1k"] = third_octave_eq(h_meas[:cut])
     meas["rt60_s"] = {str(f): schroeder_rt(h_meas[:cut], floor_rms, f) for f in OCT}
     meas["echo"] = echoes(h_meas[:cut])
+    # The same from the -24 dBFS sweep: less loop saturation, whose distortion products otherwise
+    # land in other repeats' windows. Use this one to fit a model when the two disagree.
+    meas["echo_quiet_sweep"] = echoes(lin[2][:cut])
     early = h_meas[: int(0.005 * SR)]
     meas["direct_to_total_db"] = round(float(10 * np.log10(np.sum(early ** 2) / (np.sum(h_meas[:cut] ** 2) + EPS))), 1)
     meas["harmonics_loud"] = harmonics(0.5 * (full[0] + full[1]).mean(axis=1) if c1 and c2 else full[0 if c1 else 1].mean(axis=1), n_ir, -12)

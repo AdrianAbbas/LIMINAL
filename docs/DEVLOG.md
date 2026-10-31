@@ -59,9 +59,12 @@ the checklist below.
 - [ ] **Effects from the developer's pedal captures (2026-10-31, night)** — **blocked: the captures are not in `AdrianAbbas/Samples`** (see `docs/PEDAL_CAPTURES.md`)
   - [x] Part 1 — inventory: Samples @ `476bfe1` (whole history) has no effect captures and no dry/reamped phrases; nothing elsewhere on the account; expected layout written down — push `[skip ci]`
   - [x] Part 2 — `tools/captures/` (analyze, run_all, kit, selftest): glitch detection on raw + cross-predicted residual, AR click repair, sweep choice/averaging, noise floor, drift from the clicks; synthetic self-test 24/24 + 2 report-only (`docs/captures-selftest.txt`); **no real take checked** — push `[skip ci]`
-  - [ ] Part 3 — deconvolution + measurement tools (validated on synthetic units with known answers); real-time non-uniform partitioned convolver + tests; real-unit IRs/measurements **blocked**
-  - [ ] Part 4 — rooms: **blocked** (nothing captured to use)
-  - [ ] Part 5 — listening render: **blocked** (before = after); DEVLOG handoff; final push without `[skip ci]`
+  - [x] Part 3 — tools: deconvolution, alignment, measurements (EQ, RT60/band, echo time, feedback, darkening, wow/flutter, THD, level dependence, bursts), reamp comparison; `Source/DSP/Convolver` (zero-latency non-uniform partitioned, Quality-capped, test group `convolver`); `Source/DSP/CaptureModels.h` (TapeEcho, ModVoice, OctaveShifter); closed loop model -> tools 30/30 — push `[skip ci]`. **Real-unit IRs/measurements/comparisons: blocked (no captures)**
+  - [ ] Part 4 — rooms: **blocked** (nothing captured to use); routing plan in `docs/PEDAL_CAPTURES.md`; rooms unchanged
+  - [ ] Part 5 — listening render: **blocked** (before = after, not rendered)
+  - [x] DEVLOG handoff; final push without `[skip ci]`
+  - **Resume here after the captures are uploaded:** `docs/PEDAL_CAPTURES.md` -> "Next session"
+
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)

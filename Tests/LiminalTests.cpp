@@ -18,6 +18,10 @@
 #include <cstdlib>
 #include <iostream>
 #include <numeric>
+#include <chrono>
+#include <random>
+#include "DSP/CaptureModels.h"
+#include "DSP/Convolver.h"
 #include <new>
 #include <string>
 #include <set>
@@ -998,6 +1002,7 @@ int renderPlaces(const juce::String& path) {
 
 #include "FrameTests.h"
 #include "VhsTests.h"
+#include "ConvolverTests.h"
 
 } // namespace
 
@@ -1152,6 +1157,11 @@ int main(int argc, char** argv) {
         else if (arg == "--only" && i + 1 < argc) only = juce::StringArray::fromTokens(argv[++i], ",", "");
         else if (arg == "--render" && i + 1 < argc) return renderPhrase(argv[++i]);
         else if (arg == "--render-places" && i + 1 < argc) return renderPlaces(argv[++i]);
+        else if (arg == "--capture-model" && i + 3 < argc) {
+            const juce::String model(argv[i + 1]);
+            const auto cwd = juce::File::getCurrentWorkingDirectory();
+            return runCaptureModel(model, cwd.getChildFile(argv[i + 2]), cwd.getChildFile(argv[i + 3]));
+        }
         else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
         else if (arg == "--vhs-snapshots" && i + 1 < argc) return writeVhsSnapshots(argv[++i]);
         else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
@@ -1201,6 +1211,7 @@ int main(int argc, char** argv) {
     }
     if (run("vhs")) testVhs(s);
     if (run("cpu")) testEditorCpu(s);
+    if (run("convolver")) testConvolver(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

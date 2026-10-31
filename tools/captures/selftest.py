@@ -180,6 +180,30 @@ def main(scratch):
     c = analyze.compare(phrase, wet, got_ir)
     check(c["spectral_rms_db"] < 1.0 and c["envelope_rms_db"] < 1.0, "reamp comparison: recovered IR within 1 dB", c)
 
+    # Closed loop with the plugin's own tape-echo model (if the test binary is given): render the
+    # kit through it, analyse, and get the profile back (default profile: 380 ms, -6 dB/repeat,
+    # -2.5 dB darkening, wow 0.7 Hz / 6 cents, flutter 6 Hz / 1.5 cents, drive 0.3).
+    if len(sys.argv) > 2:
+        import subprocess
+        binp = os.path.abspath(sys.argv[2])
+        tone = np.sin(2 * np.pi * 1000 * np.arange(14 * SR) / SR) * 0.125
+        wavfile.write(os.path.join(scratch, "tone.wav"), SR, tone.astype(np.float32))
+        for model, src, dst in (("tape", "kit.wav", "model-tape.wav"), ("tape-static", "kit.wav", "model-tape-static.wav"),
+                                ("tape", "tone.wav", "model-tone.wav")):
+            subprocess.run([binp, "--capture-model", model, src, dst], cwd=scratch, check=True)
+        r = analyze.analyze(os.path.join(scratch, "model-tape.wav"), os.path.join(scratch, "out-model"),
+                            os.path.join(scratch, "kit.wav"), os.path.join(scratch, "model-tape-static.wav"))
+        q = r["measurements"]["echo_quiet_sweep"]
+        check(r["quality"][0]["clean"] and r["quality"][1]["clean"], "model: a clean render raises no glitch", r["ir_from"])
+        check(abs(r["measurements"]["echo"]["echo_ms"] - 380) < 0.5, "model: echo time back (380 ms)", r["measurements"]["echo"]["echo_ms"])
+        check(abs(q["feedback_db_per_repeat_1k"] + 6.0) < 0.5, "model: feedback back from the quiet sweep (-6 dB)", q["feedback_db_per_repeat_1k"])
+        check(abs(q["darkening_db_per_repeat"] + 2.5) < 0.5, "model: darkening back from the quiet sweep (-2.5 dB)", q["darkening_db_per_repeat"])
+        wet = analyze.load(os.path.join(scratch, "model-tone.wav")) - tone[:, None]
+        mod = analyze.modulation(wet, 2 * SR, 14 * SR, "model")["fm"]
+        check(abs(mod["wow"]["rate_hz"] - 0.7) < 0.1 and abs(mod["wow"]["depth_cents"] - 6) < 1, "model: wow back (0.7 Hz, 6 cents)", mod["wow"])
+        check(abs(mod["flutter"]["rate_hz"] - 6) < 0.2 and abs(mod["flutter"]["depth_cents"] - 1.5) < 0.5, "model: flutter back (6 Hz, 1.5 cents)", mod["flutter"])
+        print("     loud-sweep echo (saturation shows as level dependence):", r["measurements"]["echo"])
+
     print(f"{sum(results)} / {len(results)} checks pass")
     return 0 if all(results) else 1
 

@@ -47,7 +47,7 @@ juce_add_plugin(LIMINAL
     COPY_PLUGIN_AFTER_BUILD FALSE)
 target_sources(LIMINAL PRIVATE
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
-    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp
+    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp Source/DSP/Convolver.cpp
     Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp Source/UI/Vhs.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 # Photographic scenes (Direction Update 2): light passes rendered offline by tools/scenes and
@@ -63,7 +63,7 @@ endif()
 target_compile_definitions(LIMINAL PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
-target_link_libraries(LIMINAL PRIVATE juce::juce_audio_utils
+target_link_libraries(LIMINAL PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 if(LIMINAL_BUILD_TESTS)
     enable_testing()

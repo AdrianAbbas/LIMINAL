@@ -26,6 +26,7 @@ wait
 # The editor's frames in real time (and its CPU), also alone so the timing is not disturbed.
 "$tests" --only frames > "$logs/10-frames.txt" 2>&1
 "$tests" --only cpu > "$logs/14-cpu.txt" 2>&1
+"$tests" --only convolver > "$logs/15-convolver.txt" 2>&1
 
 passed=0
 failed=0
