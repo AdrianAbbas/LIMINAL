@@ -211,11 +211,13 @@ void PlaceStrip::mouseMove(const juce::MouseEvent& e) {
     if (h != hover) {
         hover = h;
         repaint();
+        if (onHover) onHover(h);
     }
 }
 void PlaceStrip::mouseExit(const juce::MouseEvent&) {
     hover = -1;
     repaint();
+    if (onHover) onHover(-1);
 }
 void PlaceStrip::mouseUp(const juce::MouseEvent& e) {
     if (!e.mouseWasClicked()) return;
@@ -225,14 +227,14 @@ void PlaceStrip::mouseUp(const juce::MouseEvent& e) {
 
 CharacterStrip::CharacterStrip(juce::AudioProcessorValueTreeState& s) : state(s) { refresh(); }
 
-bool CharacterStrip::refresh() {
-    const int p = int(std::lround(state.getRawParameterValue(params::environment)->load()));
-    const int c = int(std::lround(state.getRawParameterValue(params::character)->load()));
-    if (p == place && c == selected) return false;
+// The chips follow the picture (show()), not the parameters: nothing to poll.
+bool CharacterStrip::refresh() { return false; }
+
+void CharacterStrip::show(int p, int c) {
+    if (p == place && c == selected) return;
     place = p;
     selected = c;
     repaint();
-    return true;
 }
 
 juce::Rectangle<float> CharacterStrip::chip(int character) const {
@@ -1379,6 +1381,10 @@ MainView::MainView(LiminalProcessor& p)
     };
     places.onChoose = [this] { if (syncPlace()) repaint(); };
     placeStrip.onChoose = [this] { if (syncPlace()) repaint(); };
+    placeStrip.onHover = [this](int place) {   // decode a hovered place ahead, so a click swaps it in at once
+        hoverPlace = place;
+        hoverTicks = 0;
+    };
     characterStrip.onChoose = [this] { if (syncPlace()) repaint(); };
     syncPlace();
     setSize(defaultWidth, defaultHeight);
@@ -1390,21 +1396,168 @@ MainView::~MainView() {
     setLookAndFeel(nullptr);
 }
 
-// A new place: caption, button text and colour cast follow the Environment parameter.
+// The place and Character the parameters ask for. The picture, caption, chips and lights follow
+// together once the new scene is ready (advanceSwitch); only the very first one is taken at once.
 bool MainView::syncPlace() {
     placeStrip.refresh();
-    characterStrip.refresh();
-    const int place = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
-    const int ch = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::character)->load())), 0, dsp::characterCount - 1);
-    if (place == placeShown && ch == characterShown) return false;
+    targetPlace = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::environment)->load())), 0, dsp::placeCount - 1);
+    targetCharacter = std::clamp(int(std::lround(processor.parameters.getRawParameterValue(params::character)->load())), 0, dsp::characterCount - 1);
+    if (placeShown >= 0) return false;
+    placeShown = targetPlace;   // (nothing on screen yet to fade from: the thumbnail stands in until the scene decodes)
+    characterShown = targetCharacter;
+    grade = gradeFor(placeShown, characterShown);
+    characterStrip.show(placeShown, characterShown);
+    environmentButton.setButtonText("PLACE");
+    return true;
+}
+
+// The Character's grade (Milestone 4 adds its light and flicker to the painted scene).
+juce::Colour MainView::gradeFor(int place, int character) {
+    const auto characterGrade = dsp::character(place, character).grade;
+    return juce::Colour(characterGrade != 0 ? characterGrade : placeInfo[place].grade);
+}
+
+// Ease-out, on wall time, set once per tick so a frame's paint and its report agree.
+float MainView::fadeAlpha() const { return fadeStartMs >= 0 ? fadeNow : 1.0f; }
+
+// The fade starts one frame in: the first frame after the swap already shows a fifth of the new
+// scene, so the caption and chips never change over an unchanged picture.
+void MainView::startFade() {
+    fadeStartMs = nowMs() - ui::FrameGovernor::tickMs;
+    const float t = float(ui::FrameGovernor::tickMs / (fadeSeconds * 1000.0));
+    fadeNow = 1.0f - (1.0f - t) * (1.0f - t);
+}
+
+// A private copy of what is on screen now (mid-fade: the blend), to fade out from. Nothing else
+// writes to it - the compositor recycles its own pictures.
+void MainView::freezeCurrentFrame() {
+    const bool photographic = photoPlace(std::max(0, placeShown));
+    const juce::Image& now = !photographic ? scene.image : showingPhoto() ? photoImage : photoPlaceholder;
+    const juce::Image& frost = !photographic ? scene.frosted : photoFrosted;
+    if (!now.isValid()) {
+        fromPicture = {};
+        fromFrosted = {};
+    } else if (fadeAlpha() < 1.0f && fromPicture.isValid()) {   // a switch during a fade: freeze the blend
+        juce::Image blend(juce::Image::ARGB, now.getWidth(), now.getHeight(), false);
+        juce::Graphics g(blend);
+        g.fillAll(juce::Colours::black);
+        g.drawImage(fromPicture, blend.getBounds().toFloat(), juce::RectanglePlacement::stretchToFit);
+        g.setOpacity(fadeAlpha());
+        g.drawImage(now, blend.getBounds().toFloat(), juce::RectanglePlacement::stretchToFit);
+        fromPicture = blend;
+        fromFrosted = frost;
+    } else {
+        fromPicture = now.createCopy();
+        fromFrosted = frost;   // (frosted pictures are made new each time, never written again)
+    }
+    fromPlace = placeShown;
+    fromCharacter = characterShown;
+}
+
+// The frosted glass of the strip and the pages, from the photograph on screen.
+void MainView::makeFrost() {
+    const auto small = photoImage.rescaled(std::max(1, photoImage.getWidth() / 16), std::max(1, photoImage.getHeight() / 16), juce::Graphics::mediumResamplingQuality);
+    photoFrosted = juce::Image(juce::Image::ARGB, photoImage.getWidth() / 2, photoImage.getHeight() / 2, false);
+    juce::Graphics g(photoFrosted);
+    g.fillAll(juce::Colours::black);   // opaque (macOS keeps even RGB images as ARGB)
+    g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+    g.drawImage(small, 0, 0, photoFrosted.getWidth(), photoFrosted.getHeight(), 0, 0, small.getWidth(), small.getHeight());
+    g.fillAll(juce::Colour(0x8c0a0e0d));
+    photoNeedsFrost = false;
+}
+
+// The swap, in one frame: what the paint shows next is the new scene (fading in over the frozen
+// last frame), with the new caption, chips, grade and light levels.
+void MainView::commitSwitch(int place, int character, juce::RectangleList<int>& dirty) {
     placeShown = place;
-    characterShown = ch;
-    // The Character's grade (Milestone 4 adds its light and flicker to the painted scene).
-    const auto characterGrade = dsp::character(place, ch).grade;
-    grade = juce::Colour(characterGrade != 0 ? characterGrade : placeInfo[place].grade);
+    characterShown = character;
+    grade = gradeFor(place, character);
+    characterStrip.show(place, character);
     environmentButton.setButtonText("PLACE");
     effects.repaint();   // it shows what the place adds
-    return true;
+    shownPulse = {};
+    pulse = {};
+    requestedPlace = requestedCharacter = -1;
+    if (fromPicture.isValid() && !settle) startFade();
+    else {
+        fadeStartMs = -1;
+        fromPicture = {};
+        fromFrosted = {};
+    }
+    dirty.add(getLocalBounds());
+}
+
+// Prepares the scene the parameters ask for, off screen, and swaps it in when its first picture is
+// complete: a photograph's passes decoded (or kept from before / decoded on hover) and composited
+// with the target Character's light; a painted place drawn. Until then the old scene stays.
+void MainView::advanceSwitch(juce::RectangleList<int>& dirty) {
+    if (!pendingSwitch()) return;
+    const int place = targetPlace, character = targetCharacter;
+    if (!photoPlace(place)) {   // a painted place: drawn now, on this thread
+        freezeCurrentFrame();
+        const float scale = sceneScale > 0 ? sceneScale : 1.0f;
+        scene = ui::renderPlace(place, character, getWidth(), getHeight(), scale);
+        sceneScale = scale;
+        if (photo != nullptr) spare = std::move(photo);
+        photoImage = {};
+        photoFrosted = {};
+        commitSwitch(place, character, dirty);
+        return;
+    }
+    ui::PhotoScene* s = nullptr;
+    if (photo != nullptr && photo->place() == place) s = photo.get();   // a new Character, same place
+    else {
+        if (incoming == nullptr || incoming->place() != place) {
+            if (spare != nullptr && spare->place() == place) std::swap(incoming, spare);   // decoded ahead
+            else {
+                if (incoming != nullptr && incoming->loaded()) spare = std::move(incoming);
+                incoming = std::make_unique<ui::PhotoScene>(place);
+            }
+            requestedPlace = -1;
+        }
+        s = incoming.get();
+    }
+    if (settle) s->ensureLoaded();
+    if (s->failed()) {   // no photograph after all: the painted scene
+        photoKnown[std::size_t(place)] = 0;
+        if (s == incoming.get()) incoming.reset();
+        advanceSwitch(dirty);
+        return;
+    }
+    if (!s->loaded()) return;
+    const auto install = [&](const juce::Image& picture) {
+        if (s != photo.get()) {
+            if (photo != nullptr) spare = std::move(photo);
+            photo = std::move(incoming);
+        }
+        photoImage = picture;
+        photoSwell.assign(photo->passes().size(), 0.0f);
+        photoLevelsSent = targetLevels;
+        photoPhaseSent = targetPhase;
+        photoCharacterSent = character;
+        makeFrost();
+        commitSwitch(place, character, dirty);
+    };
+    if (requestedPlace != place || requestedCharacter != character) {
+        auto look = photoLook(*s, place, character, false);
+        look.serial = targetSerial = ++lookSerial;
+        targetLevels = look.levels;
+        targetPhase = look.causticPhase;
+        requestedPlace = place;
+        requestedCharacter = character;
+        if (settle) {   // tests and snapshots: composited on the spot
+            freezeCurrentFrame();
+            install(s->renderNow(look));
+            return;
+        }
+        s->request(look);
+        return;
+    }
+    unsigned serial = 0;
+    if (!s->peek(serial) || serial < targetSerial) return;   // not the target look yet
+    freezeCurrentFrame();   // (before take(): the picture on screen may go back to the compositor)
+    juce::Image next;
+    if (s->take(next)) install(next);
 }
 
 // One drawer at a time: opening one closes the others.
@@ -1539,6 +1692,8 @@ void MainView::paint(juce::Graphics& g) {
     const float scale = std::max(1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
     // A photographic scene (light passes composited live) where there is one; else the drawing.
     const bool photographic = photoPlace(std::max(0, placeShown));
+    const float fade = fadeAlpha();
+    const bool fading = fade < 1.0f && fromPicture.isValid();
     if (photographic && placeholderFor != placeShown) {
         photoPlaceholder = ui::PhotoScene::thumbnail(placeShown);
         placeholderFor = placeShown;
@@ -1555,10 +1710,17 @@ void MainView::paint(juce::Graphics& g) {
     const juce::Image& picture = !photographic ? scene.image : showingPhoto() ? photoImage : photoPlaceholder;
     const juce::Image& frosted = !photographic ? scene.frosted : photoFrosted;
     lastPicture = picture;
+    frameInfo = { fading ? fromPlace : -1, fading ? fromCharacter : -1, placeShown, characterShown, fading ? fade : 1.0f,
+                  placeShown, characterShown, characterStrip.shownPlace(), characterStrip.shownCharacter(), photographic && !showingPhoto() };
     g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
+    if (fading) {   // the frozen last frame, the new scene over it
+        g.drawImage(fromPicture, bounds, juce::RectanglePlacement::stretchToFit);
+        g.setOpacity(fade);
+    }
     g.drawImage(picture, bounds, juce::RectanglePlacement::stretchToFit);
+    g.setOpacity(1.0f);
 
-    if (!photographic) paintLights(g);   // (a photograph's lights are its passes)
+    if (!photographic && !fading) paintLights(g);   // (a photograph's lights are its passes)
     else {   // a photograph's ceiling lights sit behind the viewfinder's captions: shade the top a little
         g.setGradientFill(juce::ColourGradient(juce::Colour(0x66080b0a), 0, 0, juce::Colour(0x00080b0a), 0, 150, false));
         g.fillRect(bounds.withHeight(150));
@@ -1566,8 +1728,16 @@ void MainView::paint(juce::Graphics& g) {
     const auto drawFrosted = [&](juce::Rectangle<int> area) {
         juce::Graphics::ScopedSaveState save(g);
         g.reduceClipRegion(area);
-        if (frosted.isValid()) g.drawImage(frosted, bounds, juce::RectanglePlacement::stretchToFit);
-        else g.fillAll(juce::Colour(0xe00a0e0d));
+        const auto glass = [&](const juce::Image& image) {
+            if (image.isValid()) g.drawImage(image, bounds, juce::RectanglePlacement::stretchToFit);
+            else g.fillAll(juce::Colour(0xe00a0e0d));
+        };
+        if (fading) {
+            glass(fromFrosted);
+            g.setOpacity(fade);
+        }
+        glass(frosted);
+        g.setOpacity(1.0f);
     };
     if (clock < shimmerUntil) {   // Unreal: a band of the picture slips sideways, like worn tape
         const auto band = juce::Rectangle<float>(0, shimmerY, bounds.getWidth(), shimmerH);
@@ -1659,41 +1829,66 @@ bool MainView::photoPlace(int place) {
     return known == 1;
 }
 
-// The photographic scene, one frame: every light group's level from the music (notes swell the
-// nearest bank), the place's events, the failing tube (the hum's stutter, from the audio
-// thread), the Character and the mouse; the caustics drift on their loop. The compositing runs
-// on the scene's own thread; this only asks for a look and picks up finished pictures.
+// A photograph's look under a place's Character: every light group's level (the Character's light
+// from the manifest; the failing tube following the hum), the grade, the caustics' phase. `live`
+// adds what the music and the mouse do to the lights on screen (the swells).
+ui::PhotoScene::Look MainView::photoLook(const ui::PhotoScene& s, int place, int character, bool live) const {
+    auto look = s.defaultLook();
+    const auto& passes = s.passes();
+    for (std::size_t i = 0; i < passes.size(); ++i) {
+        float level = passes[i].defaultLevel * passes[i].level(character);   // how the Character lights this group
+        if (passes[i].flickers(character)) level *= 0.02f + 0.98f * photoLamp * photoLamp * photoLamp;
+        if (live && i < photoSwell.size()) {
+            level *= 1.0f + photoSwell[i];
+            const auto a = passes[i].anchor;   // the light under the mouse warms a little
+            if (a.x >= 0 && mouse.getDistanceFrom({ a.x * float(getWidth()), a.y * float(getHeight()) }) < 90.0f) level *= 1.08f;
+        }
+        look.levels[i] = std::max(0.0f, level);
+    }
+    look.light = dsp::character(place, character).light;
+    look.grade = gradeFor(place, character).getARGB();
+    look.character = character;
+    look.causticLevel *= s.causticCharacter(character);
+    if (s.hasCaustics() && !lightsStill) {   // two steps per caustic frame: smooth, and no composite every tick
+        const double steps = 2.0 * double(s.causticFrames());
+        look.causticPhase = float(std::floor(std::fmod(clock * double(s.causticFps()) / double(s.causticFrames()), 1.0) * steps) / steps);
+    } else look.causticPhase = photoPhaseSent < 0 ? 0.0f : photoPhaseSent;
+    return look;
+}
+
+// The photographic scene on screen, one frame: the lights answer the music (notes swell the
+// nearest bank), the place's events, the failing tube (the hum's stutter, from the audio thread)
+// and the mouse; the caustics drift on their loop. The compositing runs on the scene's own
+// thread; this only asks for a look and picks up finished pictures. Changes of place or
+// Character are advanceSwitch's: while one is being prepared in this same scene, it waits.
 void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     const int place = std::max(0, placeShown), character = std::max(0, characterShown);
     if (!photoPlace(place)) {
         if (photo != nullptr) {
-            photo.reset();
+            spare = std::move(photo);
             photoImage = {};
             photoFrosted = {};
             dirty.add(getLocalBounds());
         }
         return;
     }
-    if (photo == nullptr || photo->place() != place) {
-        photo = std::make_unique<ui::PhotoScene>(place);
+    if (photo == nullptr || photo->place() != place) {   // (the first place: nothing was on screen)
+        photo = incoming != nullptr && incoming->place() == place ? std::move(incoming) : std::make_unique<ui::PhotoScene>(place);
         photoImage = {};
         photoFrosted = {};
         photoLevelsSent.clear();
         photoSwell.clear();
         photoCharacterSent = -1;
     }
-    const bool settleNow = settle && (!photoImage.isValid() || character != photoCharacterSent);
-    if (settleNow && photo->ensureLoaded()) {   // tests and snapshots: the first picture of a place or Character, composited now
-        auto look = photo->characterLook(character);   // the Character's light (from the manifest)
-        look.light = dsp::character(place, character).light;
-        look.grade = grade.getARGB();
-        photoImage = photo->renderNow(look);
+    if (pendingSwitch() && targetPlace == place) return;   // a new Character is being composited in this scene
+    const bool settleNow = settle && !photoImage.isValid();
+    if (settleNow && photo->ensureLoaded()) {   // tests and snapshots: the first picture, composited now
+        photoImage = photo->renderNow(photoLook(*photo, place, character, false));
         photoNeedsFrost = true;
     }
     if (!photo->loaded()) return;
     const auto& passes = photo->passes();
     if (photoSwell.size() != passes.size()) photoSwell.assign(passes.size(), 0.0f);
-    const auto& ch = dsp::character(place, character);
     const int notes = processor.meters.notes.load(), events = processor.meters.events.load();
     // The failing tube follows the hum: the darkest it got since the last frame.
     const float lamp = processor.meters.lamp.exchange(1.0f);
@@ -1711,59 +1906,38 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     }
     photoNotesSeen = notes;
     photoEventsSeen = events;
-    auto look = photo->defaultLook();
-    for (std::size_t i = 0; i < passes.size(); ++i) {
-        float level = passes[i].defaultLevel * passes[i].level(character);   // how the Character lights this group
-        if (passes[i].flickers(character)) level *= 0.02f + 0.98f * photoLamp * photoLamp * photoLamp;
-        if (!still) {
-            level *= 1.0f + photoSwell[i];
-            const auto a = passes[i].anchor;   // the light under the mouse warms a little
-            if (a.x >= 0 && mouse.getDistanceFrom({ a.x * float(getWidth()), a.y * float(getHeight()) }) < 90.0f) level *= 1.08f;
-        }
-        look.levels[i] = std::max(0.0f, level);
-        photoSwell[i] *= 0.88f;
-        if (std::abs(photoSwell[i]) < 0.01f) photoSwell[i] = 0.0f;   // (a 1 % swell is invisible: stop compositing for it)
+    const auto look = photoLook(*photo, place, character, !still);
+    for (auto& swell : photoSwell) {
+        swell *= 0.88f;
+        if (std::abs(swell) < 0.01f) swell = 0.0f;   // (a 1 % swell is invisible: stop compositing for it)
     }
-    look.light = ch.light;
-    look.grade = grade.getARGB();
-    look.character = character;
-    look.causticLevel *= photo->causticCharacter(character);
-    if (photo->hasCaustics() && !still) {   // two steps per caustic frame: smooth, and no composite every tick
-        const double steps = 2.0 * double(photo->causticFrames());
-        look.causticPhase = float(std::floor(std::fmod(clock * double(photo->causticFps()) / double(photo->causticFrames()), 1.0) * steps) / steps);
-    }
-    else look.causticPhase = photoPhaseSent < 0 ? 0.0f : photoPhaseSent;
     bool changed = character != photoCharacterSent || photoLevelsSent.size() != look.levels.size() || std::abs(look.causticPhase - photoPhaseSent) > 1.0e-4f;
     // Only a light whose intensity really moved (over 2 % of its level, about the smallest step the
     // eye sees on a whole light group) asks for a new picture.
     for (std::size_t i = 0; !changed && i < look.levels.size(); ++i)
         changed = std::abs(look.levels[i] - photoLevelsSent[i]) > std::max(0.004f, 0.02f * std::max(look.levels[i], photoLevelsSent[i]));
-    if (changed && !settleNow) {
-        photo->request(look);
-        photoLevelsSent = look.levels;
-        photoPhaseSent = look.causticPhase;
-        if (character != photoCharacterSent) photoNeedsFrost = true;
-        photoCharacterSent = character;
-    }
-    if (settleNow) {
+    if (changed && !settleNow) photo->request(look);
+    if (changed || settleNow) {
         photoLevelsSent = look.levels;
         photoPhaseSent = look.causticPhase;
         photoCharacterSent = character;
     }
     juce::Image next;
+    const bool first = !photoImage.isValid();
     if (photo->take(next)) {
+        if (first && photoPlaceholder.isValid() && placeholderFor == place && !settle) {   // the thumbnail that stood in fades out
+            fromPicture = photoPlaceholder;
+            fromFrosted = {};
+            fromPlace = place;
+            fromCharacter = character;
+            startFade();
+        }
         photoImage = next;
+        photoNeedsFrost = photoNeedsFrost || first;
         dirty.add(getLocalBounds().withBottom(stripArea().getY()));
     }
-    if (photoNeedsFrost && photoImage.isValid()) {   // frosted glass for the strip and the pages
-        const auto small = photoImage.rescaled(std::max(1, photoImage.getWidth() / 16), std::max(1, photoImage.getHeight() / 16), juce::Graphics::mediumResamplingQuality);
-        photoFrosted = juce::Image(juce::Image::ARGB, photoImage.getWidth() / 2, photoImage.getHeight() / 2, false);
-        juce::Graphics g(photoFrosted);
-        g.fillAll(juce::Colours::black);   // opaque (macOS keeps even RGB images as ARGB)
-        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
-        g.drawImage(small, 0, 0, photoFrosted.getWidth(), photoFrosted.getHeight(), 0, 0, small.getWidth(), small.getHeight());
-        g.fillAll(juce::Colour(0x8c0a0e0d));
-        photoNeedsFrost = false;
+    if (photoNeedsFrost && photoImage.isValid()) {
+        makeFrost();
         dirty.add(getLocalBounds());
     }
 }
@@ -1778,6 +1952,16 @@ void MainView::timerCallback() {
     const double now = nowMs();
     if (!frames.beginFrame(now, elapsed)) return;
     clock += elapsed;
+    if (fadeStartMs >= 0) {   // the cross-fade's progress this frame
+        const float t = float(std::clamp((now - fadeStartMs) / (fadeSeconds * 1000.0), 0.0, 1.0));
+        fadeNow = 1.0f - (1.0f - t) * (1.0f - t);
+        if (t >= 1.0f) {   // over: the new scene alone (one last full repaint)
+            fadeStartMs = -1;
+            fromPicture = {};
+            fromFrosted = {};
+            repaint();
+        }
+    }
     // Slow frames for two seconds: stop the light's flicker (the cheapest animation to lose).
     const bool reduced = frames.slowFor(now);
     juce::RectangleList<int> dirty;
@@ -1849,7 +2033,15 @@ void MainView::timerCallback() {
     }
     notesSeen = notes;
     eventsSeen = events;
+    // A place hovered in the film strip for ~130 ms is decoded ahead (kept as the spare scene).
+    if (hoverPlace >= 0 && ++hoverTicks == 4 && hoverPlace != placeShown && photoPlace(hoverPlace) && (incoming == nullptr || incoming->place() != hoverPlace)
+        && (spare == nullptr || spare->place() != hoverPlace))
+        spare = std::make_unique<ui::PhotoScene>(hoverPlace);
+    lightsStill = reduced || eco;
+    syncPlace();
+    advanceSwitch(dirty);
     animatePhoto(reduced || eco, dirty);
+    if (fadeStartMs >= 0) dirty.add(getLocalBounds());   // the cross-fade: the whole picture and its frosted glass, every frame
     {   // the evolution indicator: at most a few repaints a second of a tiny area
         const int lit = std::clamp(int(std::lround(processor.meters.activity.load() * 12.0f)), 0, 12);
         if (lit != activityLit) {
@@ -1863,7 +2055,6 @@ void MainView::timerCallback() {
     characterStrip.refresh();
     shelf.refresh();
     places.refresh();
-    if (syncPlace()) dirty.add(getLocalBounds());
     lastDirty = dirty;
     if (dirty.isEmpty()) {
         frames.painted(0.0, now);   // nothing to draw: the frame is done

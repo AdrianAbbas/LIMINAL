@@ -61,6 +61,7 @@ public:
     juce::Rectangle<int> frame(int place) const;
     void choose(int place);
     std::function<void()> onChoose;
+    std::function<void(int)> onHover;   // the place under the mouse (-1: none), so it can be decoded ahead
 
 private:
     juce::AudioProcessorValueTreeState& state;
@@ -80,6 +81,11 @@ public:
     bool refresh();
     void choose(int character);
     std::function<void()> onChoose;
+    // The chips name the Characters of the place on screen and light the one on screen: they
+    // change in the same frame as the picture (MainView's transition), not when the parameter does.
+    void show(int place, int character);
+    int shownPlace() const { return place; }
+    int shownCharacter() const { return selected; }
 
 private:
     juce::Rectangle<float> chip(int character) const;
@@ -336,6 +342,21 @@ public:
     int photoComposites() const { return photo != nullptr ? photo->composites() : 0; }
     double photoCompositeMs() const { return photo != nullptr ? photo->compositeMs() : 0.0; }
     bool showingPhoto() const { return photo != nullptr && photoImage.isValid() && photo->place() == placeShown; }
+    // Place and Character changes (2026-10-31): the new scene is prepared off screen, then swapped
+    // in whole in one frame - picture, frosted glass, caption, Character chips, light levels -
+    // and cross-faded from a frozen copy of the last frame. What the last paint drew:
+    struct FrameInfo {
+        int fromPlace = -1, fromCharacter = -1;   // the frame fading out (-1: none)
+        int place = -1, character = -1;           // the scene fading in / on screen
+        float alpha = 1;                          // how far the fade is (1: only the new scene)
+        int captionPlace = -1, captionCharacter = -1, chipsPlace = -1, chipsCharacter = -1;
+        bool thumbnail = false;                   // a stretched thumbnail stood in for the scene
+    };
+    const FrameInfo& lastFrame() const { return frameInfo; }
+    int shownPlace() const { return placeShown; }
+    int shownCharacter() const { return characterShown; }
+    bool switching() const { return pendingSwitch() || fadeStartMs >= 0; }
+    static constexpr double fadeSeconds = 0.32;
     PlaceStrip& placeSelector() { return placeStrip; }
     CharacterStrip& characterSelector() { return characterStrip; }
     InstrumentShelf& instrumentShelf() { return shelf; }
@@ -345,6 +366,7 @@ private:
     juce::Rectangle<int> recArea() const { return { 30, 26, 70, 22 }; }
     juce::Rectangle<int> tabsArea() const { return { getWidth() - 470, 76, 452, 26 }; }
     bool syncPlace();
+    bool pendingSwitch() const { return targetPlace >= 0 && (targetPlace != placeShown || targetCharacter != characterShown); }
     juce::Rectangle<int> captionArea() const { return { 52, 48, 600, 20 }; }
     juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
     juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
@@ -383,6 +405,28 @@ private:
     bool photoNeedsFrost = true, settle = false;
     std::array<int, 10> photoKnown { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };   // has a photographic scene (cached)
     bool photoPlace(int place);
+    // The transition (see FrameInfo).
+    int targetPlace = -1, targetCharacter = -1;          // what the parameters ask for
+    std::unique_ptr<ui::PhotoScene> incoming, spare;     // the scene being prepared; the last one left (or one hovered), kept decoded
+    unsigned lookSerial = 0, targetSerial = 0;           // targetSerial: the composite that shows the target look
+    int requestedPlace = -1, requestedCharacter = -1;
+    std::vector<float> targetLevels;
+    float targetPhase = 0;
+    juce::Image fromPicture, fromFrosted;                // the frame fading out (a private copy: nothing writes to it)
+    int fromPlace = -1, fromCharacter = -1;
+    double fadeStartMs = -1;   // wall time (the animation clock slows when frames are skipped)
+    float fadeNow = 1;          // this frame's fade, set once per tick (1: only the new scene)
+    void startFade();
+    int hoverPlace = -1, hoverTicks = 0;
+    bool lightsStill = false;   // Eco or slow frames: the lights hold still
+    FrameInfo frameInfo;
+    float fadeAlpha() const;
+    void advanceSwitch(juce::RectangleList<int>& dirty);
+    void freezeCurrentFrame();
+    void commitSwitch(int place, int character, juce::RectangleList<int>& dirty);
+    void makeFrost();
+    ui::PhotoScene::Look photoLook(const ui::PhotoScene&, int place, int character, bool live) const;
+    static juce::Colour gradeFor(int place, int character);
     juce::Image photoPlaceholder;   // the film strip's small picture, stretched, until the scene is decoded
     int placeholderFor = -1;
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };

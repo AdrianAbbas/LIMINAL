@@ -47,6 +47,11 @@ the checklist below.
     - [x] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
     - [x] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
+- [ ] **Session 2026-10-31 (afternoon) — clean place transitions + ten truly distinct rooms** (sections at the end)
+  - [x] Part 1 — clean transitions: new scene prepared off screen (decoded, kept, or decoded on hover), swapped in whole in one frame (picture, frosted glass, caption, Character chips, light levels), 320 ms cross-fade; test `frames: clean place and Character changes` (frame = old/new/blend fit); push `[skip ci]`
+  - [ ] Part 2a — research: `docs/ENVIRONMENT_RESEARCH.md` (RT60, early reflections, materials, flutter, walls, PA, sources)
+  - [ ] Part 2b — one acoustic profile + one signature effect per room (no other room uses it), Characters vary the signature; Section 1 rules kept
+  - [ ] Part 2c — distinctness test (features for every pair through one piano phrase, closest pairs listed), listening render (same phrase through all ten rooms); DEVLOG; final push **without** `[skip ci]`
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
@@ -1184,3 +1189,73 @@ macOS: the look on the MacBook Air's Retina screen, decode times there (the slow
 ### For the developer's GarageBand check
 
 Install **LIMINAL-macOS-Universal** from the Actions run of this commit (`bash install-mac.sh`). Click through all ten places in the film strip and the three Character chips in each; look for Room 404 (hotel, third chip: the lit gap halfway down the right wall), the mall's last open shop (first chip), the school's sun from the open classroom (second chip), the garage headlights (second and third), the light in the subway tunnel (third). Set Activity to 100 % in the mall, hotel or impossible room and watch a light falter with the hum. Listen to `u2-rooms-characters.flac` from the Linux artifact for all thirty rooms. Please report anything that looks fake, any blank or flashing frame, and whether the MacBook Air stays cool.
+
+
+---
+
+## Clean place transitions (2026-10-31, afternoon)
+
+**Developer report:** clicking another place, the previous place's image stays on screen for a
+split second and overlaps the new one for a frame.
+
+### Cause
+
+The switch was not one event but several, each on its own schedule. A click changed the caption
+at once (`syncPlace()` read the parameter), but the photograph needs its passes decoded
+(130-380 ms) before its first composite. Meanwhile the editor drew the new place's **320 x 240
+thumbnail stretched** over the window, under the **old place's frosted glass** (the strip and
+drawers kept the previous scene's blur until the new picture arrived), and the old picture's
+buffer was dropped. A Character change had the same shape in miniature: the caption and chips
+named the new Character for one or two frames over the **old Character's light passes**, until
+the compositor's next picture came back. Different parts of the window showed different scenes.
+
+### What changed
+
+| | |
+|---|---|
+| `MainView` (editor) | **Prepare, swap, fade.** A change of place or Character is first prepared off screen: the photograph's scene is decoded on its own thread (or reused: the place just left is kept decoded as a spare, and a place **hovered in the film strip for ~130 ms is decoded ahead**), then composited with the target Character's light. Until that picture is complete the old scene stays on screen, still animating. When it is ready, in **one tick** the editor freezes a private copy of the frame on screen, installs the new picture and its frosted glass, and changes the caption, the Character chips, the grade and the light levels; then a **320 ms ease-out cross-fade** from the frozen frame (on wall time; the first frame is already a fifth of the way in, so text never changes over an unchanged picture). A switch during a fade freezes the blend and fades from that. Painted (fallback) places are drawn on the spot and swapped the same way. The first picture after opening fades in from the thumbnail. `FrameInfo` records what each paint drew (from/to scene, fade, caption, chips, thumbnail) for the test. |
+| `CharacterStrip` | Shows the place and Character **on screen** (`show()`, called by the swap) instead of polling the parameters. The film strip still lights the clicked frame at once (it is the control you pressed). |
+| `PhotoScene` | Looks carry a serial and every picture reports the look it shows (`take(image, &serial)`, `peek()`), so the swap waits for exactly the target look, never an older one in flight. A scene dropped while decoding stops after the pass it is on (no long wait on the message thread when hovering across the strip). |
+| Tests | New in group `frames`: **clean place and Character changes** (below). The older 240-frame test now compares each frame with the scene actually on screen. The editor test's "choosing a place changes the picture" takes one settle tick first (the swap is deferred by design). |
+
+### Tested (Linux, this container): 476 checks pass, 0 fail (full suite, on exactly this commit)
+
+New test (`Tests/FrameTests.h`, `testTransitions`): Activity 0, Eco (lights and caustics still, so
+the switch is the only change), seven switches - hospital to pool (decoded on the click), pool's
+Character to Submerged (same scene), pool to office, office back to pool (the kept scene),
+pool to hospital after hovering it, hospital to garage then hotel one frame later (changed mind),
+hotel's Character to Room 404. Every frame from the click until the fade is over is rendered (the
+editor's own ticks in real time, the compositor alongside) and fitted as `(1 - a) x old + a x new`
+against the two settled pictures, the scene and the frosted strip separately:
+
+- **123 frames: every one is exactly the old scene, the new one, or a blend of those two**
+  (worst residual 0.57 / 255; a thumbnail or a third picture gives tens);
+- the caption and the chips name the old scene exactly while `a = 0` and the new one as soon as
+  `a > 0`: **0 frames out of step**; the fade only moves forward and matches what the editor
+  reports; the frosted glass fades in step with the picture;
+- click to the first frame of the new scene, this container (each frame also takes a full
+  software snapshot for the test): 220-357 ms when the place is decoded on the click, **83-132
+  ms** when it was kept or hovered, 83-90 ms for a Character; fades 257-315 ms.
+
+**The test catches the old behaviour:** with the caption switched at once (as before), it fails
+with 21 thumbnail frames out of 29, residual 58 / 255, 3 frames with the new caption over the old
+picture and the frosted glass out of step.
+
+The 240-frame test is still clean (0 blank, 0 partly blank, 0 transparent, **0 thumbnail frames**).
+Editor CPU in that heavy script 60 % of one core (before: 58 %); a cross-fade frame paints two
+pictures, about 14 ms on this software renderer.
+
+### Decisions (recorded instead of asking)
+
+- **Cross-fade, not a dip through black**: a dip shows black for a moment, which is what the
+  developer reported as a bug before (the blank frames of the hotfix). 320 ms ease-out.
+- **The old scene stays until the new one is ready** rather than showing a placeholder: no frame
+  ever mixes scenes. The cost is that the picture follows the click after the decode
+  (~0.2-0.35 s here when nothing was decoded ahead); the sound changes at once as before.
+- **Memory:** at most three decoded scenes at a time (on screen, being prepared, one spare), about
+  70 MB each in this format; the spare is the place just left or the one hovered.
+
+### Not verified here
+
+macOS: how the fade looks on the MacBook Air and that GarageBand shows no frame of the old scene
+over the new one. CoreGraphics draws the two-picture fade frames much faster than this renderer.

@@ -49,6 +49,7 @@ public:
         float light = 1;          // the Character's light level
         int character = 0;        // 1: a faded memory; 2: darker, hazier edges
         unsigned grainSeed = 1;
+        unsigned serial = 0;      // the caller's tag, handed back with the picture (take)
     };
 
     // Which places have a photographic scene (bundled or dropped in), and its file name.
@@ -71,7 +72,9 @@ public:
     void request(const Look&);            // composite this look (the newest request wins)
     // The newest finished picture, if there is a new one. It stays complete and unchanged until
     // the next take() (message thread only).
-    bool take(juce::Image& out);
+    bool take(juce::Image& out, unsigned* serial = nullptr);
+    // Whether a new picture is waiting, and the serial of the look it shows (does not take it).
+    bool peek(unsigned& serial);
     int composites() const { return compositeCount.load(); }   // how many the worker has made
     double compositeMs() const { return compositeTime.load(); }   // and the time they took
     static constexpr double minFrameMs = 1000.0 / 30.0;       // the worker's frame cap
@@ -92,7 +95,7 @@ private:
     void addPasses(const std::vector<std::pair<int, float>>& moved);   // (pass, level change)
 
     int placeIndex = 0;
-    std::atomic<bool> ready { false }, broken { false };
+    std::atomic<bool> ready { false }, broken { false }, cancelled { false };   // cancelled: the scene is being dropped mid-decode
     int width = 0, height = 0, cw = 0, ch = 0;
     float headroom = 1, causticRate = 5, causticDefault = 1;
     juce::Colour causticTint { 0xffcff8f0 };
@@ -109,7 +112,8 @@ private:
     std::mutex handoff;                               // the requested look and the finished image
     Look wanted;
     bool pending = false;
-    std::array<juce::Image, 3> buffers;   // [front]: the editor's; [ready]: newest complete; [back]: the worker's
+    std::array<juce::Image, 3> buffers;
+    std::array<unsigned, 3> serials {};   // the look each buffer shows   // [front]: the editor's; [ready]: newest complete; [back]: the worker's
     int front = 0, readyIndex = 1, back = 2;   // swapped under `handoff` (back is only read by the worker)
     bool fresh = false;
     std::atomic<int> compositeCount { 0 };

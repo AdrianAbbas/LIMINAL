@@ -180,14 +180,15 @@ void testFrames(Suite& s) {
             painted += dirty.isEmpty() ? 0 : 1;
 
             const double c0 = frames::threadCpuMs();
-            const auto& ref = reference[{ st.place, st.character }];
+            // The settled picture of what is on screen (the old scene until the new one is swapped in).
+            const auto& ref = reference.count({ view.shownPlace(), view.shownCharacter() }) != 0 ? reference[{ view.shownPlace(), view.shownCharacter() }] : reference[{ st.place, st.character }];
             const auto screenTiles = frames::tiles(screen, scene);
             const auto full = editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f);
             const auto fullTiles = frames::tiles(full, scene);
-            // While a photograph decodes (~200 ms after a change of place) the editor shows that
-            // place's thumbnail, lit as its first Character: a real picture, but not the settled
-            // one. Those frames only fail if they are actually dark (no tile over 3 %).
-            const bool placeholder = ui::PhotoScene::available(st.place) && !view.showingPhoto();
+            // Since the clean-transition fix a thumbnail never stands in (the old scene stays until
+            // the new one is composited, then they cross-fade); counted in case one does. Such frames
+            // only fail if they are actually dark (no tile over 3 %).
+            const bool placeholder = view.lastFrame().thumbnail;
             const auto dark = [](const std::vector<double>& t) { return *std::max_element(t.begin(), t.end()) < 3.0 ? 2 : 0; };
             const int onScreen = placeholder ? dark(screenTiles) : frames::blankness(screenTiles, ref, worstScreen);
             const int whole = placeholder ? dark(fullTiles) : frames::blankness(fullTiles, ref, worstFull);
@@ -309,4 +310,178 @@ void testFrames(Suite& s) {
                 std::to_string(changedWhileHeld) + " changes seen");
         s.report(taken <= 2.5 * 31, "the compositor's 30 fps cap holds when asked every 4 ms", std::to_string(taken) + " pictures in 2.5 s");
     }
+}
+
+// Clean place and Character changes (2026-10-31: "the previous place's image stays on screen for a
+// split second and overlaps the new one"). The new scene is prepared off screen, swapped in whole in
+// one frame, then cross-faded. Every frame around a switch is rendered (the editor's own ticks in
+// real time, the compositor on its thread) and fitted as  frame = (1 - a) x old + a x new  against
+// the settled pictures of the two scenes, separately for the picture and for the frosted glass of
+// the control strip:
+//   - the fit is exact (small residual): no third picture - no thumbnail, no stale frame, no old
+//     Character's lights under the new one, no frosted glass from the wrong scene;
+//   - a only grows, from 0 to 1, and matches the fade the editor reports;
+//   - the caption and the Character chips name the old scene exactly while a = 0 and the new
+//     scene as soon as a > 0 (HUD, Characters and lights change in the same frame);
+//   - the picture and the glass move together.
+namespace transitions {
+struct Samples {
+    std::vector<float> scene, glass;
+};
+// The scene below the captions and above the strip, and the frosted bands of the strip that have no
+// controls on them (above the film strip and between it and the knobs), every 4th pixel, RGB.
+Samples sample(const juce::Image& image) {
+    Samples out;
+    const juce::Image::BitmapData d(image, juce::Image::BitmapData::readOnly);
+    const auto add = [&](std::vector<float>& v, int x0, int x1, int y0, int y1, int step) {
+        for (int y = y0; y < y1; y += step)
+            for (int x = x0; x < x1; x += step) {
+                const auto c = d.getPixelColour(x, y);
+                v.push_back(c.getRed());
+                v.push_back(c.getGreen());
+                v.push_back(c.getBlue());
+            }
+    };
+    add(out.scene, 30, 930, 140, 552, 4);
+    add(out.glass, 40, 920, 566, 573, 2);
+    add(out.glass, 40, 920, 627, 633, 2);
+    return out;
+}
+struct Fit { double a = 0, residual = 0, spread = 0; };
+// Least-squares a in f = A + a (B - A), and the RMS residual (0-255).
+Fit fit(const std::vector<float>& f, const std::vector<float>& A, const std::vector<float>& B) {
+    double num = 0, den = 0;
+    for (std::size_t i = 0; i < f.size(); ++i) {
+        num += double(f[i] - A[i]) * double(B[i] - A[i]);
+        den += double(B[i] - A[i]) * double(B[i] - A[i]);
+    }
+    Fit out;
+    out.a = den > 0 ? num / den : 0.0;
+    double r = 0;
+    for (std::size_t i = 0; i < f.size(); ++i) {
+        const double e = double(f[i]) - (double(A[i]) + out.a * double(B[i] - A[i]));
+        r += e * e;
+    }
+    out.residual = std::sqrt(r / double(std::max<std::size_t>(1, f.size())));
+    out.spread = std::sqrt(den / double(std::max<std::size_t>(1, f.size())));   // how different the two scenes are
+    return out;
+}
+} // namespace transitions
+
+void testTransitions(Suite& s) {
+    s.section("frames: clean place and Character changes");
+    LiminalProcessor p;
+    p.prepareToPlay(48000.0, 512);
+    const auto set = [&](const char* id, float value) {
+        auto* param = p.parameters.getParameter(id);
+        param->setValueNotifyingHost(param->convertTo0to1(value));
+    };
+    std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditorAndMakeActive());
+    auto* lm = dynamic_cast<LiminalEditor*>(editor.get());
+    if (lm == nullptr) {
+        s.check(false, "the editor is LIMINAL's");
+        return;
+    }
+    auto& view = lm->view();
+    // Still lights, so the only change on screen is the switch: no events, no notes, Eco (no
+    // caustic drift), the mouse elsewhere.
+    set(params::activity, 0.0f);
+    set(params::quality, 0.0f);
+    set(params::unreal, 0.0f);
+    const auto snapshot = [&] { return editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f); };
+    double next = juce::Time::getMillisecondCounterHiRes();
+    const auto frameTick = [&] {   // one editor frame in real time
+        next += 1000.0 / 30.0;
+        const double wait = next - juce::Time::getMillisecondCounterHiRes();
+        if (wait > 0) std::this_thread::sleep_for(std::chrono::microseconds(juce::int64(wait * 1000.0)));
+        else next = juce::Time::getMillisecondCounterHiRes();
+        view.tick();
+    };
+    struct Case {
+        const char* name;
+        int fromPlace, fromCharacter, toPlace, toCharacter;
+        int hoverFirst = -1;       // hover this film frame for a while before clicking (decoded ahead)
+        int detourPlace = -1;      // click this place first, then the target one frame later
+    };
+    const std::vector<Case> cases {
+        { "hospital -> pool (place, decoded on the click)", 0, 0, 4, 0 },
+        { "pool -> pool, Submerged (Character, same scene)", 4, 0, 4, 2 },
+        { "pool -> office (place)", 4, 2, 8, 1 },
+        { "office -> pool (back: the scene just left, kept decoded)", 8, 1, 4, 2 },
+        { "pool -> hospital, hovered first (decoded ahead)", 4, 2, 0, 0, 0 },
+        { "hospital -> garage, then hotel a frame later (changed mind)", 0, 0, 5, 1, -1, 3 },
+        { "hotel -> hotel, Room 404 (Character)", 5, 1, 5, 2 },
+    };
+    int badFits = 0, badOrder = 0, badHud = 0, badReported = 0, badGlass = 0, thumbnails = 0, unfinished = 0, totalFrames = 0;
+    double worstResidual = 0, worstGlass = 0, slowest = 0;
+    std::string firstBad;
+    for (const auto& c : cases) {
+        // Settle on the old scene (composited on the spot), then run real frames until nothing moves.
+        set(params::environment, float(c.fromPlace));
+        set(params::character, float(c.fromCharacter));
+        view.animate();
+        view.animate();
+        for (int k = 0; k < 20 || view.switching(); ++k) frameTick();
+        const auto A = transitions::sample(snapshot());
+        // The switch, then every frame until the fade is over (and a few more).
+        if (c.hoverFirst >= 0) {
+            view.placeSelector().onHover(c.hoverFirst);
+            for (int k = 0; k < 15; ++k) frameTick();   // ~0.5 s with the mouse over it: decoded meanwhile
+            view.placeSelector().onHover(-1);
+        }
+        struct Frame { transitions::Samples samples; MainView::FrameInfo info; double ms; };
+        std::vector<Frame> recorded;
+        const double t0 = juce::Time::getMillisecondCounterHiRes();
+        if (c.detourPlace >= 0) {
+            view.placeSelector().choose(c.detourPlace);
+            frameTick();
+            recorded.push_back({ transitions::sample(snapshot()), view.lastFrame(), juce::Time::getMillisecondCounterHiRes() - t0 });
+        }
+        view.placeSelector().choose(c.toPlace);
+        view.characterSelector().choose(c.toCharacter);
+        int after = 0;
+        for (int k = 0; k < 90 && after < 4; ++k) {
+            frameTick();
+            recorded.push_back({ transitions::sample(snapshot()), view.lastFrame(), juce::Time::getMillisecondCounterHiRes() - t0 });
+            after = view.switching() ? 0 : after + 1;
+        }
+        if (view.switching()) ++unfinished;
+        const auto B = recorded.back().samples;
+        // Each frame against the two settled pictures.
+        double lastA = -1, firstNewMs = -1, fadeEndMs = -1;
+        for (const auto& f : recorded) {
+            ++totalFrames;
+            const auto pic = transitions::fit(f.samples.scene, A.scene, B.scene);
+            const auto glass = transitions::fit(f.samples.glass, A.glass, B.glass);
+            const bool hudNew = f.info.captionPlace == c.toPlace && f.info.captionCharacter == c.toCharacter && f.info.chipsPlace == c.toPlace && f.info.chipsCharacter == c.toCharacter;
+            const bool hudOld = f.info.captionPlace == c.fromPlace && f.info.captionCharacter == c.fromCharacter && f.info.chipsPlace == c.fromPlace && f.info.chipsCharacter == c.fromCharacter;
+            const double reported = f.info.fromPlace < 0 ? (hudNew ? 1.0 : 0.0) : double(f.info.alpha);
+            worstResidual = std::max(worstResidual, pic.residual);
+            std::string bad;
+            if (pic.residual > 3.0) { ++badFits; bad = "the picture is not old/new alone or a blend of the two (residual " + num(pic.residual, 2) + ")"; }
+            if (pic.a < lastA - 0.02) { ++badOrder; bad = "the fade went backwards (" + num(lastA, 2) + " -> " + num(pic.a, 2) + ")"; }
+            if (!((pic.a < 0.02 && hudOld) || (pic.a > 0.02 && hudNew))) { ++badHud; bad = "caption/chips do not match the picture (a = " + num(pic.a, 3) + ")"; }
+            if (std::abs(pic.a - reported) > 0.05) { ++badReported; bad = "the picture's fade " + num(pic.a, 3) + " is not the editor's " + num(reported, 3); }
+            if (glass.spread > 2.0) {   // (only where the two scenes' glass differs visibly)
+                worstGlass = std::max(worstGlass, std::max(glass.residual, std::abs(glass.a - pic.a) * glass.spread));
+                if (glass.residual > 3.0 || std::abs(glass.a - pic.a) > 0.08) { ++badGlass; bad = "the frosted glass is not in step with the picture (a " + num(glass.a, 2) + " vs " + num(pic.a, 2) + ")"; }
+            }
+            if (f.info.thumbnail) { ++thumbnails; bad = "a thumbnail stood in"; }
+            if (firstBad.empty() && !bad.empty()) firstBad = std::string(c.name) + ", " + num(f.ms, 0) + " ms: " + bad;
+            if (pic.a > 0.02 && firstNewMs < 0) firstNewMs = f.ms;
+            if (pic.a > 0.98 && fadeEndMs < 0) fadeEndMs = f.ms;
+            lastA = std::max(lastA, pic.a);
+        }
+        slowest = std::max(slowest, firstNewMs);
+        s.metric(std::string(c.name) + ": click to the first frame of the new scene / fade", firstNewMs, (" / " + num(fadeEndMs - firstNewMs, 0) + " ms").c_str());
+    }
+    s.check(badFits == 0 && thumbnails == 0, "every frame around a switch is the old scene, the new one, or a cross-fade of exactly those two (no stale frame, thumbnail or wrong light passes)",
+            std::to_string(badFits) + " bad, " + std::to_string(thumbnails) + " thumbnails in " + std::to_string(totalFrames) + " frames; worst residual " + num(worstResidual, 2) + " / 255" +
+                (firstBad.empty() ? "" : "; first: " + firstBad));
+    s.check(badHud == 0, "caption and Character chips change in the same frame as the picture", std::to_string(badHud) + " frames out of step");
+    s.check(badOrder == 0 && badReported == 0, "the fade only moves forward, as far as the editor says", std::to_string(badOrder) + " backwards, " + std::to_string(badReported) + " off");
+    s.check(badGlass == 0, "the frosted glass of the strip fades in step with the picture", std::to_string(badGlass) + " frames; worst " + num(worstGlass, 2));
+    s.check(unfinished == 0, "every switch finishes", std::to_string(unfinished) + " still switching after 3 s");
+    s.report(slowest < 700.0, "the new scene is on screen within 0.7 s of the click (decoding included, this container)", num(slowest, 0) + " ms");
+    p.editorBeingDeleted(editor.get());
 }

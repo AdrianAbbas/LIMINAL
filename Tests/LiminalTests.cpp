@@ -769,6 +769,7 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                 // The picture follows the place.
                 const auto before = editor->createComponentSnapshot({ 200, 200, 300, 200 }, true, 1.0f);
                 view.placeSelector().choose(4);
+                view.animate();   // (the new scene is swapped in when it is ready: at once here)
                 const auto after = editor->createComponentSnapshot({ 200, 200, 300, 200 }, true, 1.0f);
                 double change = 0;
                 for (int y = 0; y < 200; y += 4)
@@ -1153,7 +1154,10 @@ int main(int argc, char** argv) {
     if (run("workflow")) testWorkflow(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
-    if (run("frames")) testFrames(s);
+    if (run("frames")) {
+        testFrames(s);
+        testTransitions(s);
+    }
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

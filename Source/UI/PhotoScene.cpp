@@ -101,6 +101,7 @@ public:
             scene.composite(look, scene.buffers[std::size_t(scene.back)]);   // the back image: nobody else touches it
             {
                 std::lock_guard<std::mutex> lock(scene.handoff);
+                scene.serials[std::size_t(scene.back)] = look.serial;
                 std::swap(scene.back, scene.readyIndex);
                 scene.fresh = true;
             }
@@ -145,7 +146,10 @@ juce::Image PhotoScene::thumbnail(int place) {
 
 PhotoScene::PhotoScene(int place) : placeIndex(place) { worker = std::make_unique<Worker>(*this); }
 
-PhotoScene::~PhotoScene() { worker.reset(); }
+PhotoScene::~PhotoScene() {
+    cancelled = true;   // a scene dropped while decoding stops after the pass it is on (the editor never waits long)
+    worker.reset();
+}
 
 bool PhotoScene::load() {
     std::lock_guard<std::mutex> lock(workLock);
@@ -171,6 +175,10 @@ bool PhotoScene::load() {
         return juce::ImageFileFormat::loadFrom(block.getData(), block.getSize());
     };
     for (const auto& p : *list) {
+        if (cancelled.load()) {
+            broken = true;
+            return false;
+        }
         Pass pass;
         pass.name = p["name"].toString();
         pass.kind = p["kind"].toString();
@@ -290,12 +298,20 @@ void PhotoScene::request(const Look& look) {
     if (worker != nullptr) worker->notify();
 }
 
-bool PhotoScene::take(juce::Image& out) {
+bool PhotoScene::take(juce::Image& out, unsigned* serial) {
     std::lock_guard<std::mutex> lock(handoff);
     if (!fresh) return false;
     std::swap(front, readyIndex);   // the old front goes back into the ring; the caller drops it now
     out = buffers[std::size_t(front)];
+    if (serial != nullptr) *serial = serials[std::size_t(front)];
     fresh = false;
+    return true;
+}
+
+bool PhotoScene::peek(unsigned& serial) {
+    std::lock_guard<std::mutex> lock(handoff);
+    if (!fresh) return false;
+    serial = serials[std::size_t(readyIndex)];
     return true;
 }
 
