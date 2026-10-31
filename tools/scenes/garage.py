@@ -143,6 +143,6 @@ CHARACTERS = {
     "near": [1.0, 1.0, 0.0],
     "mid": [1.0, 0.65, 0.8],
     "far": [1.0, 0.35, 1.0],
-    "headlights": [0.0, 0.6, 2.2],
+    "headlights": [0.0, 1.2, 2.2],
 }
 FLICKER = {"mid": [False, False, True]}
