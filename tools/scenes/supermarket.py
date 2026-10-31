@@ -132,11 +132,11 @@ PASSES = [
 # Nostalgia: everything on, a warm Saturday (the grade does the rest). Fluorescent Nightmare:
 # every tube too bright, the middle rows stuttering with the hum.
 CHARACTERS = {
-    "near": [0.8, 1.0, 1.35],
-    "mid": [0.3, 1.0, 1.35],
-    "far": [0.0, 1.0, 1.35],
-    "failing": [0.8, 1.0, 1.35],
-    "fridges": [1.0, 0.8, 1.4],
+    "near": [0.8, 0.8, 1.7],
+    "mid": [0.3, 0.7, 1.7],
+    "far": [0.0, 0.55, 1.7],
+    "failing": [0.8, 0.8, 1.7],
+    "fridges": [1.0, 0.5, 1.8],
     "checkout": [1.0, 0.0, 0.0],
 }
 FLICKER = {"mid": [False, False, True]}

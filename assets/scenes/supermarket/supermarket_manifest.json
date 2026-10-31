@@ -1,0 +1,115 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 0.0,
+      "characters": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "near",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.6024
+      ],
+      "peak": 2.41,
+      "characters": [
+        0.8,
+        0.8,
+        1.7
+      ]
+    },
+    {
+      "name": "mid",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.4959,
+        0.6791
+      ],
+      "peak": 2.438,
+      "characters": [
+        0.3,
+        0.7,
+        1.7
+      ],
+      "flicker": [
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "name": "far",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.5,
+        0.6918
+      ],
+      "peak": 2.054,
+      "characters": [
+        0.0,
+        0.55,
+        1.7
+      ]
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.5773,
+        0.6688
+      ],
+      "peak": 2.201,
+      "characters": [
+        0.8,
+        0.8,
+        1.7
+      ]
+    },
+    {
+      "name": "fridges",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4975,
+        0.5069
+      ],
+      "peak": 1.384,
+      "characters": [
+        1.0,
+        0.5,
+        1.8
+      ]
+    },
+    {
+      "name": "checkout",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        -0.6359,
+        0.5772
+      ],
+      "peak": 0.055,
+      "characters": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "supermarket",
+  "thumbnail": "supermarket_thumb.jpg"
+}
