@@ -1,0 +1,115 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 3.282,
+      "characters": [
+        1.0,
+        1.4,
+        0.05
+      ]
+    },
+    {
+      "name": "near",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.468,
+        0.179
+      ],
+      "peak": 3.24,
+      "characters": [
+        1.0,
+        0.1,
+        0.0
+      ]
+    },
+    {
+      "name": "mid",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.4886,
+        0.3683
+      ],
+      "peak": 2.824,
+      "characters": [
+        1.0,
+        0.15,
+        0.6
+      ],
+      "flicker": [
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "name": "far",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.494,
+        0.4179
+      ],
+      "peak": 2.687,
+      "characters": [
+        1.0,
+        0.3,
+        1.0
+      ]
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.4903,
+        0.384
+      ],
+      "peak": 2.64,
+      "characters": [
+        1.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "classroom",
+      "kind": "sun",
+      "default": 1.0,
+      "anchor": [
+        -0.0086,
+        0.4432
+      ],
+      "peak": 1.029,
+      "characters": [
+        0.35,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "name": "exit",
+      "kind": "sign",
+      "default": 1.0,
+      "anchor": [
+        0.479,
+        0.4469
+      ],
+      "peak": 8.666,
+      "characters": [
+        1.0,
+        0.6,
+        1.8
+      ]
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "school",
+  "thumbnail": "school_thumb.jpg"
+}

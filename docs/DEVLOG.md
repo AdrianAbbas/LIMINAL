@@ -36,7 +36,7 @@ the checklist below.
   - [ ] Part 3 (approved 2026-10-31: "the hospital render looks great") — the other seven places and the Character variants. Resume here:
     - [x] 3.0 Character lighting from the manifests (per-pass levels and flicker per Character, variant passes) instead of the editor's table; hospital/pool/office manifests moved over
     - [x] 3.1 Mall (`tools/scenes/mall.py`, rendered, packed) — push `[skip ci]`
-    - [ ] 3.2 School — push `[skip ci]`
+    - [x] 3.2 School — push `[skip ci]`
     - [ ] 3.3 Garage — push `[skip ci]`
     - [ ] 3.4 Hotel (Room 404's door ajar) — push `[skip ci]`
     - [ ] 3.5 Subway — push `[skip ci]`

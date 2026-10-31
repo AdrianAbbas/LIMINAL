@@ -70,7 +70,7 @@ def build():
                     for r in range(2):
                         c.ceiling_panel(f"shop panel {k} {r}", "lastshop", (xw + side * (1.6 + 2.0 * r), yc), (0.6, 1.2), z0 + 3.0, 22.0, (1.0, 0.95, 0.85), glow=4.0)
                     sign = c.emitter("open sign", (1.0, 0.85, 0.6), 6.0)
-                    s = c.plane(f"shop sign {k}", (xw + side * 0.26, yc, z0 + 3.25), (4.6, 0.35), sign, rotation=(math.pi / 2, 0, -side * math.pi / 2))
+                    s = c.plane(f"shop sign {k}", (xw - side * 0.005, yc, z0 + 3.25), (4.6, 0.35), sign, rotation=(math.pi / 2, 0, -side * math.pi / 2))
                     c.in_group("lastshop", s)
                     continue
                 # Closed: dark glass, then (most of them) a lowered shutter.
@@ -81,8 +81,8 @@ def build():
                     c.box(f"shutter {side} {level} {k}", (min(xw + side * 0.12, xw + side * 0.16), y + 0.3, z0 + 2.9 - h), (max(xw + side * 0.12, xw + side * 0.16), y + 5.7, z0 + 2.9), shutter)
                 # The shop's dim sign strip and a security light deep inside (the "shops" pass).
                 if (k + level + (side > 0)) % 2 == 0:
-                    strip = c.emitter(f"sign strip {side} {level} {k}", (0.85, 0.9, 1.0) if k % 3 else (1.0, 0.8, 0.55), 2.2)
-                    s = c.plane(f"strip {side} {level} {k}", (xw + side * 0.26, yc, z0 + 3.42), (3.8, 0.06), strip, rotation=(math.pi / 2, 0, -side * math.pi / 2))
+                    strip = c.emitter(f"sign strip {side} {level} {k}", (0.85, 0.9, 1.0) if k % 3 else (1.0, 0.8, 0.55), 4.0)
+                    s = c.plane(f"strip {side} {level} {k}", (xw - side * 0.005, yc, z0 + 3.42), (3.8, 0.06), strip, rotation=(math.pi / 2, 0, -side * math.pi / 2))
                     s.visible_shadow = False
                     c.in_group("shops", s)
             # The wall above the shops, up to the gallery ceiling or the roof.

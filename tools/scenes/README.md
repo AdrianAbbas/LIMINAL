@@ -20,9 +20,13 @@ Blender's Python module runs headless, no GUI or GPU needed:
 ```bash
 python3.13 -m venv ~/bpyenv
 ~/bpyenv/bin/pip install bpy pillow      # bpy 5.2.x (Blender 5.2 LTS) needs Python 3.13
-~/bpyenv/bin/python tools/scenes/render.py pool              # or office, hospital
+~/bpyenv/bin/python tools/scenes/render.py pool              # any of the ten: hospital mall school garage pool hotel subway supermarket office impossible
 ~/bpyenv/bin/python tools/scenes/render.py pool --preview    # quarter size, 16 samples: a quick look
 ~/bpyenv/bin/python tools/scenes/preview.py pool out.png sun=1.5 base=0.6   # composite like the plug-in
+~/bpyenv/bin/python tools/scenes/preview.py pool out.png character=3        # as a Character lights it
+~/bpyenv/bin/python tools/scenes/preview.py pool sheet.jpg --sheet          # the three Characters side by side
+~/bpyenv/bin/python tools/scenes/render.py mall --pack-only                 # re-pack EXRs already rendered
+~/bpyenv/bin/python tools/scenes/render.py mall --characters-only           # re-write the Character table only
 ```
 
 Environment variables: `LIMINAL_SAMPLES` (default 160), `LIMINAL_ONLY_PASS=<name>` (re-render
@@ -37,8 +41,19 @@ bundles go to `assets/scenes/<place>/`:
   in the picture), the caustic frames and their rate, the headroom.
 
 The plug-in build never needs Blender: CMake bundles whatever is in `assets/scenes/` (BinaryData).
-Rendered here on a 4-core cloud container (Linux, x86_64, CPU only): about 1-3 minutes per full
-pass at 1440 x 1080, 160 samples.
+Rendered here on a 4-core cloud container (Linux, x86_64, CPU only), 1440 x 1080: the
+prototype at 96 samples took 4.5-8.5 minutes a pass; Part 3's seven at `LIMINAL_SAMPLES=80`
+about 3-5 minutes a pass (25-35 minutes a scene).
+
+## Characters (Part 3)
+
+Each scene script ends with `CHARACTERS` (per pass, its level under Characters 1-3; 1 = as
+rendered) and optionally `FLICKER` (per pass, whether it follows the hum's stutter under each
+Character; passes of kind `failing` always do). They go into the manifest (`characters`,
+`flicker` per pass, `caustics.characters`), so the plug-in needs no table of its own. A
+*variant* is a light group that only one Character switches on - e.g. the hotel's `room404`
+(door 404 ajar, its room lit), the mall's `lastshop`, the school's `classroom` sun, the garage's
+`headlights`, the subway's `train` - with the geometry rendered once for all three.
 
 ## The developer's own renders or photographs
 

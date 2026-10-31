@@ -516,10 +516,12 @@ void testPhotoScenes(Suite& s) {
         int alone = 0;
         std::string weakest;
         double weakestDiff = 1;
+        const auto every = scene.defaultLook();   // every group lit (a Character may leave some off)
+        const auto everyPicture = scene.renderNow(every);
         for (std::size_t i = 1; i < passes.size(); ++i) {
-            auto off = look;
+            auto off = every;
             off.levels[i] = 0;
-            const double d = meanDifference(picture, scene.renderNow(off));
+            const double d = meanDifference(everyPicture, scene.renderNow(off));
             alone += d > 0.0003 ? 1 : 0;   // (the exit sign is small: 0.03 % of every pixel's range on average)
             if (d < weakestDiff) { weakestDiff = d; weakest = passes[i].name.toStdString(); }
         }
