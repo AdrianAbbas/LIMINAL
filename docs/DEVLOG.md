@@ -52,6 +52,10 @@ the checklist below.
   - [x] Part 2a — research: `docs/ENVIRONMENT_RESEARCH.md` (RT60, early reflections, materials, flutter, walls, PA, sources)
   - [x] Part 2b — one acoustic profile + one signature effect per room (`DSP/Signature`), Characters vary the signature; shared effects pruned; Section 1 rules kept; distinctness + signature-matrix tests (group `distinct`); push `[skip ci]`
   - [x] Part 2c — distinctness test (features for every pair through one piano phrase, closest pairs listed), listening render (same phrase through all ten rooms + a shuffled blind version with answer key); DEVLOG; final push **without** `[skip ci]`
+- [x] **VHS "found footage" look on every place (2026-10-31, evening)** (section at the end) — *waiting for the developer's GarageBand look*
+  - [x] Part 1 — parameters `vhs` (Off / Light / Heavy, default Light) and `vhs_warble` (off); `UI/Vhs` (static bake in the composite, animated tape layers, glitch schedule, camcorder OSD); `dsp::TapeWarble`; test groups `vhs` and `cpu` — pushed `[skip ci]`
+  - [x] Part 2 — control on the PERFORM page, fast screen-size copy, snapshots of every place at Off / Light / Heavy in `docs/snapshots/` — pushed `[skip ci]`
+  - [x] Part 3 — editor CPU before/after, DEVLOG section + handoff; final push **without** `[skip ci]`
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
@@ -1359,3 +1363,140 @@ mall's tinny far-off PA, the school's wobbling tape and ringing lockers, the gar
 underwater half (try Submerged), the hotel's wall (try Room 404), the subway's echoes running away, the supermarket's
 speaker grid, the office's hum on the notes, and the impossible room's backward swells and freezes. Please report any
 two rooms that still sound alike, and any Character that doesn't change its room enough.
+
+
+---
+
+## VHS "found footage" look (2026-10-31, evening)
+
+**Developer request:** the renders look too clean. Make every scene look as if it was filmed on an old camcorder and
+played back from a worn tape, on top of the existing scenes and interactive lights. Bake the static parts into the
+cached composite, animate only cheap layers at 24-30 fps or less, keep the double buffering, report editor CPU
+before and after.
+
+### What changed
+
+| | |
+|---|---|
+| Parameters (append-only) | **`vhs`** "VHS Look": Off / Light / Heavy, **default Light** (tuned between light and medium). **`vhs_warble`** "VHS Tape Warble", **off** by default. Both are saved with the song. Scene presets and Init keep the chosen values, because they are viewing and listening preferences, not part of the sound design. |
+| `UI/Vhs` (new): **static half**, baked into the composite | `Baker` runs on the compositor's own thread, once per new look (a scene, a light or the slow colour cast changes), **after** the place's and Character's own grade, so each keeps its look underneath. With the tape on, the scene is composited at **half size (720 x 540, ~480 lines like VHS)**: each pixel is the mean of 2 x 2 of the light-pass sum. Then the bake applies: faint **barrel curvature** (corners fixed, middle ~4 % at Heavy) and **edge vignette**. **Luma** is low-passed to roughly SD resolution (a box twice), with a trailing smear to the right and the deck's edge-enhancement halo. **Chroma** runs at a quarter of the width and is box-blurred, smeared right, **offset to the right** (colour runs past edges) and averaged with the line above (the deck's comb). **Red/cyan misregistration**: red is built from luma shifted 1-3 px. The **tape grade**: lifted, milky blacks (slightly blue-grey), bloom from highlights carried sideways and a little down, a soft shoulder that clips highlights below full white, **reds pushed**, blues faded, yellows and oranges kept, and a faint **green/magenta cast** that drifts slowly. Scanlines are not baked (they would beat against the screen's pixels); they are drawn with the grain. |
+| `UI/Vhs`: **animated half**, drawn over the cached picture | `Tape` advances on the editor's timer at **at most 24 tape frames a second** (12 when frames are slow or in Eco). Every frame: **fine moving luma grain with scanlines**. These are three pre-made frames at screen resolution with the opacity baked in (`Grain`), drawn at a new offset (a plain blend, ~3.6x cheaper than a tiled fill). Also every frame: a few **dropouts** (short white streaks) and **coloured specks**, the **head-switching strip** along the bottom of the viewfinder (the lowest lines shifted sideways and noisy), and occasionally **line wobble** (a few thin bands nudged 1-2 px) or a 1 px **jitter** of the whole picture. **Sparse glitches:** a soft **tracking band** (torn, noisy, a little brighter) rolls through the frame for 0.9-2.2 s, about every 26 s at Light and 13 s at Heavy. Gaps are exponentially distributed over a minimum, so there is never a rhythm. **Unreal and "wrong" Characters** (`vhs::wrongness`, e.g. Something Wrong, Nightmare, Room 404, Fluorescent Nightmare, Unstable, Beyond Reality; Unreal 100 % counts fully) bring up to 3x as many rolls. They also bring a colour lurch inside the band, a faster and wider colour drift, and **brief frame tears** (2-4 tape frames, never within 3 s of the last). Without wrongness there are no tears. |
+| Camcorder OSD | With the tape on, REC (blinking dot), **SP**, the deck's **PLAY ▶** (for 3.5 s after opening and after each new place) and the date/time use an original **5 x 7 pixel font** (`vhs::osdText`). It has a soft glow and a faint red/cyan fringe, each glyph is nudged a little off the line, it sits 1 px off the frame grid and jumps with the picture's jitter. It is cached per text (the clock's image is rebuilt once a second). With VHS Off, the clean overlay is unchanged. |
+| Editor (`MainView`) | The picture on screen is a **screen-resolution copy** made once per new picture (`vhs::resize`, an integer bilinear upscale, ~4x cheaper than JUCE's resample here), so a tape frame is a plain copy plus the grain. A tape frame repaints the viewfinder only (not the control strip). With the tape on, a light must move by 4 % (not 2 %) before a new composite is requested, and the compositor is capped at **15** composites a second (30 without the tape). The colour cast is sent in steps of 0.1 (a new composite every few seconds as it drifts, not every frame). Unreal's old "tape slip" shimmer stays for VHS Off. Triple buffering is unchanged. When VHS changes, the compositor's back picture is re-made at the new size; the editor's own picture is never written. |
+| Control | On the **PERFORM** page, under **PICTURE - VHS LOOK (FOUND FOOTAGE)**: OFF / LIGHT / HEAVY, and **TAPE WARBLE (AUDIO)**. It is in PERFORM because the PRESETS drawer had no room left, and it sits next to Unreal, which drives it. |
+| `dsp::TapeWarble` (new) | Optional and off by default. While on, the sound runs through a 4 ms delay line whose length wobbles with the picture's heavy glitches: 5.3 Hz + 0.83 Hz, at most ~25 cents. There is also a slight level dip and a little lost top end. Switching it on or off cross-fades over 30 ms. The editor publishes how hard the tape is struggling (`LiminalProcessor::vhsWarble`, 0..1, only for Heavy or wrong Characters); with the window closed it is 0. Real-time safe (buffers made in `prepareToPlay`). |
+| Tests | New group **`vhs`** (`Tests/VhsTests.h`, 53 checks, own step in `scripts/run-tests-parallel.sh`). New group **`cpu`** (editor CPU in normal playing per VHS amount, report-only, run alone). The transitions test now runs with VHS Off (below). `--snapshots` writes the older sheets without the tape, then the VHS sheets; `--vhs-snapshots <folder>` writes only those. |
+
+### Tested (Linux, this container): 542 passed, 0 failed (full suite, on exactly this commit's code)
+
+Group `vhs` (all pass):
+- **Parameters:** Off / Light / Heavy with Light by default; warble off by default; Heavy survives a save/restore into a fresh instance; a scene preset keeps it.
+- **The bake, on synthetic pictures (720 x 540):** fine stripes (~270 TV lines) keep 38 % of their contrast at Light and 21 % at Heavy (soft like SD tape). A red block's colour runs **past its right edge** (redness 62 twelve pixels to the right, -1.5 to the left). Red/cyan fringe at a white bar's edge: 16 levels. Reds stay strong (187 vs 160 in the source). Blacks lift to 16/17/18 (Light) and 22/23/24 (Heavy), milky and a little blue-grey. Full white clips at 243. The cast moves green by 10 levels between magenta and green. Bake time: 8.3-9.1 ms.
+- **The photographs:** with the tape on, the composite is 720 x 540. **Each of the ten places at Light is nearest in colour layout to its own picture without the tape** (10 of 10: each keeps its grade). Mean neighbour difference (sharpness) falls 2.13 -> 0.91 (Light) -> 0.71 (Heavy). One composite with one light changed: 10.0 ms without the tape and 14.8 ms with it when run alone (15.8 / 21.7 ms under the parallel suite's load).
+- **The glitch schedule** (10 minutes simulated per case):
+
+  | Case | Tracking rolls | Rolling | Mean gap | Irregularity (CV) | Tears |
+  |---|---|---|---|---|---|
+  | Light | 19 | 5.1 % of the time | 31.8 s | 0.52 | 0 |
+  | Heavy | 47 | 12.5 % | 12.8 s | 0.52 | 0 |
+  | Light + Unreal 100 % / Something Wrong | 64 | 16.1 % | 9.4 s | 0.42 | 40 (closest 3.3 s apart, at most 0.2 s long) |
+  | Heavy + Room 404 | 91 | 23.1 % | 6.6 s | 0.54 | 42 (closest 3.3 s apart, at most 0.2 s long) |
+
+  Never two rolls within 2.5 s; tape layers at 24.0 frames a second (12 when slow / Eco). Dropouts are 2.9 a second at Light and 6.8 at Heavy (single-frame 1 px streaks). The cast drifts at most 0.14 (Light) / 0.18 (Heavy) a second, and 0.31-0.37 when wrong.
+- **The editor:** with VHS Off a still scene repaints only clock/REC/meters (0 whole-viewfinder repaints, 0.03 % of the window a tick). VHS Light repaints the viewfinder 66 times in 3 s (22 a second). A still scene at Light makes 6 composites in 5 s (the colour cast's steps). A place switch with the tape running shows no dark frame (30 frames).
+- **The warble:** off = bit-identical output whatever the editor publishes; on with the tape steady: 0.000 cents; during a heavy glitch: 18.5 cents RMS; switching on and off mid-note: the largest sample step is 1.00x a sine's own (no click). On in the plug-in: the sound changes and stays finite. A painted or dropped-in scene gets the bake too.
+
+The 240-frame test (`frames`) now runs at the default **VHS Light**: still 0 blank, 0 partly blank, 0 transparent frames.
+The transitions test runs with **VHS Off**: it fits every frame as an exact blend of the old and new settled pictures,
+which moving grain can never be. With VHS on it failed only on that, with residuals of 3.1-4.0 / 255 against its 3.0
+limit. The swap code is the same with the tape on; the `vhs` group checks a switch with the tape running for dark frames.
+
+### Editor CPU, before and after (this container, JUCE's software renderer, % of one core)
+
+Measured as in the hotfix: process CPU minus the audio's and the test's own work, real time at 30 ticks a second,
+painting only what the editor asks for. "Before" = the commit before this work (`26c0932`), same machine, same tests.
+
+| Scenario | Before | After, VHS Off | After, VHS Light (default) | After, VHS Heavy |
+|---|---|---|---|---|
+| **Normal playing** (hospital, a note every 2 s, default Activity; group `cpu`, 8 s) | **10.5-11.2 %** | 10.3-11.1 % | **17.7-18.7 %** | 17.4-17.7 % |
+| of which painting / compositing | 4.9 / 6.2 % | 4.0-4.5 / 6.0-6.3 % | 11.9-12.2 / 6.2-6.7 % | 11.1-12.1 / 5.3-6.1 % |
+| frames painted / 240 ticks | 97 | 94-99 | 175-183 | 171-187 |
+| **Heavy script** (`frames`: lights changing almost every frame, ten place/Character switches in 8 s) | **59.9-61.8 %** | (not run separately) | **68-71 %** | - |
+| of which painting | 18.2 % (13.9 ms a frame) | | 20.3 % (10.0-10.8 ms a frame) | |
+| of which compositing | 23.8 % (17.3 ms a picture) | | 29-30 % (23-24 ms a picture) | |
+
+How I got there (each step measured): a first version cost **57 % in normal playing**. The bake was at full size, 81 ms
+a composite, and the picture was resampled every tape frame. Composited at half size and with the bake's per-pixel
+geometry precomputed: 34 %. The picture copied to screen size once per new picture: 28 %. Grain as pre-made
+screen-size frames instead of a tiled fill: 25 %. A 4 % light step and 15 composites a second with the tape: 20.5 %.
+The bilinear screen copy: 18 %. What remains is redrawing the whole viewfinder ~22 times a second. In this software
+renderer that is ~3.4 ms a frame: a copy of the picture, the grain blend, the overlay text and the children.
+
+What it means on the MacBook Air: the tape costs about 7-8 % of a core more than VHS Off while the editor is open
+and still. The heavy script costs ~10 % more, mostly on the compositor's own low-priority thread. Paint per frame in
+that script is *cheaper* than before (10 ms vs 13.9 ms) because of the screen-size copy. The frame governor is
+unchanged: if frames stay slow for 2 s, the tape drops to 12 frames a second (also in Eco), and late or unpainted
+frames are skipped. VHS **Off** brings the editor back to its previous cost. Not measured on macOS: CoreGraphics
+draws differently (faster image copies, Retina at 4x the pixels).
+
+### Report-only
+
+- `cpu` group metrics are report-only (machine-dependent), like the frames test's.
+
+### Decisions (recorded instead of asking)
+
+- **A choice of three, Light by default:** the request said "Off / Light / Heavy, default Light-to-medium". Light
+  is tuned between light and medium (amount 0.55 of Heavy), not a fourth setting.
+- **Half-size composite with the tape on:** a VHS frame has ~480 lines and ~330 effective pixels across. 720 x 540
+  is still finer than the tape, and the bake costs a quarter. The editor's screen copy upscales it bilinearly.
+- **Scanlines in the grain, not the bake:** baked at picture resolution they beat (moire) against the screen when
+  the 540-line picture is resampled. In the grain frames they are aligned to logical screen pixels and do not move
+  (even offsets only). At 85-150 % window sizes they still resample a little; at 1x and Retina 2x they are clean.
+- **The head-switching strip sits at the bottom of the viewfinder** (just above the control strip), not the bottom
+  of the window: the frosted strip covers the picture's own bottom edge.
+- **Which Characters are "wrong"** (`vhs::wrongness`, 0..1): hospital Something Wrong 1.0; school Nightmare 0.9;
+  hotel Room 404 0.9; impossible Beyond Reality 1.0 and Unstable 0.85; supermarket Fluorescent Nightmare 0.8;
+  garage Pursuit 0.6; office Infinite Cubicles 0.5; subway Approaching 0.4; mall Endless 0.35; a few others 0.05-0.3;
+  the calm ones 0. Unreal combines with it as 1 - (1 - unreal)(1 - wrongness).
+- **Tears only when something is wrong:** Heavy alone gets more tracking rolls, grain and dropouts, but the picture
+  never tears unless Unreal is up or the Character is wrong.
+- **The warble follows the picture:** the editor decides when the tape glitches, so the audio warble exists only
+  while the window is open. Offline export and the listening renders never warble. With the warble on, the sound
+  has a constant 4 ms delay (the wobble needs a delay line; a constant one never cross-fades with the dry sound).
+- **OSD style only with the tape on:** VHS Off keeps the clean overlay, so Off means "clean" everywhere.
+- **Existing snapshots were not regenerated:** `--snapshots` now sets VHS Off for the older sheets (they document the
+  scenes and pages) and writes the VHS sheets after them.
+
+### Snapshots (`docs/snapshots/`, looked at by eye)
+
+- `vhs-01-hospital-off-light-heavy.jpg` ... `vhs-10-impossible-off-light-heavy.jpg`: every place, the whole window,
+  Off / Light / Heavy side by side.
+- `vhs-hospital-{off,light,heavy}-1x.jpg`, `vhs-pool-{off,light,heavy}-1x.jpg`: full size, to see the softness,
+  chroma bleed, scanlines and OSD.
+- `vhs-glitches.jpg`: posed glitches. These are a tracking band rolling through (Heavy), a frame tear (Something
+  Wrong), a 2x crop of the head-switching strip, and Room 404's roll with its colour lurch.
+
+What I saw: every place keeps its own colour under the tape. The garage stays sodium orange (deeper), the pool's water
+stays turquoise, the hotel stays amber after one fix (an earlier version turned it pink by fading yellows; yellows
+are now kept). The impossible room stays pastel, the school yellowed. Blacks go milky, highlights bloom and flatten,
+edges soften and fringe red/cyan, and the OSD reads as a camcorder's. Heavy is clearly softer and noisier than Light.
+
+### Not verified here
+
+Everything on macOS: the look on the MacBook Air's Retina screen, CPU and heat in GarageBand with the tape running,
+and whether the glitch timing feels right in use. The warble has been measured, not listened to (no audio output
+here).
+
+### For the developer's GarageBand check
+
+Install **LIMINAL-macOS-Universal** from the Actions run of this commit (`bash install-mac.sh`) and open LIMINAL. The
+picture should look like old camcorder footage straight away (VHS **Light**). Check for: softer edges, colour smearing
+a little to the right of objects, milky blacks, a fine moving grain with faint scanlines, the noisy strip just above
+the controls, and the blocky REC / SP / date display with PLAY ▶ for a few seconds. Leave it running for a minute and
+watch for a tracking band rolling through now and then; it should never strobe. Click through the places: each
+should keep its own colour. On **PERFORM**, under PICTURE, try **HEAVY** and **OFF**. Then set **Unreal** up, or pick
+Something Wrong (hospital) or Room 404 (hotel): the tape should struggle more often, with brief tears. Optionally
+switch on **TAPE WARBLE (AUDIO)** with Heavy + Room 404 and listen for a faint wobble during the rolls. Please report
+anything that looks fake or too much, any flashing or frozen frame, and whether the MacBook Air stays cool with the
+tape running (VHS Off brings the editor back to its previous cost).
+
