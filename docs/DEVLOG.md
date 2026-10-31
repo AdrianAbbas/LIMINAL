@@ -39,7 +39,7 @@ the checklist below.
     - [x] 3.2 School — push `[skip ci]`
     - [x] 3.3 Garage — push `[skip ci]`
     - [x] 3.4 Hotel (Room 404's door ajar) — push `[skip ci]`
-    - [ ] 3.5 Subway — push `[skip ci]`
+    - [x] 3.5 Subway — push `[skip ci]`
     - [ ] 3.6 Supermarket — push `[skip ci]`
     - [ ] 3.7 Impossible Room — push `[skip ci]`
     - [ ] 3.8 All 30 Character variants checked by eye (`photo-<place>-characters.jpg`)

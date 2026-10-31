@@ -1,0 +1,130 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 0.071,
+      "characters": [
+        1.0,
+        0.6,
+        1.0
+      ]
+    },
+    {
+      "name": "near",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.1106,
+        0.623
+      ],
+      "peak": 3.096,
+      "characters": [
+        1.0,
+        0.0,
+        0.75
+      ]
+    },
+    {
+      "name": "mid",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.1406,
+        0.6881
+      ],
+      "peak": 2.884,
+      "characters": [
+        1.0,
+        0.35,
+        0.7
+      ],
+      "flicker": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "far",
+      "kind": "tube",
+      "default": 1.0,
+      "anchor": [
+        0.1442,
+        0.7041
+      ],
+      "peak": 3.038,
+      "characters": [
+        1.0,
+        0.0,
+        0.5
+      ]
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.1079,
+        0.6838
+      ],
+      "peak": 2.373,
+      "characters": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "signs",
+      "kind": "sign",
+      "default": 1.0,
+      "anchor": [
+        0.348,
+        0.4609
+      ],
+      "peak": 1.331,
+      "characters": [
+        1.0,
+        0.0,
+        0.6
+      ]
+    },
+    {
+      "name": "tunnel",
+      "kind": "sign",
+      "default": 1.0,
+      "anchor": [
+        0.1331,
+        0.7192
+      ],
+      "peak": 0.322,
+      "characters": [
+        1.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "train",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.1269,
+        0.7256
+      ],
+      "peak": 350.077,
+      "characters": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "subway",
+  "thumbnail": "subway_thumb.jpg"
+}
