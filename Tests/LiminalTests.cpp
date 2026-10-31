@@ -886,6 +886,8 @@ bool writeAudio(const Signal& out, const juce::File& file) {
 //     pool -> garage -> impossible room).
 //   <path minus extension>-beds.flac: 60 s of each room's bed alone (no instruments, default
 //     Activity), in the same order, a second of silence between rooms.
+//   <path minus extension>-characters.flac: all 30 Characters, 20 s each: the phrase, then the
+//     room alone (Part 3).
 // Listening aid; CI uploads both.
 int renderPlaces(const juce::String& path) {
     Signal out;
@@ -932,7 +934,25 @@ int renderPlaces(const juce::String& path) {
         beds.first.insert(beds.first.end(), 48000, 0.0f);
         beds.second.insert(beds.second.end(), 48000, 0.0f);
     }
-    return writeAudio(beds, file.getSiblingFile(file.getFileNameWithoutExtension() + "-beds.flac")) ? 0 : 1;
+    if (!writeAudio(beds, file.getSiblingFile(file.getFileNameWithoutExtension() + "-beds.flac"))) return 1;
+    // Part 3: every Character - the same phrase, then 12 s of that Character's room alone at the
+    // default Activity (its bed and whatever rare event happens), half a second of silence between.
+    Signal characters;
+    for (int place = 0; place < dsp::placeCount; ++place)
+        for (int c = 0; c < dsp::characterCount; ++c) {
+            auto rig = characterRig(place, c);
+            rig->set(params::choirOn, 1.0f);
+            rig->set(params::choirLevel, -8.0f);
+            rig->render(2.5);
+            const auto part = rig->render(20.0, standardPhrase(rig->time + 0.5));
+            std::cout << "  " << placeNames[place] << " / " << dsp::character(place, c).name << ": phrase + room " << num(toDb(rms(part.first, part.second, 0, 48000 * 7))) << " dBFS, room alone "
+                      << num(toDb(rms(part.first, part.second, 48000 * 8))) << " dBFS\n";
+            characters.first.insert(characters.first.end(), part.first.begin(), part.first.end());
+            characters.second.insert(characters.second.end(), part.second.begin(), part.second.end());
+            characters.first.insert(characters.first.end(), 24000, 0.0f);
+            characters.second.insert(characters.second.end(), 24000, 0.0f);
+        }
+    return writeAudio(characters, file.getSiblingFile(file.getFileNameWithoutExtension() + "-characters.flac")) ? 0 : 1;
 }
 
 #include "FrameTests.h"

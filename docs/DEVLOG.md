@@ -43,7 +43,7 @@ the checklist below.
     - [ ] 3.6 Supermarket — push `[skip ci]`
     - [ ] 3.7 Impossible Room — push `[skip ci]`
     - [ ] 3.8 All 30 Character variants checked by eye (`photo-<place>-characters.jpg`)
-    - [ ] 3.9 Audio re-check against Section 1's hard rules, ten rooms x three Characters (new test group `rules`: done, 6/6; five Character beds lowered, flicker events + hum sag in mall/hotel/impossible); listening render updated
+    - [x] 3.9 Audio re-check against Section 1's hard rules, ten rooms x three Characters (new test group `rules`: done, 6/6; five Character beds lowered, flicker events + hum sag in mall/hotel/impossible); listening render updated
     - [ ] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
     - [ ] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
