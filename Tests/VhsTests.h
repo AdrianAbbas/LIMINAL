@@ -577,5 +577,20 @@ void testVhs(Suite& s) {
         bool same = x.first.size() == y.first.size();
         for (std::size_t i = 0; same && i < x.first.size(); ++i) same = x.first[i] == y.first[i] && x.second[i] == y.second[i];
         s.check(same, "with the warble off (default) the sound is untouched by the picture's glitches");
+        Rig c;
+        c.set(params::vhsWarble, 1.0f);
+        c.p->vhsWarble.store(1.0f);
+        const auto z = c.render(1.0, { { 0.05, on(60, 100) } });
+        double diff = 0;
+        for (std::size_t i = 0; i < std::min(x.first.size(), z.first.size()); ++i) diff = std::max(diff, double(std::abs(x.first[i] - z.first[i])));
+        s.check(diff > 1.0e-3 && finite(z), "switched on, the plug-in's sound follows the picture's glitches (and stays finite)", "largest difference " + num(diff, 4));
+    }
+    // The painted scenes and the developer's own photographs get the same bake.
+    {
+        auto painted = ui::renderPlace(2, 0, 480, 360, 1.0f).image;
+        const auto before = painted.createCopy();
+        ui::vhs::bakeImage(painted, { 0.55f, 0.0f, 0.0f });
+        s.check(painted.getWidth() == 480 && vhstest::sharpness(painted) < 0.85 * vhstest::sharpness(before), "a painted or dropped-in scene gets the tape look too (softer, same size)",
+                num(vhstest::sharpness(before), 2) + " -> " + num(vhstest::sharpness(painted), 2));
     }
 }

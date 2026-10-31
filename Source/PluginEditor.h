@@ -230,6 +230,14 @@ private:
     juce::TextButton reset { "RESET" }, storeA { "STORE A" }, storeB { "STORE B" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeAttachment, morphOnAttachment;
     LevelControl seed;
+    // The picture (2026-10-31): the VHS look's amount (Off / Light / Heavy) and the optional
+    // tape warble on the audio.
+    std::array<juce::TextButton, 3> vhsButtons;
+    juce::ToggleButton warble { "TAPE WARBLE (AUDIO)" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> warbleAttachment;
+
+public:
+    juce::Button& vhsButton(int level) { return vhsButtons[std::size_t(std::clamp(level, 0, 2))]; }   // (tests)
 };
 
 // The effects drawer (Milestone 3): one instrument at a time (tabs). Each module is a row:
@@ -297,9 +305,6 @@ private:
     juce::ComboBox duration, rate;
     juce::ToggleButton room { "WITH ROOM" };
     juce::TextButton exportButton { "EXPORT AMBIENCE" };
-    std::array<juce::TextButton, 3> vhsButtons;   // the VHS look: Off / Light / Heavy
-    juce::ToggleButton warble { "TAPE WARBLE (AUDIO)" };
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> warbleAttachment;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<exporter::Job> job;
     juce::String status;

@@ -124,6 +124,10 @@ private:
 void paint(juce::Graphics&, const juce::Image& picture, juce::Rectangle<float> pictureBounds, juce::Rectangle<int> scene, const Tape&, float amount, float wrong,
            const Grain* grain = nullptr);
 
+// A fast bilinear resize of an opaque ARGB picture into `dst` (ARGB, any size): the editor's
+// screen-size copy of the tape picture. False if either is not ARGB (then use Graphics).
+bool resize(const juce::Image& src, juce::Image& dst);
+
 // The camcorder's on-screen display: text in a blocky 5 x 7 font, each font pixel `px` wide,
 // with a soft glow, a faint colour fringe and a slight per-glyph misalignment, as an image at
 // `scale` (physical pixels per logical). Characters: A-Z 0-9 space . : - / and '>' (a play

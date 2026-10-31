@@ -1021,6 +1021,7 @@ int writeSnapshots(const juce::String& path) {
     if (lm == nullptr) return 1;
     auto& view = lm->view();
     p.parameters.getParameter(params::glassOn)->setValueNotifyingHost(1.0f);
+    p.parameters.getParameter(params::vhs)->setValueNotifyingHost(0.0f);   // these document the scenes themselves; the VHS look has its own sheets
     const char* names[] { "hospital", "mall", "school", "garage", "pool", "hotel", "subway", "supermarket", "office", "impossible" };
     for (int place = 0; place < dsp::placeCount; ++place) {
         view.placeSelector().choose(place);
@@ -1138,7 +1139,7 @@ int writeSnapshots(const juce::String& path) {
     }
     p.editorBeingDeleted(editor.get());
     std::cout << "wrote snapshots to " << folder.getFullPathName() << "\n";
-    return 0;
+    return writeVhsSnapshots(path);
 }
 
 int main(int argc, char** argv) {

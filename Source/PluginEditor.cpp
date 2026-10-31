@@ -1044,6 +1044,24 @@ PerformDrawer::PerformDrawer(LiminalProcessor& p)
     storeA.onClick = [this] { processor.storeScene(0); refreshScenes(); };
     storeB.onClick = [this] { processor.storeScene(1); refreshScenes(); };
     for (auto* b : { &reset, &storeA, &storeB }) addAndMakeVisible(b);
+    // The VHS look (saved with the song): how worn the tape is, and the optional audio warble.
+    const char* vhsText[] { "OFF", "LIGHT", "HEAVY" };
+    for (int i = 0; i < 3; ++i) {
+        auto& b = vhsButtons[std::size_t(i)];
+        b.setButtonText(vhsText[i]);
+        b.setTooltip("The found-footage look: the picture as if filmed on an old camcorder and played from a worn tape");
+        b.onClick = [this, i] {
+            auto* v = processor.parameters.getParameter(params::vhs);
+            v->beginChangeGesture();
+            v->setValueNotifyingHost(v->convertTo0to1(float(i)));
+            v->endChangeGesture();
+            repaint();
+        };
+        addAndMakeVisible(b);
+    }
+    warble.setTooltip("A faint tape warble on the sound while the picture's tape struggles through a heavy tracking glitch (off by default)");
+    warbleAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.parameters, params::vhsWarble, warble);
+    addAndMakeVisible(warble);
     refreshScenes();
 }
 
@@ -1063,12 +1081,15 @@ void PerformDrawer::paint(juce::Graphics& g) {
     g.setColour(ink.withAlpha(0.45f));
     g.drawText("PERFORM  -  THE PLACE, AS YOU PLAY", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
     g.setFont(font(9.0f));
-    for (const auto& [y, text] : { std::pair<int, const char*> { presence.getY() - 16, "MACROS" }, { rate.getY() - 16, "EVOLUTION" }, { storeA.getY() - 18, "SCENES" } }) {
+    for (const auto& [y, text] : { std::pair<int, const char*> { presence.getY() - 16, "MACROS" }, { rate.getY() - 16, "EVOLUTION" }, { storeA.getY() - 18, "SCENES" },
+                                   { vhsButtons[0].getY() - 18, "PICTURE  -  VHS LOOK (FOUND FOOTAGE)" } }) {
         g.setColour(ink.withAlpha(0.12f));
         g.fillRect(16, y - 4, getWidth() - 32, 1);
         g.setColour(ink.withAlpha(0.45f));
-        g.drawText(text, 16, y, 120, 12, juce::Justification::centredLeft);
+        g.drawText(text, 16, y, getWidth() - 32, 12, juce::Justification::centredLeft);
     }
+    const int v = int(std::lround(processor.parameters.getRawParameterValue(params::vhs)->load()));
+    for (int i = 0; i < 3; ++i) vhsButtons[std::size_t(i)].setToggleState(i == v, juce::dontSendNotification);
     g.setColour(ink.withAlpha(0.42f));
     g.drawFittedText("While MORPH is on, the stored scenes play (an unstored scene = the knobs as they are). Place, Character and switches change at half-way.",
                      juce::Rectangle<int>(16, getHeight() - 32, getWidth() - 32, 24), juce::Justification::topLeft, 2, 1.0f);
@@ -1105,6 +1126,11 @@ void PerformDrawer::resized() {
     morphOn.setBounds(row);
     area.removeFromTop(4);
     morph.setBounds(area.removeFromTop(38));
+    area.removeFromTop(30);
+    row = area.removeFromTop(24);
+    for (auto& b : vhsButtons) b.setBounds(row.removeFromLeft(62));
+    row.removeFromLeft(16);
+    warble.setBounds(row);
 }
 
 //==============================================================================
@@ -1153,24 +1179,6 @@ PresetDrawer::PresetDrawer(LiminalProcessor& p) : processor(p) {
     exportButton.setTooltip("Render the place's own sounds (no instruments) to a WAV file, with the same engine, offline");
     exportButton.onClick = [this] { startExport(); };
     addAndMakeVisible(exportButton);
-    // The VHS look (saved with the song): how worn the tape is, and the optional audio warble.
-    const char* vhsText[] { "OFF", "LIGHT", "HEAVY" };
-    for (int i = 0; i < 3; ++i) {
-        auto& b = vhsButtons[std::size_t(i)];
-        b.setButtonText(vhsText[i]);
-        b.setTooltip("The found-footage look: the picture as if filmed on an old camcorder and played from a worn tape");
-        b.onClick = [this, i] {
-            auto* v = processor.parameters.getParameter(params::vhs);
-            v->beginChangeGesture();
-            v->setValueNotifyingHost(v->convertTo0to1(float(i)));
-            v->endChangeGesture();
-            repaint();
-        };
-        addAndMakeVisible(b);
-    }
-    warble.setTooltip("A faint tape warble on the sound while the picture's tape struggles through a heavy tracking glitch (off by default)");
-    warbleAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.parameters, params::vhsWarble, warble);
-    addAndMakeVisible(warble);
     showCategory(3);
 }
 
@@ -1252,12 +1260,6 @@ void PresetDrawer::paint(juce::Graphics& g) {
     g.drawText("EXPORT THE PLACE'S AMBIENCE (WAV, STEREO, NO INSTRUMENTS)", 16, duration.getY() - 16, getWidth() - 32, 12, juce::Justification::centredLeft);
     const int q = int(std::lround(processor.parameters.getRawParameterValue(params::quality)->load()));
     for (int i = 0; i < 3; ++i) quality[std::size_t(i)].setToggleState(i == q, juce::dontSendNotification);
-    g.setColour(ink.withAlpha(0.12f));
-    g.fillRect(16, vhsButtons[0].getY() - 22, getWidth() - 32, 1);
-    g.setColour(ink.withAlpha(0.45f));
-    g.drawText("VHS LOOK  (FOUND FOOTAGE)", 16, vhsButtons[0].getY() - 16, getWidth() - 32, 12, juce::Justification::centredLeft);
-    const int v = int(std::lround(processor.parameters.getRawParameterValue(params::vhs)->load()));
-    for (int i = 0; i < 3; ++i) vhsButtons[std::size_t(i)].setToggleState(i == v, juce::dontSendNotification);
     g.setColour(ink.withAlpha(0.6f));
     g.drawFittedText(status, juce::Rectangle<int>(exportButton.getRight() + 12, exportButton.getY(), getWidth() - exportButton.getRight() - 28, exportButton.getHeight()),
                      juce::Justification::centredLeft, 1, 0.8f);
@@ -1283,10 +1285,6 @@ void PresetDrawer::resized() {
     e.removeFromLeft(6);
     room.setBounds(e);
     exportButton.setBounds(16, listBottom + 114, 150, 22);
-    auto t = juce::Rectangle<int>(16, listBottom + 170, getWidth() - 32, 22);
-    for (auto& b : vhsButtons) b.setBounds(t.removeFromLeft(66));
-    t.removeFromLeft(12);
-    warble.setBounds(t);
 }
 
 void PresetDrawer::mouseMove(const juce::MouseEvent& e) {
@@ -1921,10 +1919,12 @@ const juce::Image& MainView::screenCopy(const juce::Image& picture, float scale)
     const int pw = juce::roundToInt(float(getWidth()) * scale), ph = juce::roundToInt(float(getHeight()) * scale);
     if (screenSerial != pictureSerial || screenSource != &picture || screenPicture.getWidth() != pw || screenPicture.getHeight() != ph) {
         if (screenPicture.getWidth() != pw || screenPicture.getHeight() != ph) screenPicture = juce::Image(juce::Image::ARGB, pw, ph, false);
-        juce::Graphics g(screenPicture);
-        g.fillAll(juce::Colour(0xff0a0e0d));
-        g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
-        g.drawImage(picture, juce::Rectangle<float>(0, 0, float(pw), float(ph)), juce::RectanglePlacement::stretchToFit);
+        if (!ui::vhs::resize(picture, screenPicture)) {   // (a painted scene is RGB: through Graphics)
+            juce::Graphics g(screenPicture);
+            g.fillAll(juce::Colour(0xff0a0e0d));
+            g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
+            g.drawImage(picture, juce::Rectangle<float>(0, 0, float(pw), float(ph)), juce::RectanglePlacement::stretchToFit);
+        }
         screenSerial = pictureSerial;
         screenSource = &picture;
     }

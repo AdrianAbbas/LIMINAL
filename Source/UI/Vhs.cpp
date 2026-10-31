@@ -544,6 +544,59 @@ void paint(juce::Graphics& g, const juce::Image& picture, juce::Rectangle<float>
 }
 
 //==============================================================================
+bool resize(const juce::Image& src, juce::Image& dst) {
+    if (!src.isValid() || !dst.isValid() || src.getFormat() != juce::Image::ARGB || dst.getFormat() != juce::Image::ARGB) return false;
+    const juce::Image::BitmapData s(src, juce::Image::BitmapData::readOnly);
+    juce::Image::BitmapData d(dst, juce::Image::BitmapData::writeOnly);
+    if (s.pixelStride != 4 || d.pixelStride != 4) return false;
+    const int sw = src.getWidth(), sh = src.getHeight(), dw = dst.getWidth(), dh = dst.getHeight();
+    // Two channels at a time (0x00ff00ff lanes), 8-bit weights: channel order does not matter.
+    const auto lerp = [](std::uint32_t a, std::uint32_t b, std::uint32_t f) {
+        const std::uint32_t g = 256 - f;
+        const std::uint32_t rb = (((a & 0x00ff00ffu) * g + (b & 0x00ff00ffu) * f) >> 8) & 0x00ff00ffu;
+        const std::uint32_t ag = (((a >> 8) & 0x00ff00ffu) * g + ((b >> 8) & 0x00ff00ffu) * f) & 0xff00ff00u;
+        return rb | ag;
+    };
+    std::vector<int> x0(std::size_t(dw), 0);
+    std::vector<std::uint32_t> fx(std::size_t(dw), 0);
+    for (int x = 0; x < dw; ++x) {
+        const float sx = std::clamp((float(x) + 0.5f) * float(sw) / float(dw) - 0.5f, 0.0f, float(sw - 1));
+        x0[std::size_t(x)] = std::min(int(sx), sw - 2 < 0 ? 0 : sw - 2);
+        fx[std::size_t(x)] = std::uint32_t(std::lround((sx - float(x0[std::size_t(x)])) * 256.0f));
+    }
+    std::vector<std::uint32_t> rowA(static_cast<std::size_t>(dw)), rowB(static_cast<std::size_t>(dw));
+    int haveA = -1, haveB = -1;
+    const auto horizontal = [&](int y, std::vector<std::uint32_t>& out) {
+        const auto* line = reinterpret_cast<const std::uint32_t*>(s.getLinePointer(y));
+        for (int x = 0; x < dw; ++x) {
+            const int i = x0[std::size_t(x)];
+            out[std::size_t(x)] = sw < 2 ? line[0] : lerp(line[i], line[i + 1], fx[std::size_t(x)]);
+        }
+    };
+    for (int y = 0; y < dh; ++y) {
+        const float sy = std::clamp((float(y) + 0.5f) * float(sh) / float(dh) - 0.5f, 0.0f, float(sh - 1));
+        const int y0 = std::min(int(sy), std::max(0, sh - 2)), y1 = std::min(sh - 1, y0 + 1);
+        const auto fy = std::uint32_t(std::lround((sy - float(y0)) * 256.0f));
+        if (haveA != y0) {
+            if (haveB == y0) {
+                std::swap(rowA, rowB);
+                std::swap(haveA, haveB);
+            } else {
+                horizontal(y0, rowA);
+                haveA = y0;
+            }
+        }
+        if (haveB != y1) {
+            horizontal(y1, rowB);
+            haveB = y1;
+        }
+        auto* out = reinterpret_cast<std::uint32_t*>(d.getLinePointer(y));
+        for (int x = 0; x < dw; ++x) out[x] = lerp(rowA[std::size_t(x)], rowB[std::size_t(x)], fy) | 0xff000000u;
+    }
+    return true;
+}
+
+//==============================================================================
 namespace {
 struct Glyph { char c; std::array<juce::uint8, 7> rows; bool narrow = false; };
 // A 5 x 7 pixel font drawn for LIMINAL (bit 4 = the leftmost column).
