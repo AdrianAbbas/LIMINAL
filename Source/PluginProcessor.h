@@ -8,6 +8,7 @@
 #include "DSP/EmptyChoir.h"
 #include "DSP/LostMusicBox.h"
 #include "DSP/HollowDrone.h"
+#include "DSP/TapeWarble.h"
 #include "Parameters.h"
 #include "Presets.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -66,6 +67,9 @@ public:
     bool sceneStored(int which) const { return stored[std::size_t(which & 1)].load(); }
     void requestEvolutionReset() { evolutionResetRequest.store(true); }
     std::atomic<float> uiScale { 1.0f };   // the editor's size (saved with the song)
+    // The VHS look (2026-10-31): how hard the picture's tape is glitching right now (0..1), set by
+    // the editor each frame; the optional audio warble (parameter vhs_warble) follows it.
+    std::atomic<float> vhsWarble { 0.0f };
 
     // Presets (Milestone 6). Message thread only.
     void applyPreset(const presets::Preset&);
@@ -148,6 +152,8 @@ private:
     std::atomic<float>* environmentChoice = nullptr;
     std::atomic<float>* environmentAmount = nullptr;
     std::atomic<float>* farAway = nullptr;
+    std::atomic<float>* warbleOn = nullptr;
+    dsp::TapeWarble warble;
     dsp::Place selectedPlace() const;
     int selectedCharacter() const;
     // Every parameter the DSP reads goes through this mirror: the live value, or, while Scene

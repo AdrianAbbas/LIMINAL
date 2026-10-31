@@ -19,9 +19,13 @@ mkdir -p "$logs"
 "$tests" --only distinct > "$logs/12-distinct.txt" 2>&1 &
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
 wait
+# The VHS look (its editor checks run in real time), then the editor's CPU in normal playing per
+# VHS amount, each alone so their timing is not disturbed.
+"$tests" --only vhs > "$logs/13-vhs.txt" 2>&1
 "$tests" --only realtime > "$logs/5-cpu.txt" 2>&1
 # The editor's frames in real time (and its CPU), also alone so the timing is not disturbed.
 "$tests" --only frames > "$logs/10-frames.txt" 2>&1
+"$tests" --only cpu > "$logs/14-cpu.txt" 2>&1
 
 passed=0
 failed=0

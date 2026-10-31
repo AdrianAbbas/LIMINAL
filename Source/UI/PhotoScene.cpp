@@ -77,10 +77,11 @@ public:
     void run() override {
         if (!scene.load()) return;
         for (auto& b : scene.buffers) b = scene.makeImage();   // once per scene, never per frame
-        double last = -1.0e9;
+        double last = -1.0e9, spacing = PhotoScene::minFrameMs;
         while (!threadShouldExit()) {
-            // At most 30 composites a second, however often the editor asks.
-            const double remaining = last + PhotoScene::minFrameMs - juce::Time::getMillisecondCounterHiRes();
+            // At most 30 composites a second, however often the editor asks; 15 with the VHS look
+            // (its soft picture hides the steps, and each new picture is copied to screen size).
+            const double remaining = last + spacing - juce::Time::getMillisecondCounterHiRes();
             if (remaining > 0.5) {
                 this->wait(int(std::ceil(remaining)));
                 continue;
@@ -98,6 +99,7 @@ public:
                 continue;
             }
             last = juce::Time::getMillisecondCounterHiRes();
+            spacing = look.vhs.amount > 0.0f ? PhotoScene::minTapeFrameMs : PhotoScene::minFrameMs;
             scene.composite(look, scene.buffers[std::size_t(scene.back)]);   // the back image: nobody else touches it
             {
                 std::lock_guard<std::mutex> lock(scene.handoff);
@@ -373,11 +375,6 @@ void PhotoScene::composite(const Look& look, juce::Image& into) {
     const float tint[3] { causticTint.getFloatRed() * look.causticLevel, causticTint.getFloatGreen() * look.causticLevel, causticTint.getFloatBlue() * look.causticLevel };
     const float gain = toneScale / std::max(0.05f, headroom);
     const bool hazy = look.character == 2;
-    juce::Image::BitmapData out(into, juce::Image::BitmapData::writeOnly);
-    // Byte order of the destination: ARGB (always, from makeImage) writes alpha 255 too.
-    const bool argb = out.pixelFormat == juce::Image::ARGB;
-    const int iR = argb ? juce::PixelARGB::indexR : juce::PixelRGB::indexR, iG = argb ? juce::PixelARGB::indexG : juce::PixelRGB::indexG,
-              iB = argb ? juce::PixelARGB::indexB : juce::PixelRGB::indexB;
     if (grain.empty() || grainFor != look.grainSeed) {   // the film grain is the same every frame: made once
         grain.resize(std::size_t(width) * std::size_t(height));
         std::uint32_t noise = 0x9E3779B9u ^ (look.grainSeed * 2654435761u);
@@ -387,6 +384,60 @@ void PhotoScene::composite(const Look& look, juce::Image& into) {
         }
         grainFor = look.grainSeed;
     }
+    if (look.vhs.amount > 0.0f) {
+        // 4. With the VHS look: the finish at half resolution (a VHS picture has ~480 lines; each
+        // pixel is the mean of 2 x 2 of the sum), then the tape's static half baked in - softness,
+        // chroma bleed, the tape grade, curvature (UI/Vhs). Done here, once per new look, so it
+        // costs nothing per frame: only the cheap animated layers move in the editor.
+        const int hw = width / 2, hh = height / 2;
+        if (into.getWidth() != hw || into.getHeight() != hh) {   // (the back picture only: the editor holds its own)
+            into = juce::Image(juce::Image::ARGB, hw, hh, false);
+            into.clear(into.getBounds(), juce::Colours::black);
+        }
+        staged.resize(std::size_t(hw) * std::size_t(hh) * 3);
+        const float topIndex = float(toneSize - 1);
+        const auto W3 = std::size_t(width) * 3;
+        for (int Y = 0; Y < hh; ++Y) {
+            const int y = 2 * Y;
+            const float* s0 = sum.data() + std::size_t(y) * W3;
+            const float* s1 = s0 + W3;
+            const juce::uint8* vig = vignette.data() + std::size_t(y) * std::size_t(width);
+            const juce::int8* grainRow = grain.data() + std::size_t(y) * std::size_t(width);
+            const juce::uint8* ca = caustic ? caustics[std::size_t(fa)].data() + std::size_t(causticY[std::size_t(y)]) * std::size_t(cw) : nullptr;
+            const juce::uint8* cb = caustic ? caustics[std::size_t(fb)].data() + std::size_t(causticY[std::size_t(y)]) * std::size_t(cw) : nullptr;
+            auto* o = staged.data() + std::size_t(Y) * std::size_t(hw) * 3;
+            for (int X = 0; X < hw; ++X, o += 3) {
+                const int x = 2 * X;
+                float v = float(vig[x]) * (1.0f / 255.0f);
+                if (hazy) v *= v;
+                const float e = gain * v;
+                float ex = 0;
+                if (caustic) {
+                    const int cx = causticX[std::size_t(x)];
+                    ex = lin[ca[cx]] + blend * (lin[cb[cx]] - lin[ca[cx]]);
+                }
+                const int n = grainRow[x];
+                for (int c = 0; c < 3; ++c) {
+                    const std::size_t k = std::size_t(x) * 3 + std::size_t(c);
+                    const float mean = 0.25f * (s0[k] + s0[k + 3] + s1[k] + s1[k + 3]);
+                    const int i = int(std::clamp((mean + ex * tint[c]) * e, 0.0f, topIndex));
+                    o[c] = juce::uint8(std::clamp(int(table[std::size_t(c)][std::size_t(i)]) + n, 0, 255));
+                }
+            }
+        }
+        juce::Image::BitmapData half(into, juce::Image::BitmapData::writeOnly);
+        baker.bake(staged.data(), hw, hh, look.vhs, half);
+        return;
+    }
+    if (into.getWidth() != width || into.getHeight() != height) {   // (back from the VHS look's half size)
+        into = juce::Image(juce::Image::ARGB, width, height, false);
+        into.clear(into.getBounds(), juce::Colours::black);
+    }
+    juce::Image::BitmapData out(into, juce::Image::BitmapData::writeOnly);
+    // Byte order of the destination: ARGB (always, from makeImage) writes alpha 255 too.
+    const bool argb = out.pixelFormat == juce::Image::ARGB;
+    const int iR = argb ? juce::PixelARGB::indexR : juce::PixelRGB::indexR, iG = argb ? juce::PixelARGB::indexG : juce::PixelRGB::indexG,
+              iB = argb ? juce::PixelARGB::indexB : juce::PixelRGB::indexB;
     // Per row, in three simple loops: the exposure per pixel, the tone-table index per channel
     // (plain float arithmetic the compiler vectorises), then the tables, the grain and the bytes.
     const auto w = static_cast<std::size_t>(width);
@@ -415,8 +466,8 @@ void PhotoScene::composite(const Look& look, juce::Image& into) {
                 const float value = (s[x * 3 + c] + extra[std::size_t(x)] * tint[c]) * exposure[std::size_t(x)];
                 idx[x * 3 + c] = int(std::clamp(value, 0.0f, top));
             }
-        auto* row = out.getLinePointer(y);
         const juce::int8* grainRow = grain.data() + std::size_t(y) * w;
+        auto* row = out.getLinePointer(y);
         for (int x = 0; x < width; ++x) {
             const int n = grainRow[x];
             auto* p = row + x * out.pixelStride;

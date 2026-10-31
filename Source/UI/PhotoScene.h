@@ -21,6 +21,7 @@
 // Assets: bundled (BinaryData from assets/scenes/<name>/), or the developer's own renders in
 // photographFolder()/<name>/ (same files: <name>_manifest.json, <name>_<pass>.jpg ...), which win.
 #include <juce_graphics/juce_graphics.h>
+#include "UI/Vhs.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -50,6 +51,7 @@ public:
         int character = 0;        // 1: a faded memory; 2: darker, hazier edges
         unsigned grainSeed = 1;
         unsigned serial = 0;      // the caller's tag, handed back with the picture (take)
+        vhs::Static vhs;          // the tape look baked in on top (amount 0: none)
     };
 
     // Which places have a photographic scene (bundled or dropped in), and its file name.
@@ -78,6 +80,7 @@ public:
     int composites() const { return compositeCount.load(); }   // how many the worker has made
     double compositeMs() const { return compositeTime.load(); }   // and the time they took
     static constexpr double minFrameMs = 1000.0 / 30.0;       // the worker's frame cap
+    static constexpr double minTapeFrameMs = 1000.0 / 15.0;   // ... with the VHS look baked in
     // Tests and snapshots: load and composite on the calling thread.
     juce::Image renderNow(const Look&);
     bool ensureLoaded() { return load(); }   // (blocks while decoding)
@@ -108,6 +111,8 @@ private:
     std::vector<juce::int8> grain;                    // per pixel, -3..+3 (made on the first composite)
     unsigned grainFor = 0;
     std::vector<int> causticX, causticY;              // nearest caustic sample per column / row
+    std::vector<juce::uint8> staged;                  // the finished picture before the tape look (RGB)
+    vhs::Baker baker;
     std::mutex workLock;                              // the sum and the passes (worker vs renderNow)
     std::mutex handoff;                               // the requested look and the finished image
     Look wanted;

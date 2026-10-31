@@ -206,6 +206,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
         pct(midi::velocityFilter, "Velocity to Filter", 0.0f);
     }
     layout.add(amount(farAway, "Far Away", 0.0f));
+    // The VHS look: Light by default (tuned between light and medium), saved with the song.
+    layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { vhs, 1 }, "VHS Look", juce::StringArray { "Off", "Light", "Heavy" }, 1));
+    layout.add(toggle(vhsWarble, "VHS Tape Warble", false));
     return layout;
 }
 

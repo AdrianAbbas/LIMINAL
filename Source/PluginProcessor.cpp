@@ -88,6 +88,7 @@ LiminalProcessor::LiminalProcessor()
     environmentChoice = raw(params::environment);
     environmentAmount = raw(params::environmentAmount);
     farAway = raw(params::farAway);
+    warbleOn = raw(params::vhsWarble);
     characterChoice = raw(params::character);
     evolutionRate = raw(params::evolution);
     evolutionFreeze = raw(params::evolutionFreeze);
@@ -186,6 +187,7 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     updateMirror();
     updateSettings();
+    warble.prepare(sampleRate);
     qualityNow = -1;
     updateSolo();
     for (int i = 0; i < instrumentCount; ++i) {
@@ -509,6 +511,8 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         handleMidi(metadata.getMessage());
     }
     renderRange(position, total);
+    // The VHS look's optional tape warble (off by default), following the picture's glitches.
+    warble.process(left, right, total, warbleOn->load() > 0.5f, vhsWarble.load(std::memory_order_relaxed));
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch) buffer.clear(ch, 0, total);
 
     if (total > 0) {
@@ -544,7 +548,7 @@ void LiminalProcessor::setParameter(const juce::String& id, float value) {
 void LiminalProcessor::resetToDefaults() {
     for (const auto& m : mirrored) {
         const auto id = m.parameter->getParameterID();
-        if (id == params::power) continue;
+        if (id == params::power || id == params::vhs || id == params::vhsWarble) continue;   // (viewing / listening preferences, not the sound's design)
         m.parameter->beginChangeGesture();
         m.parameter->setValueNotifyingHost(m.parameter->getDefaultValue());
         m.parameter->endChangeGesture();

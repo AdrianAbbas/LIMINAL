@@ -997,6 +997,7 @@ int renderPlaces(const juce::String& path) {
 }
 
 #include "FrameTests.h"
+#include "VhsTests.h"
 
 } // namespace
 
@@ -1151,6 +1152,7 @@ int main(int argc, char** argv) {
         else if (arg == "--render" && i + 1 < argc) return renderPhrase(argv[++i]);
         else if (arg == "--render-places" && i + 1 < argc) return renderPlaces(argv[++i]);
         else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
+        else if (arg == "--vhs-snapshots" && i + 1 < argc) return writeVhsSnapshots(argv[++i]);
         else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
             const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(argv[++i]);
             folder.createDirectory();
@@ -1196,6 +1198,8 @@ int main(int argc, char** argv) {
         testFrames(s);
         testTransitions(s);
     }
+    if (run("vhs")) testVhs(s);
+    if (run("cpu")) testEditorCpu(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

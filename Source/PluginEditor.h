@@ -11,6 +11,7 @@
 #include "Export.h"
 #include "PluginProcessor.h"
 #include "UI/FrameGovernor.h"
+#include "UI/Vhs.h"
 #include "UI/PhotoScene.h"
 #include "UI/SceneArt.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -296,6 +297,9 @@ private:
     juce::ComboBox duration, rate;
     juce::ToggleButton room { "WITH ROOM" };
     juce::TextButton exportButton { "EXPORT AMBIENCE" };
+    std::array<juce::TextButton, 3> vhsButtons;   // the VHS look: Off / Light / Heavy
+    juce::ToggleButton warble { "TAPE WARBLE (AUDIO)" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> warbleAttachment;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<exporter::Job> job;
     juce::String status;
@@ -360,6 +364,14 @@ public:
     PlaceStrip& placeSelector() { return placeStrip; }
     CharacterStrip& characterSelector() { return characterStrip; }
     InstrumentShelf& instrumentShelf() { return shelf; }
+    // The VHS look (2026-10-31): its animated half and what the composite bakes in.
+    const ui::vhs::Tape& tape() const { return vhsTape; }
+    ui::vhs::Tape& tapeForTests() { return vhsTape; }
+    float vhsAmount() const { return vhsAmountNow; }
+    ui::vhs::Static vhsStatic() const;
+    // Tests and snapshots: the current look composited now, on this thread (no waiting for the
+    // scene's own thread).
+    void settlePicture();
 
 private:
     void timerCallback() override;
@@ -429,6 +441,25 @@ private:
     static juce::Colour gradeFor(int place, int character);
     juce::Image photoPlaceholder;   // the film strip's small picture, stretched, until the scene is decoded
     int placeholderFor = -1;
+    // The VHS look: the tape's animated layers, the static half sent with each look.
+    ui::vhs::Tape vhsTape;
+    ui::vhs::Grain vhsGrain;
+    int vhsLevel = -1;
+    float vhsAmountNow = 0, vhsWrongNow = 0;
+    ui::vhs::Static photoVhsSent;
+    float sceneVhs = -1;   // the tape amount the painted scene was baked with
+    double playUntil = 3.5;   // the deck's "PLAY" shows for a few seconds (opening, a new place)
+    juce::String osdClock;
+    struct Osd { juce::String text; float scale = 0; juce::uint32 colour = 0; juce::Image image; };
+    std::array<Osd, 5> osd;
+    const juce::Image& osdImage(int slot, const juce::String& text, juce::Colour colour, float scale);
+    void paintOsd(juce::Graphics&, float scale);
+    void renderPainted(int place, int character, float scale);
+    // The picture at screen resolution (with the tape look the viewfinder repaints every tape frame).
+    int pictureSerial = 0, screenSerial = -1;
+    const void* screenSource = nullptr;
+    juce::Image screenPicture;
+    const juce::Image& screenCopy(const juce::Image& picture, float scale);
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };

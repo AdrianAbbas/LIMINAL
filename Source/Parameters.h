@@ -146,6 +146,10 @@ inline constexpr const char* quality = "quality";   // Eco / Standard / High
 // Direction Update 2: the instruments heard from elsewhere (mall: the PA in another wing; hotel:
 // through the wall; elsewhere: another room).
 inline constexpr const char* farAway = "far_away";
+// The VHS "found footage" look (2026-10-31): how worn the tape looks (Off / Light / Heavy; the
+// picture only), and an optional faint tape warble on the audio during heavy tracking glitches.
+inline constexpr const char* vhs = "vhs";
+inline constexpr const char* vhsWarble = "vhs_warble";
 namespace midi {
 inline constexpr const char* keyLow = "key_low";
 inline constexpr const char* keyHigh = "key_high";

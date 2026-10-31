@@ -388,6 +388,10 @@ void testTransitions(Suite& s) {
     set(params::activity, 0.0f);
     set(params::quality, 0.0f);
     set(params::unreal, 0.0f);
+    // The VHS look off: its grain and dropouts move every tape frame, so no frame could be an exact
+    // blend of two settled pictures. (With it on, the swap is the same code; testVhs checks that a
+    // place switch with the tape running still shows only whole pictures.)
+    set(params::vhs, 0.0f);
     const auto snapshot = [&] { return editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f); };
     double next = juce::Time::getMillisecondCounterHiRes();
     const auto frameTick = [&] {   // one editor frame in real time

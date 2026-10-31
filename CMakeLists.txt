@@ -48,7 +48,7 @@ juce_add_plugin(LIMINAL
 target_sources(LIMINAL PRIVATE
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
     Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp
-    Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp)
+    Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp Source/UI/Vhs.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 # Photographic scenes (Direction Update 2): light passes rendered offline by tools/scenes and
 # committed in assets/scenes/<place>/, so building the plug-in never needs Blender.
