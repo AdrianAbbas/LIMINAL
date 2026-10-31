@@ -43,17 +43,22 @@ place's processing (from Milestone 2) is scaled the same way. So:
 
 ## Place defaults (piano; other instruments adjusted: synth more chorus/tape, glass more echo and room, choir more granular and less chorus, music box more tape and drift, drone more granular, less echo)
 
+Since the signatures (2026-10-31, `docs/ENVIRONMENT_RESEARCH.md`): an effect that is one place's signature is
+no other place's default. Tape is only the school's, pitch drift only the subway's and the impossible room's,
+and discrete echoes stay only where the place's own echo belongs. The places' identity lives in their
+signature (`DSP/Signature`), not in these defaults.
+
 | Place | Drift | Tape | Chorus | Granular | Echo | Filter | Room |
 |---|---|---|---|---|---|---|---|
-| Hospital | 25 | – | – | – | 12 @ 420 ms | LP -1 oct, HP +0.8 oct (cold) | -30 % (short) |
-| Mall | 20 (gentle detune) | 10 | 30 | 8 (long grains) | – | LP -1.2 oct (soft highs) | +80 % (long, diffuse) |
-| School | 30 | 60 (worn cassette) | 15 | – | 10 @ 180 ms | LP -0.8, HP +0.5 | -20 % |
-| Garage | – | 10 | – | – | 20 @ 300 ms | LP -1.5 oct | +30 % |
-| Pool | – | – (minimal) | – | – | **35 @ 340 ms, fb 45 %** | HP +0.4 | +60 % (bright tiles) |
-| Hotel | 10 | 50 | – | – | – | LP -0.5 | -50 % (intimate) |
-| Subway | 40 | – | – | 10 | 30 @ 650 ms, fb 50 % | – | +40 % |
-| Supermarket | 15 | 30 | **45** | – | – | HP +0.6 (thin) | -60 % |
-| Office | – | – | 35 | 20 | 25 @ 500 ms, fb 55 % | LP -0.7 | +40 % |
+| Hospital | – | – | – | – | 6 @ 420 ms (far end, faint) | LP -1 oct, HP +0.8 oct (cold) | -30 % (short) |
+| Mall | – | – | 30 | – | – | LP -1.2 oct (soft highs) | +80 % (long, diffuse) |
+| School | – | **60 (worn cassette)** | – | – | – | LP -0.8, HP +0.5 | -20 % |
+| Garage | – | – | – | – | – | LP -1.5 oct | +30 % |
+| Pool | – | – | – | – | 15 @ 340 ms, fb 35 % | HP +0.4 | +60 % (bright tiles) |
+| Hotel | – | – | – | – | – | LP -0.5, HP +0.3 | -50 % (intimate) |
+| Subway | **25** | – | – | – | – | – | +40 % |
+| Supermarket | – | – | – | – | – | HP +0.6 (thin) | -60 % |
+| Office | – | – | – | – | – | LP -0.5 | -90 % (dry) |
 | Impossible | **60** | – | 20 | **50** | 20 @ 777 ms, fb 60 % | – | +80 % |
 
 ## Smoothness and safety

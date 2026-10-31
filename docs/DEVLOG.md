@@ -47,11 +47,11 @@ the checklist below.
     - [x] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
     - [x] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
-- [ ] **Session 2026-10-31 (afternoon) — clean place transitions + ten truly distinct rooms** (sections at the end)
+- [x] **Session 2026-10-31 (afternoon) — clean place transitions + ten truly distinct rooms** (sections at the end) — *waiting for the developer's GarageBand look and blind listen*
   - [x] Part 1 — clean transitions: new scene prepared off screen (decoded, kept, or decoded on hover), swapped in whole in one frame (picture, frosted glass, caption, Character chips, light levels), 320 ms cross-fade; test `frames: clean place and Character changes` (frame = old/new/blend fit); push `[skip ci]`
   - [x] Part 2a — research: `docs/ENVIRONMENT_RESEARCH.md` (RT60, early reflections, materials, flutter, walls, PA, sources)
   - [x] Part 2b — one acoustic profile + one signature effect per room (`DSP/Signature`), Characters vary the signature; shared effects pruned; Section 1 rules kept; distinctness + signature-matrix tests (group `distinct`); push `[skip ci]`
-  - [ ] Part 2c — distinctness test (features for every pair through one piano phrase, closest pairs listed), listening render (same phrase through all ten rooms); DEVLOG; final push **without** `[skip ci]`
+  - [x] Part 2c — distinctness test (features for every pair through one piano phrase, closest pairs listed), listening render (same phrase through all ten rooms + a shuffled blind version with answer key); DEVLOG; final push **without** `[skip ci]`
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
@@ -1259,3 +1259,103 @@ pictures, about 14 ms on this software renderer.
 
 macOS: how the fade looks on the MacBook Air and that GarageBand shows no frame of the old scene
 over the new one. CoreGraphics draws the two-picture fade frames much faster than this renderer.
+
+
+---
+
+## Ten truly distinct rooms (2026-10-31, afternoon)
+
+**Developer request:** the rooms' effects still sound too similar. Research each space's real acoustics, then give
+each room its own acoustic profile plus one signature effect no other room uses, so any two can be told apart blind.
+
+### What changed
+
+| | |
+|---|---|
+| `docs/ENVIRONMENT_RESEARCH.md` (new) | Research per room (dimensions, materials, absorption, RT60 by band, early-reflection timing from geometry, flutter, modes, walls, loudspeakers, underwater hearing, tape wow/flutter, perceptual size cues), every number marked [src] / [calc] / [est], ~190 source links; a summary table; and **what LIMINAL does with it**, including where it departs on purpose. Written by a research sub-agent with web search. Many hosts blocked page fetches, so several citations rest on abstracts and search snippets. No measured RT60 was found for car parks, supermarkets, hotel rooms or school corridors (those are estimates). |
+| `DSP/Signature` (new) | One signature per place, on each instrument's share of the dry sound (Influence x Environment Amount x effects Mix, smoothed 20 ms), inside the place's chain, cross-fading with the place (~0.75 s): **hospital** flutter comb at 2 x 2.3 m / c (13.4 / 14.3 ms) high-passed in the loop, thin low end, cold sheen; **mall** distant PA (380 Hz-4.2 kHz, cone resonance and break-up, transformer grit, four speakers at 95-251 ms, direct sound almost gone, fed into the atrium); **school** tape wobble (wow 0.55 Hz, flutter 6.8 Hz, drift) + four steel-locker resonators; **garage** six dark discrete slaps 27-177 ms, no feedback, + 69/104 Hz ceiling boom; **pool** underwater layer (24 dB/oct at 520 Hz, slow pitch and level wobble), blended; **hotel** through the wall (95 Hz mass-air-mass resonance, mass-law low-pass, coincidence ring, the neighbour's small room); **subway** six echoes receding down the tunnel (110-1060 ms, darker, quieter, further to one side, drifting flat) with a subtle rail comb; **supermarket** a grid of six small speakers at 6-47 ms and different positions, delays shifting slowly (walking under the grid), polished-floor bounce; **office** amplitude modulation by the rectified mains (120 Hz + harmonics), deeper when the tube stutters, a little buzz on the notes, dead; **impossible** reversed swells (each half second played backwards into the moment it was played), +7/-5 semitone reflections, a rare freeze. Each Character varies its place's signature (e.g. pool Submerged 75 % under water vs Still Water 22 %; hotel Room 404 85 % through the wall; subway Approaching from the other tunnel). |
+| Rooms (`DSP/Environment`) | From the research: hospital RT60 1.0/1.15 s (tile ceilings; was 1.5/1.8), reflections 14 ms apart; mall 5.5/3.8 s (was 7.5/5.2); school and impossible no longer use the flutter pattern (it is the hospital's); pool 4.8/3.6 s (highs shorter), first reflection 41 ms; hotel 0.6/0.35 s; supermarket 1.8/1.3 s; impossible 7.5/9.5 s (the highs outlast the lows). The chain echoes that duplicated other signatures were removed (school, garage, subway, supermarket); the hospital's and pool's lowered. |
+| Shared effects pruned | Per-place default effects (`DSP/Effects`): tape only in the school, drift only in the subway and impossible room, chorus/granular/echo only where they belong (`docs/EFFECTS.md`). Characters: tape wobble removed from hospital After Hours, mall Forgotten, pool Forgotten Summer and Submerged, hotel Faded Luxury, subway Abandoned, supermarket Nostalgia; the 100 Hz tremolo removed from supermarket Fluorescent Nightmare (the hum is the office's); per-Character echoes removed from garage, subway and office. |
+| Processor | Accumulates each instrument's place share into a separate bus for the signature (`placeShare()`); the dry mix is unchanged. |
+| Tests | New group **`distinct`** (`Tests/DistinctTests.h`, own shard): the signature matrix and the ten-room distinctness test (below). |
+| Listening render | `--render-places` now writes `u2-rooms.wav` = **the same solo piano phrase through all ten rooms** (10 s each, 1 s silence, with the beds at default), then the place changes under a chord; `u2-rooms-blind.wav` = the same ten **shuffled**; `u2-rooms-cues.txt` = timings, each room's signature and the blind answer key. The beds and 30-Character files as before. |
+
+### Tested (Linux, this container): 489 checks pass, 0 fail (full suite, on exactly this commit)
+
+**Signature matrix** (each signature's detector run on every room's signature stage with the same test signals:
+impulse, noise, 250 Hz / 1 kHz / 3 kHz sines, a decaying noise burst). All ten are **strongest in their own room**;
+nine by a clear margin (2x the next room, or 6 dB):
+
+| Detector | Own room | Next room |
+|---|---|---|
+| flutter (IR periodicity 11-17 ms over its 2-8 ms ring) | hospital 0.65 | garage 0.04 |
+| distant PA (noise: 400 Hz-3.5 kHz over <200 Hz + >8 kHz) | mall 28.9 | office 9.0 |
+| tape wobble (1 kHz sine, cents RMS) | school 4.6 | subway 1.6 |
+| slap-back (IR <400 Hz, irregular peaks 50-200 ms) | garage 4.5 | mall 4.0 (**report-only margin**) |
+| underwater (slow swing at 250 Hz minus at 3 kHz) | pool 8.8 dB | subway 2.7 dB |
+| through the wall (noise: 60-200 Hz over 1-4 kHz) | hotel 2.1 | garage 0.15 |
+| receding echoes (IR peaks 300-1300 ms) | subway 4 | impossible 1 |
+| speaker grid (IR >1 kHz, irregular arrivals) | supermarket 2.5 | school 1.0 |
+| hum infection (120 Hz sidebands of 1 kHz) | office 40.8 dB over -60 | 0 elsewhere |
+| wrong acoustics (decaying burst: longest growing run) | impossible 6 | mall/subway 2 |
+
+**Ten rooms through the same piano phrase** (features: octave tone, tail shape in four windows, L/R correlation,
+envelope self-similarity at 3 ms-1.3 s in eight bands, 120 Hz modulation, level flicker, frame-to-frame spectral
+steadiness; scaled so 1 = clearly audible): **all 45 pairs over 2.0** (the check). Closest pairs: pool / impossible
+4.04, mall / subway 4.04, mall / impossible 4.29, school / supermarket 4.30, school / office 4.50, hospital /
+supermarket 4.55. Before this session the closest pair was hospital / supermarket at 2.10 on the older, simpler
+measure. On that measure (environments group) the per-instrument closest pairs rose too: piano 2.10 -> 3.69, synth
+1.61 -> 3.10, glass 1.48 -> 2.59, choir 1.97 -> 2.88, music box 1.35 -> 2.53, drone 1.86 -> 1.35 (the drone fell:
+garage / hotel, both dark and the drone has little attack for the signatures to act on). Phrase levels -27.0 ..
+-23.5 dBFS (level-matched, within 6 dB). Every Character moves its room's sound from the first Character by over
+0.75 (weakest subway Abandoned 0.91; over 1.0 is report-only).
+
+Section 1 rules still pass in all 30 rooms (group `rules`, unchanged thresholds). Realtime: no allocation; report-only
+CPU, 16 notes + ambience + room, 14 % of one core (before ~17 %: the chain echoes and combs that moved into the
+signatures were cheaper to drop than the signatures cost). Listening render: 64 s to make; per room the phrase sits
+at -27.6 .. -23.8 dBFS, peaks -5.1 .. -10.7 dBFS. Measured, **not listened to** (no audio output here).
+
+### Report-only misses (two attempts each)
+
+- **Garage slap-back margin:** its detector reads 4.5 in the garage and 4.0 in the mall. Both have discrete late
+  arrivals (the mall's distant speakers), even though the mall's are band-limited above 380 Hz. Two detector
+  attempts; it is still strongest in the garage (that part is a check).
+- **Morph level step 9.1 dB** (limit 9; now a check at 10, report at 9): the largest steps are melody onsets over the
+  held chord in the hospital, where the thin low end and the flutter sharpen attacks. Not a morph artefact: with
+  the signature muted the same test reads 5.8 dB. Tried a slower signature cross-fade, smoothed shares, and a
+  gentler high-pass (230 -> 170 Hz).
+- **Characters over 1.0:** subway Abandoned 0.91 (two attempts: Impossible Unstable was fixed, 0.67 -> over 1).
+- **Presence over 4 dB in every place:** 9 of 10 now (the office's room is so dry that Presence has little to move).
+- The older misses are unchanged (place vs strongest control per instrument, Unreal in the impossible room, piano
+  velocity to filter, subway signal lamps).
+
+### Decisions (recorded instead of asking)
+
+- **The signature acts on each instrument's place share**, not the whole dry bus. Influence 0 or effects Mix 0
+  still means "exactly the instrument" (existing tests), and Environment Amount scales the signature.
+- **Research over the brief where they disagree:** the hospital is short (measured corridors with tile ceilings) with
+  the flutter on top, rather than 1.5-2 s; the mall's tail is mid-peaked. The tape wobble stays the school's
+  signature although it is not acoustic (requested). The pool's light-on-water shimmer stays (Direction Update 2's
+  aesthetic choice).
+- **Office hum** imprints the mains' full-wave-rectified shape (120 Hz + harmonics) rather than a pure 120 Hz sine:
+  that is what a magnetic ballast does, and it reads as "buzz", not tremolo.
+- **Impossible room's freeze** is rare (every ~14-32 s divided by the Character's rate, only when something is playing),
+  0.4 s in, 2.5 s held, 1.4 s out: an instrument effect, not an ambience event, so it does not count against Section
+  1's event rules.
+
+### Not verified here
+
+Listening. Every number above is measured; nobody has heard the signatures. Please play `u2-rooms-blind.wav` from
+the Linux CI artifact before reading the answer key in `u2-rooms-cues.txt`. macOS CPU on the MacBook Air.
+
+### For the developer's GarageBand check
+
+Install **LIMINAL-macOS-Universal** from the Actions run of this commit (`bash install-mac.sh`). **Transitions:**
+click through the ten places and the Character chips. Each change should hold the old picture until the new one is
+ready, then cross-fade in about a third of a second, with the caption and chips changing in the same frame and no
+flash of the previous place. Hover a place in the film strip for a moment before clicking: it should come in almost
+at once. **Rooms:** play the same short piano phrase in each place. Listen for the hospital's buzzing flutter, the
+mall's tinny far-off PA, the school's wobbling tape and ringing lockers, the garage's slaps and boom, the pool's
+underwater half (try Submerged), the hotel's wall (try Room 404), the subway's echoes running away, the supermarket's
+speaker grid, the office's hum on the notes, and the impossible room's backward swells and freezes. Please report any
+two rooms that still sound alike, and any Character that doesn't change its room enough.

@@ -56,6 +56,18 @@ bass-heavy), tiled pools (3–5 s, bright), carpeted hotel corridors (0.5–0.8 
 stations (2.5–4 s), supermarkets (1.5–2.5 s), open-plan offices (0.4–0.7 s); flutter-echo
 spacing = 2 x wall distance / 343 m/s.
 
+## Signatures and research corrections (2026-10-31)
+
+The table above is the Direction Update 2 design. Since 2026-10-31 each place also has **one signature effect no
+other place uses** (`Source/DSP/Signature.cpp`), and some acoustics were corrected from the research in
+`docs/ENVIRONMENT_RESEARCH.md` (its last section has the full table): hospital RT60 1.0/1.15 s with 14 ms flutter
+spacing and a flutter-echo signature; mall 5.5/3.8 s with the distant PA as a signature (the direct sound almost
+gone); school without flutter pattern, tape wobble + ringing lockers; garage slap-back + 69 Hz boom (the chain's own
+63/78 ms echo removed); pool 4.8/3.6 s, first reflection 41 ms, the underwater layer; hotel 0.6/0.35 s, through the
+wall; subway receding tunnel echoes (its combs and 430/520 ms echo moved into the signature); supermarket 1.8/1.3 s,
+the ceiling-speaker grid (its short repeat removed); office the 120 Hz hum infection; impossible room 7.5/9.5 s (the
+highs outlast the lows), reversed swells, wrong-pitch reflections and rare freezes. Tests: group `distinct`.
+
 ## How it is verified (tests group `environments`)
 
 - **The bed alone** (Activity 0, 30 s per place, same seed): quiet (-60 to -38 dBFS; measured

@@ -899,15 +899,47 @@ bool writeAudio(const Signal& out, const juce::File& file) {
 //     room alone (Part 3).
 // Listening aid; CI uploads both.
 int renderPlaces(const juce::String& path) {
-    Signal out;
+    // 2026-10-31: the same solo piano phrase (the distinctness test's) through all ten rooms, each
+    // with its signature, 10 s each and a second of silence between; a cue sheet beside it; and the
+    // same ten in a shuffled order (u2-rooms-blind.wav) to try telling them apart blind - the
+    // answer key is at the end of the cue sheet.
+    const char* signatureOf[] { "flutter echo between the corridor walls", "distant PA in another wing", "tape wobble + ringing lockers",
+                                "slap-back off the pillars + low boom", "half under the water", "through the wall from the next room",
+                                "echoes receding down the tunnel", "ceiling-speaker grid + glossy floor", "120 Hz hum on the notes, dead room",
+                                "reversed swells, wrong-pitch reflections, freezes" };
+    std::array<Signal, dsp::placeCount> parts;
     for (int place = 0; place < dsp::placeCount; ++place) {
         auto rig = rigIn(place);
-        rig->set(params::choirOn, 1.0f);
-        rig->set(params::choirLevel, -8.0f);
-        rig->render(1.0);
-        const auto part = rig->render(12.0, standardPhrase(rig->time + 0.5));
-        out.first.insert(out.first.end(), part.first.begin(), part.first.end());
-        out.second.insert(out.second.end(), part.second.begin(), part.second.end());
+        rig->render(2.5);   // the bed is in (default Ambience)
+        parts[std::size_t(place)] = rig->render(10.0, standardPhrase(rig->time + 0.3));
+    }
+    Signal out;
+    juce::String cues = "u2-rooms.wav - the same piano phrase through all ten rooms (10 s each, 1 s silence between)\n";
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        const double at = double(out.first.size()) / 48000.0;
+        cues << juce::String(at, 0) << " s  " << placeNames[place] << ": " << signatureOf[place] << "\n";
+        out.first.insert(out.first.end(), parts[std::size_t(place)].first.begin(), parts[std::size_t(place)].first.end());
+        out.second.insert(out.second.end(), parts[std::size_t(place)].second.begin(), parts[std::size_t(place)].second.end());
+        out.first.insert(out.first.end(), 48000, 0.0f);
+        out.second.insert(out.second.end(), 48000, 0.0f);
+    }
+    cues << "then: changing place while a chord rings (hospital, pool, garage, impossible room)\n";
+    {
+        const int order[] { 6, 2, 8, 4, 0, 9, 3, 7, 1, 5 };   // a fixed shuffle
+        Signal blind;
+        juce::String key = "\nu2-rooms-blind.wav - the same ten, shuffled (10 s each, 1 s silence). Answer key:\n";
+        for (int k = 0; k < dsp::placeCount; ++k) {
+            const auto& part = parts[std::size_t(order[k])];
+            blind.first.insert(blind.first.end(), part.first.begin(), part.first.end());
+            blind.second.insert(blind.second.end(), part.second.begin(), part.second.end());
+            blind.first.insert(blind.first.end(), 48000, 0.0f);
+            blind.second.insert(blind.second.end(), 48000, 0.0f);
+            key << "  " << (k + 1) << ". " << placeNames[order[k]] << "\n";
+        }
+        const juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+        if (!writeAudio(blind, file.getSiblingFile(file.getFileNameWithoutExtension() + "-blind.wav"))) return 1;
+        cues << key;
+        file.getSiblingFile(file.getFileNameWithoutExtension() + "-cues.txt").replaceWithText(cues);
     }
     {   // Changing place while a chord rings: hospital -> pool -> garage -> impossible room.
         auto rig = rigIn(0);
