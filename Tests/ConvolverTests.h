@@ -78,11 +78,11 @@ void testConvolver(Suite& s) {
         std::vector<float> l(128), r(128);
         std::mt19937 rng(7);
         std::normal_distribution<float> g(0.0f, 0.2f);
+        std::vector<double> byPhase(64, 0.0);   // mean time per position in the 64-block (8192-sample) cycle
         allocationProbe::calls = 0;
         allocationProbe::enabled = true;
         const int blocks = int(rate * 20.0 / 128);
         double worst = 0, total = 0;
-        std::vector<double> byPhase(64, 0.0);   // mean time per position in the 64-block (8192-sample) cycle
         for (int b = 0; b < blocks; ++b) {
             for (int i = 0; i < 128; ++i) { l[std::size_t(i)] = g(rng); r[std::size_t(i)] = g(rng); }
             const auto t0 = std::chrono::steady_clock::now();

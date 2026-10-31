@@ -1509,3 +1509,51 @@ switch on **TAPE WARBLE (AUDIO)** with Heavy + Room 404 and listen for a faint w
 anything that looks fake or too much, any flashing or frozen frame, and whether the MacBook Air stays cool with the
 tape running (VHS Off brings the editor back to its previous cost).
 
+
+## Effects from the developer's pedal captures (2026-10-31, night) — blocked on the captures
+
+### What happened
+The milestone asked for real reverbs/echoes/modulation from the developer's captures of five
+units (dark hall, shimmer, tape echo, modulated drive, flanger - no brand names in the product).
+**The captures are not in `AdrianAbbas/Samples`**: its whole history (5 commits, `476bfe1`) holds
+guitar, kalimba, violin, room tone and the dry Minilogue synth batch - no capture-sequence takes,
+no reamped or dry phrases - and no other repository on the account has them. Everything that
+doesn't need the recordings was built and tested; the rooms were **not** changed (inventing IRs
+would be the "bland and fake" this milestone replaces). Full detail: `docs/PEDAL_CAPTURES.md`.
+
+### What changed
+- `tools/captures/`: `analyze.py` (per take: sections, clock drift, glitch QC on raw + cross-
+  predicted residual, noise floor, IR from the clean/averaged/repaired sweep, measurements),
+  `run_all.py` (a whole folder -> inventory, summary, re-record list, reamp comparisons),
+  `kit.py`, `selftest.py`.
+- `Source/DSP/Convolver.h/.cpp`: zero-latency non-uniform partitioned convolver (128-tap
+  direct head + 128/512/2048/8192 stages, work spread and staggered), Quality caps the IR
+  (Eco 1.5 s / Standard 3.5 s / High 8 s). `juce_dsp` now linked (Apple FFT on the Mac).
+- `Source/DSP/CaptureModels.h`: `TapeEcho` (profile = what the tools measure), `ModVoice`,
+  `OctaveShifter`. Not routed into any room yet.
+- Tests: group `convolver` (also in `scripts/run-tests-parallel.sh`); `--capture-model` CLI.
+
+### Tested (Linux, this container)
+- Full suite: 551 passed, 0 failed (the first full run caught one allocation - it was the test's
+  own vector created after the probe was switched on; fixed, the group re-run green).
+- `convolver`: equals direct convolution to -134 dB (random host blocks 1-1024); latency 0,
+  reported 0; no allocations; stereo 3.5 s IR 2.8-2.95 % of one core; tape echo time/feedback/
+  darkening as profiled; octave shifter 40 dB.
+- Tools: `docs/captures-selftest.txt` - 30/30 (synthetic glitches, drift, floor, RT60, echo,
+  wow/flutter, reamp comparison, and the closed loop through the plugin's own tape model).
+
+### Report-only (two attempts each)
+- Tools: feedback of the saturating synthetic echo from the loud sweep -7.58 vs -6.3 dB (the
+  saturation, not the tool: the quiet sweep reads right on the model); IR error -20.4 dB vs -25.
+- `convolver`: structural worst block ~21 % of its budget (met); modulation LFO rate 0.44 vs
+  0.5 Hz (met, coarse 10 ms demodulation).
+
+### Not done / not verified
+- Parts 4 and 5 (rooms, before/after render): blocked - before would equal after. No Mac CPU or
+  plugin size measured this session (no product change to the sound or assets; CI builds once).
+
+### For the developer
+Upload the captures to Samples as `effects/<unit>/<patch>[-static]/01-pedal-capture-sequence-48k.wav`
+plus the reamped phrases, and if possible the kit file itself, a loopback take and the dry phrases
+(`effects/dry/`). The next session runs `run_all.py`, reports glitches and re-records, then does
+Parts 4-5 with the routing table in `docs/PEDAL_CAPTURES.md`.
