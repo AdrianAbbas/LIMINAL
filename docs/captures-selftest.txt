@@ -1,0 +1,28 @@
+PASS clock drift found  [30.3]
+PASS sweep 1 damage detected  [['dropout', 'click']]
+PASS both sweep-1 glitches found (dropout + tail click)  [['click', 'dropout']]
+PASS sweep 2 clean (no false alarms on a modulated echo)  [[]]
+PASS modulated take: sweep 2 only  [sweep 2 only (sweep 1 damaged)]
+PASS IR from the static take (both sweeps averaged)  [static take: average of both sweeps]
+PASS tone click repaired  [1]
+PASS noise floor ~ -84 dBFS  [-84.1]
+PASS echo time 380 ms  [380.05]
+REPORT feedback -6.3 dB/repeat at 1 kHz (-6 dB gain, filters -0.3 dB)  [-7.58] (report-only)
+PASS repeats darken ~-2.5 dB/repeat at 4 kHz vs 500 Hz  [-2.91]
+PASS static take clean, IR averaged  [average of both sweeps]
+     tone modulation: {"segment": "tone", "seconds": 3.18, "fm": {"wow": {"rate_hz": 0.69, "depth_cents": 3.191}, "flutter": {"rate_hz": 4.142, "depth_cents": 2.3}, "rms_cents": 4.533}, "am": {"wow": {"rate_hz": 0.65, "depth_dB": 4.354}, "flutter": {"rate_hz": 6.213, "depth_dB": 1.237}, "rms_dB": 5.212}, "lowest_rate_resolvable_hz": 0.63}
+PASS more distortion at -12 than -24 dBFS  [(0.985, 0.1)]
+PASS wow rate 0.7 Hz  [{'rate_hz': 0.704, 'depth_cents': 6.102}]
+PASS wow depth 6 cents  [{'rate_hz': 0.704, 'depth_cents': 6.102}]
+PASS flutter rate 6 Hz  [{'rate_hz': 5.998, 'depth_cents': 1.427}]
+PASS flutter depth 1.5 cents  [{'rate_hz': 5.998, 'depth_cents': 1.427}]
+PASS both clean sweeps averaged  [average of both sweeps]
+PASS hiss burst in the quiet sweep's tail found  [[{'at': np.float64(131.25), 'len_ms': np.float64(0.020833333333333332), 'kind': 'click', 'seen_in': 'raw'}, {'at': np.float64(131.27), 'len_ms': 20.0, 'kind': 'hiss burst', 'seen_in': 'raw'}]]
+PASS RT60 at 250 Hz = 4.0 s (+/-10 %)  [3.717]
+PASS RT60 at 1000 Hz = 3.0 s (+/-10 %)  [2.979]
+PASS RT60 at 4000 Hz = 1.6 s (+/-10 %)  [1.625]
+PASS a hall is not an echo  [{'periodic': False, 'autocorr': 0.28}]
+PASS a linear hall has no level dependence (quiet vs loud sweep, 125 Hz - 4 kHz)  [{'125': 0.0, '250': 0.0, '500': 0.0, '1000': 0.0, '2000': 0.0, '4000': 0.0, '8000': 0.0}]
+REPORT recovered IR matches the true one in 30 Hz - 16 kHz (error energy < -25 dB)  [-20.4] (report-only)
+PASS reamp comparison: recovered IR within 1 dB  [{'lag_ms': 0.0, 'level_db': 0.23, 'spectral_rms_db': 0.38, 'envelope_rms_db': 0.38}]
+24 / 24 checks pass

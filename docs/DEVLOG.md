@@ -58,7 +58,7 @@ the checklist below.
   - [x] Part 3 — editor CPU before/after, DEVLOG section + handoff; final push **without** `[skip ci]`
 - [ ] **Effects from the developer's pedal captures (2026-10-31, night)** — **blocked: the captures are not in `AdrianAbbas/Samples`** (see `docs/PEDAL_CAPTURES.md`)
   - [x] Part 1 — inventory: Samples @ `476bfe1` (whole history) has no effect captures and no dry/reamped phrases; nothing elsewhere on the account; expected layout written down — push `[skip ci]`
-  - [ ] Part 2 — quality-check tools (glitch detection, click repair, sweep choice, noise floor), validated on a synthetic capture
+  - [x] Part 2 — `tools/captures/` (analyze, run_all, kit, selftest): glitch detection on raw + cross-predicted residual, AR click repair, sweep choice/averaging, noise floor, drift from the clicks; synthetic self-test 24/24 + 2 report-only (`docs/captures-selftest.txt`); **no real take checked** — push `[skip ci]`
   - [ ] Part 3 — deconvolution + measurement tools (validated on synthetic units with known answers); real-time non-uniform partitioned convolver + tests; real-unit IRs/measurements **blocked**
   - [ ] Part 4 — rooms: **blocked** (nothing captured to use)
   - [ ] Part 5 — listening render: **blocked** (before = after); DEVLOG handoff; final push without `[skip ci]`
