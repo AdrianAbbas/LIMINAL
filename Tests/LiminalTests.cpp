@@ -1123,6 +1123,7 @@ int main(int argc, char** argv) {
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);
     if (run("characters")) testCharacters(s);
+    if (run("rules")) testAudioRules(s);
     if (run("workflow")) testWorkflow(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);

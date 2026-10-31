@@ -15,6 +15,7 @@ mkdir -p "$logs"
 "$tests" --only environments > "$logs/6-environments.txt" 2>&1 &
 "$tests" --only effects > "$logs/7-effects.txt" 2>&1 &
 "$tests" --only characters > "$logs/8-characters.txt" 2>&1 &
+"$tests" --only rules > "$logs/11-rules.txt" 2>&1 &
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
 wait
 "$tests" --only realtime > "$logs/5-cpu.txt" 2>&1
@@ -23,7 +24,7 @@ wait
 
 passed=0
 failed=0
-for log in "$logs"/[1-9]-*.txt "$logs"/10-*.txt; do
+for log in "$logs"/[1-9]-*.txt "$logs"/1[0-9]-*.txt; do
     line=$(grep -E '^[0-9]+ passed, [0-9]+ failed' "$log" | tail -1)
     if [[ -z "$line" ]]; then
         echo "$log: did not finish"

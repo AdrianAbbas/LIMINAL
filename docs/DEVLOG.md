@@ -35,7 +35,7 @@ the checklist below.
   - [x] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — pushed without `[skip ci]`; **waiting for the developer's approval of the look**
   - [ ] Part 3 (approved 2026-10-31: "the hospital render looks great") — the other seven places and the Character variants. Resume here:
     - [x] 3.0 Character lighting from the manifests (per-pass levels and flicker per Character, variant passes) instead of the editor's table; hospital/pool/office manifests moved over
-    - [ ] 3.1 Mall (`tools/scenes/mall.py`, rendered, packed) — push `[skip ci]`
+    - [x] 3.1 Mall (`tools/scenes/mall.py`, rendered, packed) — push `[skip ci]`
     - [ ] 3.2 School — push `[skip ci]`
     - [ ] 3.3 Garage — push `[skip ci]`
     - [ ] 3.4 Hotel (Room 404's door ajar) — push `[skip ci]`
@@ -43,10 +43,12 @@ the checklist below.
     - [ ] 3.6 Supermarket — push `[skip ci]`
     - [ ] 3.7 Impossible Room — push `[skip ci]`
     - [ ] 3.8 All 30 Character variants checked by eye (`photo-<place>-characters.jpg`)
-    - [ ] 3.9 Audio re-check against Section 1's hard rules, ten rooms x three Characters; listening render updated
+    - [ ] 3.9 Audio re-check against Section 1's hard rules, ten rooms x three Characters (new test group `rules`: done, 6/6; five Character beds lowered, flicker events + hum sag in mall/hotel/impossible); listening render updated
     - [ ] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
     - [ ] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
+**Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
+
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
 

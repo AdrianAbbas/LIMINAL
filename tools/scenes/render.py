@@ -1,6 +1,6 @@
 """Render one LIMINAL scene's light passes and pack them for the plug-in.
 
-    python3 tools/scenes/render.py <pool|office|hospital> [--preview]
+    python3 tools/scenes/render.py <scene> [--preview | --pack-only | --characters-only]
 
 Needs Blender's Python module (`pip install bpy`, Blender 5.2 on Python 3.13; see
 tools/scenes/README.md) and Pillow. Writes linear EXR passes to build/scenes/<scene>/, then
@@ -93,18 +93,22 @@ def main():
             json.dump(manifest, f, indent=2)
         print("characters written", path)
         return
-    built = module.build()
+    pack_only = "--pack-only" in sys.argv   # re-pack the EXRs already in build/scenes/<scene>/
+    built = None if pack_only else module.build()
     scene = bpy.context.scene
     if preview:
         scene.render.resolution_percentage = 25
     work = os.path.join(ROOT, "build", "scenes", name)
     assets = os.path.join(ROOT, "assets", "scenes", name)
-    os.makedirs(assets, exist_ok=True)
     samples = 16 if preview else int(os.environ.get("LIMINAL_SAMPLES", "160"))
-    manifest = common.render_passes(work, module.PASSES, samples=samples, extra=getattr(module, "EXTRA", None), base_default=getattr(module, "BASE_DEFAULT", 1.0))
+    if pack_only:
+        with open(os.path.join(work, "manifest.json")) as f:
+            manifest = json.load(f)
+    else:
+        manifest = common.render_passes(work, module.PASSES, samples=samples, extra=getattr(module, "EXTRA", None), base_default=getattr(module, "BASE_DEFAULT", 1.0))
     # The caustic loop: rendered at half size, the pattern stepping once around its circle.
     loop = getattr(module, "CAUSTIC_FRAMES", 0)
-    if loop and os.environ.get("LIMINAL_ONLY_PASS") in (None, "caustics"):
+    if loop and not pack_only and os.environ.get("LIMINAL_ONLY_PASS") in (None, "caustics"):
         _, gobo, _ = built
         common._set_group("caustics", 0.0, 1.0)
         # The pattern is soft: a quarter of the size and few samples are plenty (and ~20 s a frame).
@@ -116,6 +120,7 @@ def main():
             bpy.ops.render.render(write_still=True)
             print("rendered caustic frame", f, flush=True)
     # Pack for the plug-in.
+    os.makedirs(assets, exist_ok=True)
     for p in manifest["passes"]:
         exr = os.path.join(work, p["name"] + ".exr")
         if os.path.exists(exr):

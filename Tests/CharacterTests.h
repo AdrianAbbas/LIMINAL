@@ -265,3 +265,125 @@ void testCharacters(Suite& s) {
         s.check(maxDiff(r1.render(2.0, { { 0.1, on(60) } }), r2.render(2.0, { { 0.1, on(60) } })) == 0.0, "a restored song with scenes plays identically every time");
     }
 }
+
+// Direction Update 2, Section 1's hard rules, re-checked in every place under each of its three
+// Characters (Part 3): a quiet, still, tonal bed; rare, sparse events (default Activity and
+// 100 %); no risers, whooshes or waves of noise (the air above 2 kHz never swells for long); the
+// instruments about 10-15 dB over the room at the default settings.
+void testAudioRules(Suite& s) {
+    s.section("audio rules: ten places x three Characters (Direction Update 2, Section 1)");
+    const double rate = 48000.0;
+    int beds = 0, still = 0, tonal = 0, rare = 0, noSwell = 0, over = 0, total = 0;
+    double minGap = 1e9, maxGap = -1e9, longestSwell = 0;
+    std::string worstGap, worstSwell;
+    for (int place = 0; place < dsp::placeCount; ++place)
+        for (int c = 0; c < dsp::characterCount; ++c) {
+            ++total;
+            const std::string name = std::string(placeNames[place]) + " / " + dsp::character(place, c).name;
+            // The bed alone (Activity 0), 20 s after 2 s to settle.
+            auto rig = characterRig(place, c);
+            rig->set(params::activity, 0.0f);
+            rig->render(2.0);
+            const auto x = rig->render(20.0);
+            const double level = toDb(rms(x));
+            auto env = envelope(x, rate, 0.25);
+            std::sort(env.begin(), env.end());
+            const double spread = env[env.size() * 95 / 100] - env[env.size() * 5 / 100];
+            double tone = 0, all = 0;
+            {
+                const Spectrum sp(monoOf(x, rate, 4.0, 8.0), rate, 1 << 17);
+                const auto& m = sp.mag;
+                const std::size_t lo = std::size_t(30.0 / sp.binHz), hi = std::min(m.size() - 64, std::size_t(6000.0 / sp.binHz));
+                std::vector<double> local;
+                for (std::size_t i = lo; i < hi; ++i) {
+                    local.clear();
+                    for (std::size_t j = i - 48; j < i + 48; j += 3) local.push_back(m[j]);
+                    std::nth_element(local.begin(), local.begin() + std::ptrdiff_t(local.size() / 2), local.end());
+                    all += m[i] * m[i];
+                    if (m[i] > 4.0 * local[local.size() / 2]) tone += m[i] * m[i];
+                }
+            }
+            const double share = tone / std::max(1e-30, all);
+            beds += level > -64.0 && level < -36.0 ? 1 : 0;
+            still += (place == 7 || place == 9 || spread < 2.5) ? 1 : 0;   // (the compressor cycles; the impossible room's silences)
+            tonal += share > 0.5 ? 1 : 0;
+            if (!(level > -64.0 && level < -36.0) || !(place == 7 || place == 9 || spread < 2.5) || share <= 0.5)
+                std::cout << "  [detail] " << name << ": bed " << num(level, 1) << " dBFS, moves " << num(spread, 2) << " dB, tonal " << num(share, 2) << "\n";
+            // Events from the engine itself: default Activity and 100 %, 3 minutes each.
+            const auto eventTimes = [&](float activity) {
+                dsp::Ambience amb;
+                amb.prepare(rate);
+                amb.configure(dsp::Ambience::Place(place), 1, &dsp::character(place, c));
+                amb.setActivity(dsp::activityRate(activity, dsp::macroResponse(place).activity));
+                std::vector<double> times;
+                int seen = 0, flicks = 0;
+                for (int i = 0; i < int(180.0 * rate); ++i) {
+                    amb.tick();
+                    if (amb.spawned() + amb.flickers() > seen + flicks) times.push_back(double(i) / rate);
+                    seen = amb.spawned();
+                    flicks = amb.flickers();
+                }
+                return times;
+            };
+            const auto atDefault = eventTimes(0.25f), atFull = eventTimes(1.0f);
+            double closest = 1e9;
+            for (std::size_t i = 1; i < atDefault.size(); ++i) closest = std::min(closest, atDefault[i] - atDefault[i - 1]);
+            const bool sparse = atDefault.size() <= 9 && (atDefault.size() < 2 || closest >= 19.0) && atFull.size() <= 40;
+            rare += sparse ? 1 : 0;
+            if (!sparse) std::cout << "  [detail] " << name << ": events " << atDefault.size() << " (closest " << num(closest, 1) << " s) / " << atFull.size() << " at 100 %\n";
+            // No risers or whooshes: at the default Activity, the air above 2 kHz (250 ms frames)
+            // never stays more than 8 dB over its median for over 1.5 s.
+            {
+                auto r2 = characterRig(place, c);
+                r2->render(2.0);
+                const auto y = r2->render(45.0);
+                std::vector<double> hiEnv;
+                double hp = 0, prev = 0, acc = 0;
+                const double a = std::exp(-2.0 * juce::MathConstants<double>::pi * 2000.0 / rate);
+                const int frame = int(0.25 * rate);
+                for (std::size_t i = 0; i < y.first.size(); ++i) {
+                    const double m = 0.5 * (double(y.first[i]) + double(y.second[i]));
+                    hp = a * (hp + m - prev);
+                    prev = m;
+                    acc += hp * hp;
+                    if ((i + 1) % std::size_t(frame) == 0) {
+                        hiEnv.push_back(10.0 * std::log10(acc / frame + 1e-20));
+                        acc = 0;
+                    }
+                }
+                auto sorted = hiEnv;
+                std::nth_element(sorted.begin(), sorted.begin() + std::ptrdiff_t(sorted.size() / 2), sorted.end());
+                const double median = sorted[sorted.size() / 2];
+                int run = 0, longest = 0, endsAt = 0;
+                for (std::size_t k = 0; k < hiEnv.size(); ++k) {
+                    run = hiEnv[k] > median + 8.0 ? run + 1 : 0;
+                    if (run > longest) { longest = run; endsAt = int(k); }
+                }
+                const double seconds = 0.25 * longest;
+                if (seconds > 1.5) std::cout << "  [detail] " << name << ": the air above 2 kHz swells for " << num(seconds, 2) << " s, ending " << num(2.0 + 0.25 * (endsAt + 1), 2) << " s in\n";
+                // (The impossible room's reverb swells after each sound by design - Section 2 - so a
+                // ghost note's tail may stay up to 3 s; everywhere else 1.5 s.)
+                noSwell += seconds <= (place == 9 ? 3.0 : 1.5) ? 1 : 0;
+                if (place != 9 && seconds > longestSwell) { longestSwell = seconds; worstSwell = name; }
+                // The instruments over the room: the standard phrase alone vs this bed at the default Activity.
+                auto r3 = characterRig(place, c);
+                r3->set(params::ambience, params::minDb);
+                r3->render(1.0);
+                const auto phrase = r3->render(7.0, standardPhrase(r3->time));
+                const double gap = toDb(rms(phrase)) - toDb(rms(y));
+                over += gap >= 10.0 ? 1 : 0;
+                if (gap < minGap) { minGap = gap; worstGap = name; }
+                maxGap = std::max(maxGap, gap);
+                if (gap < 10.0) std::cout << "  [detail] " << name << ": phrase over the room " << num(gap, 1) << " dB\n";
+            }
+        }
+    const auto all = std::to_string(total);
+    s.check(beds == total, "every bed is quiet (-64..-36 dBFS at Activity 0)", std::to_string(beds) + " of " + all);
+    s.check(still == total, "every bed is still: steady hums, no waves (level moves under 2.5 dB)", std::to_string(still) + " of " + all);
+    s.check(tonal == total, "every bed is tonal: noise stays below the hum (over half the energy in tones)", std::to_string(tonal) + " of " + all);
+    s.check(rare == total, "events rare and distant in every Character (default: at most 9 in 3 min, never two within 20 s; 100 %: at most 40)", std::to_string(rare) + " of " + all);
+    s.check(noSwell == total, "no risers, whooshes or noise swells (air above 2 kHz never 8 dB over its median for over 1.5 s; the impossible room's swelling reverb 3 s)",
+            std::to_string(noSwell) + " of " + all + ", longest " + num(longestSwell, 2) + " s (" + worstSwell + ")");
+    s.metric("phrase over the room at default settings: smallest / largest", minGap, (" / " + num(maxGap, 1) + " dB (smallest: " + worstGap + ")").c_str());
+    s.check(over == total, "the instruments sit at least 10 dB over the room in every place and Character", std::to_string(over) + " of " + all);
+}

@@ -1,0 +1,95 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 0.929,
+      "characters": [
+        0.7,
+        1.5,
+        0.05
+      ]
+    },
+    {
+      "name": "atrium",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.365,
+        0.7164
+      ],
+      "peak": 21.959,
+      "characters": [
+        0.8,
+        0.0,
+        1.2
+      ]
+    },
+    {
+      "name": "shops",
+      "kind": "sign",
+      "default": 1.0,
+      "anchor": [
+        0.4672,
+        0.3926
+      ],
+      "peak": 0.0,
+      "characters": [
+        0.5,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "lastshop",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.8028,
+        0.5214
+      ],
+      "peak": 0.16,
+      "characters": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "fountain",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4504,
+        0.7398
+      ],
+      "peak": 7.859,
+      "characters": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.2609,
+        0.7548
+      ],
+      "peak": 4.829,
+      "characters": [
+        1.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "mall",
+  "thumbnail": "mall_thumb.jpg"
+}
