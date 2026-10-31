@@ -1,4 +1,5 @@
 #include "DSP/Environment.h"
+#include "DSP/Signature.h"
 #include <cmath>
 
 namespace liminal::dsp {
@@ -10,16 +11,16 @@ namespace {
 Profile makeHospital() {
     Profile p { "VACANT HOSPITAL", "EAST WING, LEVEL 2", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a long, narrow, hard corridor: flutter between the parallel walls, cold and bright-ish
-    r.rt60Low = 1.5f; r.rt60High = 1.8f; r.crossoverHz = 2200.0f; r.size = 1.0f; r.preDelayMs = 16.0f;
+    r.rt60Low = 1.0f; r.rt60High = 1.15f; r.crossoverHz = 2200.0f; r.size = 1.0f; r.preDelayMs = 16.0f;   // (research: tile ceilings make corridors short; the flutter stays)
     r.diffusion = 0.35f; r.modulation = 0.1f; r.pattern = Space::Pattern::flutter; r.reflections = 16;
-    r.firstMs = 5.0f; r.spacingMs = 8.5f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.65f; r.width = 1.5f;
+    r.firstMs = 7.0f; r.spacingMs = 14.0f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.65f; r.width = 1.5f;
     r.lowCutHz = 240.0f; r.highCutHz = 9000.0f;
     auto& c = p.colour;   // thin low end, a slight cold high-mid edge, set back a little
     c.highPassHz = 280.0f; c.lowPassHz = 9500.0f; c.peakHz = 2700.0f; c.peakQ = 1.1f; c.peakDb = 4.5f;
     c.peak2Hz = 380.0f; c.peak2Q = 1.0f; c.peak2Db = -5.0f;
     c.width = 1.6f; c.dryDb = 0.0f;
     auto& e = p.echo;     // the corridor's far end answering
-    e.leftMs = 186.0f; e.rightMs = 241.0f; e.feedback = 0.35f; e.level = 0.38f; e.lowPassHz = 5200.0f; e.highPassHz = 500.0f;
+    e.leftMs = 186.0f; e.rightMs = 241.0f; e.feedback = 0.3f; e.level = 0.18f; e.lowPassHz = 5200.0f; e.highPassHz = 500.0f;
     p.wetDb = 0.0f;
     p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
@@ -27,7 +28,7 @@ Profile makeHospital() {
 Profile makeMall() {
     Profile p { "EMPTY SHOPPING MALL", "CENTRAL ATRIUM, AFTER HOURS", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a huge atrium: RT60 7 s, diffuse, slightly dark highs
-    r.rt60Low = 7.5f; r.rt60High = 5.2f; r.crossoverHz = 1600.0f; r.size = 2.5f; r.preDelayMs = 75.0f;
+    r.rt60Low = 5.5f; r.rt60High = 3.8f; r.crossoverHz = 1600.0f; r.size = 2.5f;   // (research: atria 4-5 s mid, shorter in the highs) r.preDelayMs = 75.0f;
     r.diffusion = 0.9f; r.modulation = 0.4f; r.pattern = Space::Pattern::sparse; r.reflections = 6;
     r.firstMs = 45.0f; r.spacingMs = 26.0f; r.reflectionDecay = 0.8f; r.reflectionLevel = 0.22f; r.width = 1.3f;
     r.lowCutHz = 45.0f; r.highCutHz = 6500.0f;
@@ -46,16 +47,14 @@ Profile makeSchool() {
     Profile p { "ABANDONED SCHOOL", "B CORRIDOR, NEAR ROOM 14", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a hallway of lockers and hard floors: metallic early reflections, boxy
     r.rt60Low = 1.4f; r.rt60High = 1.2f; r.crossoverHz = 1400.0f; r.size = 0.65f; r.preDelayMs = 7.0f;
-    r.diffusion = 0.3f; r.modulation = 0.05f; r.pattern = Space::Pattern::flutter; r.reflections = 16;
-    r.firstMs = 2.5f; r.spacingMs = 4.6f; r.reflectionDecay = 0.84f; r.reflectionLevel = 0.6f; r.width = 0.25f;
+    r.diffusion = 0.3f; r.modulation = 0.05f; r.pattern = Space::Pattern::dense; r.reflections = 12;
+    r.firstMs = 4.0f; r.spacingMs = 6.0f; r.reflectionDecay = 0.84f; r.reflectionLevel = 0.6f; r.width = 0.25f;
     r.lowCutHz = 150.0f; r.highCutHz = 7000.0f;
     auto& c = p.colour;   // boxy mids, a faint ring of sheet metal
     c.highPassHz = 140.0f; c.lowPassHz = 7500.0f; c.peakHz = 720.0f; c.peakQ = 1.2f; c.peakDb = 7.0f;
     c.peak2Hz = 2900.0f; c.peak2Q = 2.0f; c.peak2Db = 5.0f;
-    c.combHz = 1160.0f; c.comb2Hz = 1630.0f; c.combFeedback = 0.65f; c.combMix = 0.3f; c.combDamp = 0.2f;
     c.width = 0.2f; c.dryDb = -1.5f;
-    auto& e = p.echo;     // the opposite wall, close: a short slap
-    e.leftMs = 34.0f; e.rightMs = 37.0f; e.feedback = 0.3f; e.level = 0.35f; e.lowPassHz = 5000.0f; e.highPassHz = 300.0f; e.pingPong = false;
+    // (no echo of its own since the signatures: the lockers and the tape are the school's; discrete slaps are the garage's)
     p.wetDb = -1.0f;
     p.ambienceTrim = 2.24f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
@@ -71,8 +70,7 @@ Profile makeGarage() {
     c.highPassHz = 35.0f; c.lowPassHz = 4200.0f; c.lowPassQ = 0.8f; c.steep = true;
     c.peakHz = 180.0f; c.peakQ = 0.9f; c.peakDb = 7.0f; c.peak2Hz = 360.0f; c.peak2Q = 1.4f; c.peak2Db = 3.0f;
     c.width = 0.7f; c.dryDb = -6.0f;
-    auto& e = p.echo;     // slap-back off the pillars and the far wall
-    e.leftMs = 63.0f; e.rightMs = 78.0f; e.feedback = 0.25f; e.level = 0.42f; e.lowPassHz = 2200.0f; e.highPassHz = 90.0f; e.pingPong = false;
+    // (the slap-back off the pillars is the garage's signature now: DSP/Signature)
     p.wetDb = -0.5f;
     p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
@@ -80,15 +78,15 @@ Profile makeGarage() {
 Profile makePool() {
     Profile p { "ABANDONED INDOOR POOL", "MAIN HALL, DEEP END", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // still water and tile: very bright, long, diffuse; distinct reflections; the surface alive
-    r.rt60Low = 3.8f; r.rt60High = 4.4f; r.crossoverHz = 2500.0f; r.size = 1.9f; r.preDelayMs = 28.0f;
-    r.diffusion = 0.75f; r.modulation = 0.3f; r.pattern = Space::Pattern::flutter; r.reflections = 12;
-    r.firstMs = 14.0f; r.spacingMs = 15.0f; r.reflectionDecay = 0.84f; r.reflectionLevel = 0.6f; r.width = 1.5f;
+    r.rt60Low = 4.8f; r.rt60High = 3.6f; r.crossoverHz = 2500.0f;   // (research: untreated pools 5-10 s; highs still shorter) r.size = 1.9f; r.preDelayMs = 28.0f;
+    r.diffusion = 0.75f; r.modulation = 0.3f; r.pattern = Space::Pattern::sparse; r.reflections = 8;
+    r.firstMs = 41.0f; r.spacingMs = 38.0f; r.reflectionDecay = 0.84f; r.reflectionLevel = 0.6f; r.width = 1.5f;
     r.lowCutHz = 110.0f; r.highCutHz = 15000.0f; r.surface = 1.0f;
     auto& c = p.colour;   // bright, glassy
     c.highPassHz = 150.0f; c.shelfHz = 3500.0f; c.shelfDb = 7.0f; c.peakHz = 3200.0f; c.peakQ = 1.0f; c.peakDb = 2.0f;
     c.width = 1.5f; c.dryDb = -4.0f;
     auto& e = p.echo;     // the far tiled wall, distinct
-    e.leftMs = 151.0f; e.rightMs = 233.0f; e.feedback = 0.42f; e.level = 0.45f; e.lowPassHz = 9500.0f; e.highPassHz = 250.0f;
+    e.leftMs = 151.0f; e.rightMs = 233.0f; e.feedback = 0.35f; e.level = 0.3f; e.lowPassHz = 9500.0f; e.highPassHz = 250.0f;
     p.wetDb = 2.0f;
     p.ambienceTrim = 2.51f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
@@ -96,7 +94,7 @@ Profile makePool() {
 Profile makeHotel() {
     Profile p { "EMPTY HOTEL", "FOURTH FLOOR, ROOM 412", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // carpet and soft furnishings: short, warm, muffled
-    r.rt60Low = 0.9f; r.rt60High = 0.4f; r.crossoverHz = 900.0f; r.size = 0.7f; r.preDelayMs = 8.0f;
+    r.rt60Low = 0.6f; r.rt60High = 0.35f; r.crossoverHz = 900.0f; r.size = 0.7f; r.preDelayMs = 8.0f;
     r.diffusion = 0.8f; r.modulation = 0.1f; r.pattern = Space::Pattern::sparse; r.reflections = 5;
     r.firstMs = 6.0f; r.spacingMs = 8.0f; r.reflectionDecay = 0.6f; r.reflectionLevel = 0.25f; r.width = 0.8f;
     r.lowCutHz = 60.0f; r.highCutHz = 3500.0f;
@@ -120,10 +118,8 @@ Profile makeSubway() {
     auto& c = p.colour;   // metallic coloration from the tiles and rails
     c.highPassHz = 50.0f; c.lowPassHz = 5000.0f; c.peakHz = 95.0f; c.peakQ = 1.2f; c.peakDb = 7.0f;
     c.peak2Hz = 2600.0f; c.peak2Q = 1.4f; c.peak2Db = 5.0f;
-    c.combHz = 412.0f; c.comb2Hz = 587.0f; c.combFeedback = 0.65f; c.combMix = 0.22f; c.combDamp = 0.15f;
     c.width = 0.35f; c.dryDb = -5.0f;
-    auto& e = p.echo;     // the long echo down the tunnel, one way
-    e.leftMs = 430.0f; e.rightMs = 520.0f; e.feedback = 0.45f; e.level = 0.55f; e.lowPassHz = 3500.0f; e.highPassHz = 350.0f; e.pingPong = false;
+    // (the echoes down the tunnel are the subway's signature now: DSP/Signature)
     p.wetDb = 1.0f;
     p.ambienceTrim = 2.24f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
@@ -131,7 +127,7 @@ Profile makeSubway() {
 Profile makeSupermarket() {
     Profile p { "EMPTY SUPERMARKET", "AISLE 7, FROZEN FOODS", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a large reflective commercial interior, glossy floors: RT60 2 s, slightly bright
-    r.rt60Low = 2.5f; r.rt60High = 2.9f; r.crossoverHz = 2500.0f; r.size = 1.6f; r.preDelayMs = 14.0f;
+    r.rt60Low = 1.8f; r.rt60High = 1.3f; r.crossoverHz = 2500.0f;   // (research: shelved goods absorb; 1-2 s) r.size = 1.6f; r.preDelayMs = 14.0f;
     r.diffusion = 0.5f; r.modulation = 0.05f; r.pattern = Space::Pattern::grid; r.reflections = 12;
     r.firstMs = 9.0f; r.spacingMs = 17.0f; r.reflectionDecay = 0.86f; r.reflectionLevel = 0.45f; r.width = 1.5f;
     r.lowCutHz = 120.0f; r.highCutHz = 11000.0f;
@@ -139,8 +135,7 @@ Profile makeSupermarket() {
     c.highPassHz = 160.0f; c.lowPassHz = 12000.0f; c.peakHz = 1700.0f; c.peakQ = 1.2f; c.peakDb = 3.0f;
     c.shelfHz = 5000.0f; c.shelfDb = 5.0f;
     c.width = 1.6f; c.dryDb = -0.5f;
-    auto& e = p.echo;     // shelving and cold cases: a bright, short repeat
-    e.leftMs = 63.0f; e.rightMs = 71.0f; e.feedback = 0.2f; e.level = 0.2f; e.lowPassHz = 7000.0f; e.highPassHz = 600.0f;
+    // (the speaker grid and the floor are the supermarket's signature now: DSP/Signature)
     p.wetDb = -1.0f;
     p.ambienceTrim = 1.41f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
     return p;
@@ -162,8 +157,8 @@ Profile makeOffice() {
 Profile makeImpossible() {
     Profile p { "IMPOSSIBLE ROOM", "THE ROOM THAT WAS NOT THERE YESTERDAY", {}, {}, {}, 0, 1 };
     auto& r = p.room;   // a small room's reflections with a cathedral's tail - one that swells after the note
-    r.rt60Low = 9.0f; r.rt60High = 7.5f; r.crossoverHz = 1500.0f; r.size = 2.3f; r.preDelayMs = 4.0f;
-    r.diffusion = 0.85f; r.modulation = 0.6f; r.pattern = Space::Pattern::flutter; r.reflections = 10;
+    r.rt60Low = 7.5f; r.rt60High = 9.5f; r.crossoverHz = 1500.0f;   // the highs outlast the lows: no real room does that r.size = 2.3f; r.preDelayMs = 4.0f;
+    r.diffusion = 0.85f; r.modulation = 0.6f; r.pattern = Space::Pattern::dense; r.reflections = 10;
     r.firstMs = 2.0f; r.spacingMs = 3.2f; r.reflectionDecay = 0.8f; r.reflectionLevel = 0.35f; r.width = 1.9f;
     r.lowCutHz = 40.0f; r.highCutHz = 12000.0f;
     auto& c = p.colour;   // near and clear, barely wrong: a faint shifted copy, an image that will not stay still
@@ -613,6 +608,9 @@ Stereo Echo::tick(Stereo in, float amount) {
 }
 
 //==============================================================================
+EnvironmentChain::EnvironmentChain() : signature(std::make_unique<Signature>()) {}
+EnvironmentChain::~EnvironmentChain() = default;
+
 void EnvironmentChain::prepare(double sampleRate) {
     sr = sampleRate;
     echo.prepare(sr);
@@ -623,8 +621,11 @@ void EnvironmentChain::prepare(double sampleRate) {
     sbufR.assign(1024, 0.0f);
     ebufL.assign(1024, 0.0f);
     ebufR.assign(1024, 0.0f);
+    for (auto* b : { &sigL, &sigR, &sigSendL, &sigSendR }) b->assign(1024, 0.0f);
+    signature->prepare(sr);
     amountCoef = float(1.0 - std::exp(-1.0 / (0.02 * sr)));
     liveCoef = float(1.0 - std::exp(-1.0 / (0.03 * sr)));
+    signatureCoef = float(1.0 - std::exp(-1.0 / (0.25 * sr)));
     ambienceCoef = float(1.0 - std::exp(-1.0 / (0.6 * sr)));   // about 2 s to fade across
     killStep = float(1.0 / (0.03 * sr));
     quietLimit = int(sr);
@@ -643,6 +644,7 @@ void EnvironmentChain::configure(Place place, int characterIndex, unsigned seed,
     wetLive = wetLiveTarget = 1;
     ambienceLive = 1;
     echo.configure(p->echo);
+    if (signature != nullptr) signature->configure(place, characterNow, seed + 31u);
     room.configure(p->room, seed + unsigned(place) * 7919u);
     room.reset();
     ambience.trim = p->ambienceTrim;
@@ -684,9 +686,14 @@ void EnvironmentChain::setLive(const Live& l) {
     ambienceLive = l.ambienceGain;
 }
 
-void EnvironmentChain::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
-                               const float* space, float* outL, float* outR, float* ambienceOut, int n) {
+void EnvironmentChain::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
+                               const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n) {
     n = std::min(n, int(sbufL.size()));
+    // The place's signature on the instruments' share of the dry sound (each instrument's place
+    // amount: Influence x Environment Amount x Mix); it replaces that share by `live`, so the two
+    // chains' signatures cross-fade with the place.
+    signature->setLamp(ambience.lamp());
+    signature->process(dryL, dryR, sigL.data(), sigR.data(), sigSendL.data(), sigSendR.data(), n);
     for (int i = 0; i < n; ++i) {
         live += liveCoef * (liveTarget - live);
         sbufL[std::size_t(i)] = sendL[i] * live;
@@ -706,10 +713,11 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         amount += amountCoef * (amountTarget - amount);
         if (std::abs(amountTarget - amount) < 1.0e-3f) amount = amountTarget;
         ambienceFade += ambienceCoef * (liveTarget - ambienceFade);
+        signatureFade += signatureCoef * (liveTarget - signatureFade);
         if (killing) outFade = std::max(0.0f, outFade - killStep);
         const float ag = ambienceGain[i] * ambienceFade * ambienceLive * (1.0f + 0.2f * evo.spectral());
         const auto amb = ambience.tick();
-        Stereo send { sbufL[std::size_t(i)], sbufR[std::size_t(i)] };
+        Stereo send { sbufL[std::size_t(i)] + sigSendL[std::size_t(i)] * signatureFade, sbufR[std::size_t(i)] + sigSendR[std::size_t(i)] * signatureFade };
         if (p->bloomSeconds > 0.0f) {   // the room hears the note late and grows into it
             const float level = std::abs(send.l) + std::abs(send.r);
             bloomFast += (level > bloomFast ? bloomFastAttack : bloomRelease) * (level - bloomFast);
@@ -727,8 +735,8 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         const float ambL = amb.dry.l * ag, ambR = amb.dry.r * ag;
         const float l = (keep * ambL + echoed.l + sp * wetGain * wetLive * wet.l) * outFade;
         const float r = (keep * ambR + echoed.r + sp * wetGain * wetLive * wet.r) * outFade;
-        outL[i] += l;
-        outR[i] += r;
+        outL[i] += l + signatureFade * outFade * (sigL[std::size_t(i)] - dryL[i]);
+        outR[i] += r + signatureFade * outFade * (sigR[std::size_t(i)] - dryR[i]);
         ambienceOut[i] += 0.5f * (ambL * ambL + ambR * ambR);
         quietFor = std::abs(l) + std::abs(r) < 3.0e-5f ? quietFor + 1 : 0;
     }
@@ -792,10 +800,10 @@ void Environments::start(Place place, int character) {
     active = other;
 }
 
-void Environments::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
-                           const float* space, float* outL, float* outR, float* ambienceOut, int n) {
+void Environments::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
+                           const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n) {
     for (int c = 0; c < 2; ++c)
-        if (running[std::size_t(c)]) chains[std::size_t(c)].process(sendL, sendR, echoInL, echoInR, ambienceGain, space, outL, outR, ambienceOut, n);
+        if (running[std::size_t(c)]) chains[std::size_t(c)].process(sendL, sendR, echoInL, echoInR, dryL, dryR, ambienceGain, space, outL, outR, ambienceOut, n);
 }
 
 // Retiring a faded chain and starting a waiting place happen only here, on the processor's

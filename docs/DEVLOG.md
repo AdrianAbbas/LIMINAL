@@ -49,8 +49,8 @@ the checklist below.
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
 - [ ] **Session 2026-10-31 (afternoon) — clean place transitions + ten truly distinct rooms** (sections at the end)
   - [x] Part 1 — clean transitions: new scene prepared off screen (decoded, kept, or decoded on hover), swapped in whole in one frame (picture, frosted glass, caption, Character chips, light levels), 320 ms cross-fade; test `frames: clean place and Character changes` (frame = old/new/blend fit); push `[skip ci]`
-  - [ ] Part 2a — research: `docs/ENVIRONMENT_RESEARCH.md` (RT60, early reflections, materials, flutter, walls, PA, sources)
-  - [ ] Part 2b — one acoustic profile + one signature effect per room (no other room uses it), Characters vary the signature; Section 1 rules kept
+  - [x] Part 2a — research: `docs/ENVIRONMENT_RESEARCH.md` (RT60, early reflections, materials, flutter, walls, PA, sources)
+  - [x] Part 2b — one acoustic profile + one signature effect per room (`DSP/Signature`), Characters vary the signature; shared effects pruned; Section 1 rules kept; distinctness + signature-matrix tests (group `distinct`); push `[skip ci]`
   - [ ] Part 2c — distinctness test (features for every pair through one piano phrase, closest pairs listed), listening render (same phrase through all ten rooms); DEVLOG; final push **without** `[skip ci]`
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 

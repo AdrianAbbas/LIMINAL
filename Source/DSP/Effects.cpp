@@ -9,24 +9,27 @@ namespace {
 PlaceEffects basePlace(Place p) {
     PlaceEffects e;
     switch (p) {
-    case Place::hospital:     // cold filtering, short reflections, a far-off stereo repeat
-        e.drift = 0.25f; e.echo = 0.12f; e.echoMs = 420; e.echoFeedback = 0.3f; e.lowOctaves = 1.0f; e.highOctaves = 0.8f; e.reverbBias = -0.3f; break;
+    // Since the signatures (2026-10-31) an effect that is one place's signature is not another
+    // place's default: tape only in the school, pitch drift only in the subway (its echoes) and
+    // the impossible room, discrete echoes only where the place's own echo belongs.
+    case Place::hospital:     // cold filtering, a faint far-off repeat down the corridor
+        e.echo = 0.06f; e.echoMs = 420; e.echoFeedback = 0.25f; e.lowOctaves = 1.0f; e.highOctaves = 0.8f; e.reverbBias = -0.3f; break;
     case Place::mall:         // long diffuse reverb, high-frequency softening, gentle detuning
-        e.drift = 0.2f; e.tape = 0.1f; e.chorus = 0.3f; e.grain = 0.08f; e.grainSize = 0.8f; e.lowOctaves = 1.2f; e.reverbBias = 0.8f; break;
+        e.chorus = 0.3f; e.lowOctaves = 1.2f; e.reverbBias = 0.8f; break;
     case Place::school:       // a worn cassette: wow, flutter, hiss, narrow and boxy
-        e.drift = 0.3f; e.tape = 0.6f; e.chorus = 0.15f; e.echo = 0.1f; e.echoMs = 180; e.echoFeedback = 0.2f; e.lowOctaves = 0.8f; e.highOctaves = 0.5f; e.reverbBias = -0.2f; break;
-    case Place::garage:       // concrete: a dull slap, heavy, dark
-        e.tape = 0.1f; e.echo = 0.2f; e.echoMs = 300; e.echoFeedback = 0.25f; e.lowOctaves = 1.5f; e.reverbBias = 0.3f; break;
-    case Place::pool:         // bright tiled reverb, strong echoes, minimal tape
-        e.echo = 0.35f; e.echoMs = 340; e.echoFeedback = 0.45f; e.reverbBias = 0.6f; e.highOctaves = 0.4f; break;
-    case Place::hotel:        // subtle tape degradation, intimate, muffled
-        e.drift = 0.1f; e.tape = 0.5f; e.lowOctaves = 0.5f; e.reverbBias = -0.5f; break;
-    case Place::subway:       // occasional pitch modulation, a metallic tunnel delay
-        e.drift = 0.4f; e.echo = 0.3f; e.echoMs = 650; e.echoFeedback = 0.5f; e.grain = 0.1f; e.reverbBias = 0.4f; break;
-    case Place::supermarket:  // mild chorus, thin nostalgic tape
-        e.drift = 0.15f; e.tape = 0.3f; e.chorus = 0.45f; e.highOctaves = 0.6f; e.reverbBias = -0.6f; break;
+        e.tape = 0.6f; e.lowOctaves = 0.8f; e.highOctaves = 0.5f; e.reverbBias = -0.2f; break;
+    case Place::garage:       // concrete: heavy, dark
+        e.lowOctaves = 1.5f; e.reverbBias = 0.3f; break;
+    case Place::pool:         // bright tiled reverb, the far wall answering
+        e.echo = 0.15f; e.echoMs = 340; e.echoFeedback = 0.35f; e.reverbBias = 0.6f; e.highOctaves = 0.4f; break;
+    case Place::hotel:        // intimate, muffled
+        e.lowOctaves = 0.5f; e.highOctaves = 0.3f; e.reverbBias = -0.5f; break;
+    case Place::subway:       // pitch that will not hold, like the tunnel's echoes
+        e.drift = 0.25f; e.reverbBias = 0.4f; break;
+    case Place::supermarket:  // bright and a little thin under the tubes
+        e.highOctaves = 0.6f; e.reverbBias = -0.6f; break;
     case Place::office:       // dry and close under the tubes (Direction Update 2: no wash, no delay)
-        e.drift = 0.05f; e.lowOctaves = 0.5f; e.reverbBias = -0.3f; break;
+        e.lowOctaves = 0.5f; e.reverbBias = -0.9f; break;
     case Place::impossible:   // unstable pitch, spectral smearing, fragments
         e.drift = 0.6f; e.chorus = 0.2f; e.grain = 0.5f; e.grainSize = 0.5f; e.echo = 0.2f; e.echoMs = 777; e.echoFeedback = 0.6f; e.reverbBias = 0.8f; break;
     }

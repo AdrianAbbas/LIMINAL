@@ -67,6 +67,9 @@ public:
     // What the effects are doing now (for tests and the interface).
     struct Effective { float drift, tape, chorus, grain, echo, echoMs, echoFeedback, lowPass, highPass, reverb, colour; };
     Effective effective() const { return now; }
+    // How much of this instrument the place's signature takes (DSP/Signature): its place amount
+    // (Influence x Environment Amount) through the effects' Mix.
+    float placeShare() const { return target.colour * std::clamp(user.mix, 0.0f, 1.0f); }   // (the processor smooths it)
 
 private:
     enum Module { drift, tape, filter, chorus, grain, echo };

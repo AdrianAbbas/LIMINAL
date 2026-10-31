@@ -21,6 +21,7 @@
 #include "DSP/Filters.h"
 #include "DSP/Space.h"
 #include <array>
+#include <memory>
 #include <vector>
 
 namespace liminal::dsp {
@@ -181,8 +182,11 @@ private:
 
 // One place's shared part: its echo, room and ambience (the instruments' own processing by
 // the place lives in each instrument's EffectRack, DSP/Effects).
+class Signature;
 class EnvironmentChain {
 public:
+    EnvironmentChain();
+    ~EnvironmentChain();
     void prepare(double sampleRate);
     void configure(Place, int character, unsigned seed, unsigned evolutionSeed);   // resets everything
     Place place() const { return current; }
@@ -204,13 +208,14 @@ public:
     int flickers() const { return ambience.flickers(); }
     // Adds into out (echo + room + ambience). `send` feeds the room, `echoIn` the place's
     // echo; this chain fades its inputs in and out for cross-fades between places.
-    void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
-                 const float* space, float* outL, float* outR, float* ambienceOut, int n);
+    // dryL/R: the instruments' dry bus; the place's signature (DSP/Signature) replaces it in out.
+    void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
+                 const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n);
     void setAmount(float a) { amountTarget = a; }
     void snapAmount() { amount = amountTarget; }
     // Fading: 1 = this is the current place; 0 = fading out.
     void setLive(bool on) { liveTarget = on ? 1.0f : 0.0f; }
-    void snapLive() { live = ambienceFade = liveTarget; }
+    void snapLive() { live = ambienceFade = signatureFade = liveTarget; }
     // A quick fade of everything (before it is reused for another place).
     void kill() { killing = true; }
     bool killed() const { return killing && outFade <= 0.0f; }
@@ -234,11 +239,13 @@ private:
     float shimmerIn = 0, shimmerExtra = 0;
     float bloomFast = 0, bloomSlow = 0, bloomAttack = 0, bloomFastAttack = 0, bloomRelease = 0;
     float wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
+    float signatureFade = 1, signatureCoef = 0.0001f;   // the signature cross-fades slower (~0.75 s) than the sends
     float live = 1, liveTarget = 1, liveCoef = 0.001f, ambienceFade = 1, ambienceCoef = 0.0001f;
     int quietFor = 0, quietLimit = 48000;
     bool killing = false;
     float outFade = 1, killStep = 0.001f;
-    std::vector<float> sbufL, sbufR, ebufL, ebufR;
+    std::vector<float> sbufL, sbufR, ebufL, ebufR, sigL, sigR, sigSendL, sigSendR;
+    std::unique_ptr<Signature> signature;
 };
 
 // Two chains and the cross-fade between them.
@@ -253,8 +260,8 @@ public:
     void setEvolutionSeed(unsigned s) { evolutionSeed = s; }
     const EnvironmentChain& current() const { return chains[std::size_t(active)]; }
     void setAmount(float a);
-    void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* ambienceGain,
-                 const float* space, float* outL, float* outR, float* ambienceOut, int n);
+    void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
+                 const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n);
     Place place() const { return chains[std::size_t(active)].place(); }
     bool fading() const { return !chains[std::size_t(1 - active)].silent(); }
 

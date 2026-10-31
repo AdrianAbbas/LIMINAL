@@ -7,6 +7,7 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "Export.h"
+#include "DSP/Signature.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <algorithm>
@@ -174,6 +175,7 @@ double frequency(const std::vector<float>& x, double rate) {
 #include "EnvironmentTests.h"
 #include "EffectsTests.h"
 #include "CharacterTests.h"
+#include "DistinctTests.h"
 #include "WorkflowTests.h"
 
 //==============================================================================
@@ -1151,6 +1153,10 @@ int main(int argc, char** argv) {
     if (run("effects")) testEffects(s);
     if (run("characters")) testCharacters(s);
     if (run("rules")) testAudioRules(s);
+    if (run("distinct")) {
+        testSignatures(s);
+        testDistinct(s);
+    }
     if (run("workflow")) testWorkflow(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);

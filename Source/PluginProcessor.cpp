@@ -198,6 +198,8 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
         slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm);
         slot.rack.setPlace(selectedPlace(), selectedCharacter());
         slot.gain.coef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
+        slot.share.coef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
+        slot.share.reset(slot.rack.placeShare());
         slot.gain.reset(slot.targetGain());
         slot.running = slot.enabled();
     }
@@ -349,6 +351,8 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
     std::fill(sendR, sendR + n, 0.0f);
     std::fill(echoInL, echoInL + n, 0.0f);
     std::fill(echoInR, echoInR + n, 0.0f);
+    std::fill(dryL, dryL + n, 0.0f);   // the share of the instruments the place's signature takes
+    std::fill(dryR, dryR + n, 0.0f);
     for (auto& slot : slots) {
         if (!slot.running) continue;
         std::fill(slotL, slotL + n, 0.0f);
@@ -365,10 +369,13 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         std::fill(slotEchoR, slotEchoR + n, 0.0f);
         const float sendFactor = 1.0f + 1.5f * (slot.distance != nullptr ? slot.distance->load() : 0.0f);
         slot.rack.process(slotL, slotR, slotSendL, slotSendR, slotEchoL, slotEchoR, sendFactor, n);
+        slot.share.target = slot.rack.placeShare();
         for (int i = 0; i < n; ++i) {
-            const float g = slot.gain.next();
+            const float g = slot.gain.next(), share = slot.share.next();
             il[i] += slotL[i] * g;
             ir[i] += slotR[i] * g;
+            dryL[i] += slotL[i] * g * share;
+            dryR[i] += slotR[i] * g * share;
             sendL[i] += slotSendL[i] * g;
             sendR[i] += slotSendR[i] * g;
             echoInL[i] += slotEchoL[i] * g;
@@ -385,6 +392,8 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         const float ig = instrumentGain.next();
         il[i] *= ig;
         ir[i] *= ig;
+        dryL[i] *= ig;
+        dryR[i] *= ig;
         const float roomGain = presenceRoom.next();
         sendL[i] *= ig * roomGain;
         sendR[i] *= ig * roomGain;
@@ -402,8 +411,10 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         const float keep = (1.0f - 0.45f * spaces[i]) * presenceDry.next();
         mixL[i] = il[i] * keep;
         mixR[i] = ir[i] * keep;
+        dryL[i] *= keep;
+        dryR[i] *= keep;
     }
-    environments.process(sendL, sendR, echoInL, echoInR, ambienceGains, spaces, mixL, mixR, ambiencePower, n);
+    environments.process(sendL, sendR, echoInL, echoInR, dryL, dryR, ambienceGains, spaces, mixL, mixR, ambiencePower, n);
     for (int i = 0; i < n; ++i) {
         const float p = powerGain.next(), m = masterGain.next() * p;
         float l = mixL[i] * m;

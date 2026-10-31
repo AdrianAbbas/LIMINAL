@@ -47,7 +47,7 @@ juce_add_plugin(LIMINAL
     COPY_PLUGIN_AFTER_BUILD FALSE)
 target_sources(LIMINAL PRIVATE
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
-    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp
+    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp
     Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 # Photographic scenes (Direction Update 2): light passes rendered offline by tools/scenes and

@@ -104,6 +104,7 @@ private:
         std::atomic<float>* velocityVolume = nullptr;
         std::atomic<float>* velocityFilter = nullptr;
         Smooth gain;
+        Smooth share;   // how much of it the place's signature takes (smoothed: no jumps when its effects change)
         bool running = false;
         bool muted = false;   // another instrument is soloed
         bool enabled() const { return on->load() > 0.5f; }
@@ -176,7 +177,7 @@ private:
     Smooth presenceDry, presenceRoom;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
     float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};
-    float ambienceGains[chunk] {}, spaces[chunk] {}, mixL[chunk] {}, mixR[chunk] {}, ambiencePower[chunk] {};
+    float ambienceGains[chunk] {}, spaces[chunk] {}, mixL[chunk] {}, mixR[chunk] {}, dryL[chunk] {}, dryR[chunk] {}, ambiencePower[chunk] {};
     float slotL[chunk] {}, slotR[chunk] {}, slotSendL[chunk] {}, slotSendR[chunk] {}, slotEchoL[chunk] {}, slotEchoR[chunk] {};
     float echoInL[chunk] {}, echoInR[chunk] {};
     double instrumentSum = 0, ambienceSum = 0, outputSum = 0;
