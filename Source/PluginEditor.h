@@ -326,6 +326,15 @@ public:
     // One animation tick now (tests, snapshots): the first picture of a photographic place or
     // Character is composited on the spot; later ones go through its thread as usual.
     void animate() { frames = {}; settle = true; timerCallback(); settle = false; }
+    // One real timer tick (tests): the frame governor and the scene's own thread as in a host.
+    // lastRepaint() is what that tick asked to be repainted (empty: nothing changed or skipped).
+    void tick() { lastDirty.clear(); timerCallback(); }
+    const juce::RectangleList<int>& lastRepaint() const { return lastDirty; }
+    juce::Rectangle<int> sceneArea() const { return getLocalBounds().withBottom(stripArea().getY()); }
+    // The scene picture the last paint drew (tests: valid until the next tick).
+    const juce::Image& paintedPicture() const { return lastPicture; }
+    int photoComposites() const { return photo != nullptr ? photo->composites() : 0; }
+    double photoCompositeMs() const { return photo != nullptr ? photo->compositeMs() : 0.0; }
     bool showingPhoto() const { return photo != nullptr && photoImage.isValid() && photo->place() == placeShown; }
     PlaceStrip& placeSelector() { return placeStrip; }
     CharacterStrip& characterSelector() { return characterStrip; }
@@ -364,6 +373,8 @@ private:
     // The photographic scene (Direction Update 2): light passes composited live (UI/PhotoScene).
     void animatePhoto(bool still, juce::RectangleList<int>& dirty);
     std::unique_ptr<ui::PhotoScene> photo;
+    juce::RectangleList<int> lastDirty;
+    juce::Image lastPicture;
     juce::Image photoImage, photoFrosted;
     std::vector<float> photoSwell;
     std::vector<float> photoLevelsSent;

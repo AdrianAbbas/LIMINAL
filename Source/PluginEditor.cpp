@@ -1549,9 +1549,12 @@ void MainView::paint(juce::Graphics& g) {
     }
     const auto bounds = getLocalBounds().toFloat();
     if (photographic) scene.lights.clear();   // (the drawing's lights do not belong to the photograph)
-    if (photographic && !showingPhoto()) g.fillAll(juce::Colour(0xff0a0e0d));   // (decoding: a moment)
+    // Every repaint, however small its region, draws the whole scene under it: a base fill (so a
+    // missing picture is never "nothing"), then the picture (opaque; clipped to the region).
+    g.fillAll(juce::Colour(0xff0a0e0d));
     const juce::Image& picture = !photographic ? scene.image : showingPhoto() ? photoImage : photoPlaceholder;
     const juce::Image& frosted = !photographic ? scene.frosted : photoFrosted;
+    lastPicture = picture;
     g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
     g.drawImage(picture, bounds, juce::RectanglePlacement::stretchToFit);
 
@@ -1744,16 +1747,22 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
         }
         look.levels[i] = std::max(0.0f, level);
         photoSwell[i] *= 0.88f;
-        if (std::abs(photoSwell[i]) < 0.002f) photoSwell[i] = 0.0f;
+        if (std::abs(photoSwell[i]) < 0.01f) photoSwell[i] = 0.0f;   // (a 1 % swell is invisible: stop compositing for it)
     }
     look.light = ch.light;
     look.grade = grade.getARGB();
     look.character = character;
     look.causticLevel *= photoLevel(place, character, "caustics");
-    if (photo->hasCaustics() && !still) look.causticPhase = float(std::fmod(clock * double(photo->causticFps()) / double(photo->causticFrames()), 1.0));
+    if (photo->hasCaustics() && !still) {   // two steps per caustic frame: smooth, and no composite every tick
+        const double steps = 2.0 * double(photo->causticFrames());
+        look.causticPhase = float(std::floor(std::fmod(clock * double(photo->causticFps()) / double(photo->causticFrames()), 1.0) * steps) / steps);
+    }
     else look.causticPhase = photoPhaseSent < 0 ? 0.0f : photoPhaseSent;
     bool changed = character != photoCharacterSent || photoLevelsSent.size() != look.levels.size() || std::abs(look.causticPhase - photoPhaseSent) > 1.0e-4f;
-    for (std::size_t i = 0; !changed && i < look.levels.size(); ++i) changed = std::abs(look.levels[i] - photoLevelsSent[i]) > 0.004f;
+    // Only a light whose intensity really moved (over 2 % of its level, about the smallest step the
+    // eye sees on a whole light group) asks for a new picture.
+    for (std::size_t i = 0; !changed && i < look.levels.size(); ++i)
+        changed = std::abs(look.levels[i] - photoLevelsSent[i]) > std::max(0.004f, 0.02f * std::max(look.levels[i], photoLevelsSent[i]));
     if (changed && !settleNow) {
         photo->request(look);
         photoLevelsSent = look.levels;
@@ -1773,8 +1782,9 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     }
     if (photoNeedsFrost && photoImage.isValid()) {   // frosted glass for the strip and the pages
         const auto small = photoImage.rescaled(std::max(1, photoImage.getWidth() / 16), std::max(1, photoImage.getHeight() / 16), juce::Graphics::mediumResamplingQuality);
-        photoFrosted = juce::Image(juce::Image::RGB, photoImage.getWidth() / 2, photoImage.getHeight() / 2, true);
+        photoFrosted = juce::Image(juce::Image::ARGB, photoImage.getWidth() / 2, photoImage.getHeight() / 2, false);
         juce::Graphics g(photoFrosted);
+        g.fillAll(juce::Colours::black);   // opaque (macOS keeps even RGB images as ARGB)
         g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
         g.drawImage(small, 0, 0, photoFrosted.getWidth(), photoFrosted.getHeight(), 0, 0, small.getWidth(), small.getHeight());
         g.fillAll(juce::Colour(0x8c0a0e0d));
@@ -1878,7 +1888,8 @@ void MainView::timerCallback() {
     characterStrip.refresh();
     shelf.refresh();
     places.refresh();
-    if (syncPlace()) repaint();
+    if (syncPlace()) dirty.add(getLocalBounds());
+    lastDirty = dirty;
     if (dirty.isEmpty()) {
         frames.painted(0.0, now);   // nothing to draw: the frame is done
         return;

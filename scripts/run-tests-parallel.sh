@@ -18,10 +18,12 @@ mkdir -p "$logs"
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
 wait
 "$tests" --only realtime > "$logs/5-cpu.txt" 2>&1
+# The editor's frames in real time (and its CPU), also alone so the timing is not disturbed.
+"$tests" --only frames > "$logs/10-frames.txt" 2>&1
 
 passed=0
 failed=0
-for log in "$logs"/[1-9]-*.txt; do
+for log in "$logs"/[1-9]-*.txt "$logs"/10-*.txt; do
     line=$(grep -E '^[0-9]+ passed, [0-9]+ failed' "$log" | tail -1)
     if [[ -z "$line" ]]; then
         echo "$log: did not finish"

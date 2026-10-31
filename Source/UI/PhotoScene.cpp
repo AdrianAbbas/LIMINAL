@@ -76,7 +76,15 @@ public:
     ~Worker() override { stopThread(4000); }
     void run() override {
         if (!scene.load()) return;
+        for (auto& b : scene.buffers) b = scene.makeImage();   // once per scene, never per frame
+        double last = -1.0e9;
         while (!threadShouldExit()) {
+            // At most 30 composites a second, however often the editor asks.
+            const double remaining = last + PhotoScene::minFrameMs - juce::Time::getMillisecondCounterHiRes();
+            if (remaining > 0.5) {
+                this->wait(int(std::ceil(remaining)));
+                continue;
+            }
             Look look;
             {
                 std::lock_guard<std::mutex> lock(scene.handoff);
@@ -86,14 +94,18 @@ public:
                 }
             }
             if (look.levels.empty()) {
-                wait(100);
+                this->wait(100);
                 continue;
             }
-            juce::Image image(juce::Image::RGB, scene.width, scene.height, false);
-            scene.composite(look, image);
-            std::lock_guard<std::mutex> lock(scene.handoff);
-            scene.finished = image;
-            scene.fresh = true;
+            last = juce::Time::getMillisecondCounterHiRes();
+            scene.composite(look, scene.buffers[std::size_t(scene.back)]);   // the back image: nobody else touches it
+            {
+                std::lock_guard<std::mutex> lock(scene.handoff);
+                std::swap(scene.back, scene.readyIndex);
+                scene.fresh = true;
+            }
+            ++scene.compositeCount;
+            scene.compositeTime.store(scene.compositeTime.load() + juce::Time::getMillisecondCounterHiRes() - last);
         }
     }
 
@@ -162,14 +174,19 @@ bool PhotoScene::load() {
         if (image.getWidth() != width || image.getHeight() != height) image = image.rescaled(width, height);
         std::vector<juce::uint8> rgb(std::size_t(width) * std::size_t(height) * 3);
         const juce::Image::BitmapData data(image, juce::Image::BitmapData::readOnly);
-        for (int y = 0; y < height; ++y)
-            for (int x = 0; x < width; ++x) {
-                const auto c = data.getPixelColour(x, y);
-                auto* o = rgb.data() + (std::size_t(y) * std::size_t(width) + std::size_t(x)) * 3;
-                o[0] = c.getRed();
-                o[1] = c.getGreen();
-                o[2] = c.getBlue();
+        const bool argb = data.pixelFormat == juce::Image::ARGB;   // (a decoded JPEG is opaque: no unpremultiplying)
+        const bool grey = data.pixelFormat == juce::Image::SingleChannel;
+        const int iR = grey ? 0 : argb ? juce::PixelARGB::indexR : juce::PixelRGB::indexR, iG = grey ? 0 : argb ? juce::PixelARGB::indexG : juce::PixelRGB::indexG,
+                  iB = grey ? 0 : argb ? juce::PixelARGB::indexB : juce::PixelRGB::indexB;
+        for (int y = 0; y < height; ++y) {
+            const juce::uint8* in = data.getLinePointer(y);
+            auto* o = rgb.data() + std::size_t(y) * std::size_t(width) * 3;
+            for (int x = 0; x < width; ++x, in += data.pixelStride, o += 3) {
+                o[0] = in[iR];
+                o[1] = in[iG];
+                o[2] = in[iB];
             }
+        }
         passList.push_back(pass);
         pixels.push_back(std::move(rgb));
     }
@@ -218,12 +235,22 @@ bool PhotoScene::load() {
     return true;
 }
 
-void PhotoScene::addPass(int index, float delta) {
+void PhotoScene::addPasses(const std::vector<std::pair<int, float>>& moved) {
     const auto& lin = linearOf();
-    const auto& src = pixels[std::size_t(index)];
     float* s = sum.data();
     const std::size_t n = sum.size();
-    for (std::size_t i = 0; i < n; ++i) s[i] += delta * lin[src[i]];
+    std::size_t k = 0;
+    for (; k + 1 < moved.size(); k += 2) {   // two passes per sweep
+        const juce::uint8* a = pixels[std::size_t(moved[k].first)].data();
+        const juce::uint8* b = pixels[std::size_t(moved[k + 1].first)].data();
+        const float da = moved[k].second, dbl = moved[k + 1].second;
+        for (std::size_t i = 0; i < n; ++i) s[i] += da * lin[a[i]] + dbl * lin[b[i]];
+    }
+    if (k < moved.size()) {
+        const juce::uint8* a = pixels[std::size_t(moved[k].first)].data();
+        const float da = moved[k].second;
+        for (std::size_t i = 0; i < n; ++i) s[i] += da * lin[a[i]];
+    }
 }
 
 PhotoScene::Look PhotoScene::defaultLook() const {
@@ -245,29 +272,39 @@ void PhotoScene::request(const Look& look) {
 bool PhotoScene::take(juce::Image& out) {
     std::lock_guard<std::mutex> lock(handoff);
     if (!fresh) return false;
-    out = finished;
+    std::swap(front, readyIndex);   // the old front goes back into the ring; the caller drops it now
+    out = buffers[std::size_t(front)];
     fresh = false;
     return true;
 }
 
+juce::Image PhotoScene::makeImage() const {
+    juce::Image image(juce::Image::ARGB, width, height, false);
+    image.clear(image.getBounds(), juce::Colours::black);   // opaque from the start
+    return image;
+}
+
 juce::Image PhotoScene::renderNow(const Look& look) {
     if (!load()) return {};
-    juce::Image image(juce::Image::RGB, width, height, false);
+    auto image = makeImage();
     composite(look.levels.empty() ? defaultLook() : look, image);
     return image;
 }
 
 void PhotoScene::composite(const Look& look, juce::Image& into) {
     std::lock_guard<std::mutex> lock(workLock);
-    // 1. The running sum follows the levels: only the passes whose level moved are added in.
+    // 1. The running sum follows the levels: only the passes whose level moved are added in, all
+    // of them in one sweep over the sum (it is memory that costs here, not arithmetic).
+    std::vector<std::pair<int, float>> moved;
     for (std::size_t i = 0; i < pixels.size(); ++i) {
         const float want = i < look.levels.size() ? std::max(0.0f, look.levels[i]) : passList[i].defaultLevel;
         const float delta = want - levelsNow[i];
         if (std::abs(delta) > 1.0e-4f) {
-            addPass(int(i), delta);
+            moved.emplace_back(int(i), delta);
             levelsNow[i] = want;
         }
     }
+    addPasses(moved);
     // 2. The finish, as three per-channel tables: the curve, the Character's light and grade,
     // the faded wash of the second Character.
     const auto& tone = toneOf();
@@ -300,31 +337,56 @@ void PhotoScene::composite(const Look& look, juce::Image& into) {
     const float gain = toneScale / std::max(0.05f, headroom);
     const bool hazy = look.character == 2;
     juce::Image::BitmapData out(into, juce::Image::BitmapData::writeOnly);
-    std::uint32_t noise = 0x9E3779B9u ^ (look.grainSeed * 2654435761u);
+    // Byte order of the destination: ARGB (always, from makeImage) writes alpha 255 too.
+    const bool argb = out.pixelFormat == juce::Image::ARGB;
+    const int iR = argb ? juce::PixelARGB::indexR : juce::PixelRGB::indexR, iG = argb ? juce::PixelARGB::indexG : juce::PixelRGB::indexG,
+              iB = argb ? juce::PixelARGB::indexB : juce::PixelRGB::indexB;
+    if (grain.empty() || grainFor != look.grainSeed) {   // the film grain is the same every frame: made once
+        grain.resize(std::size_t(width) * std::size_t(height));
+        std::uint32_t noise = 0x9E3779B9u ^ (look.grainSeed * 2654435761u);
+        for (auto& g : grain) {
+            noise ^= noise << 13; noise ^= noise >> 17; noise ^= noise << 5;
+            g = juce::int8(int(noise & 7u) - 3);
+        }
+        grainFor = look.grainSeed;
+    }
+    // Per row, in three simple loops: the exposure per pixel, the tone-table index per channel
+    // (plain float arithmetic the compiler vectorises), then the tables, the grain and the bytes.
+    const auto w = static_cast<std::size_t>(width);
+    std::vector<float> exposure(w), extra(w, 0.0f);
+    std::vector<int> index(w * 3);
+    const float top = float(toneSize - 1);
     for (int y = 0; y < height; ++y) {
-        auto* row = out.getLinePointer(y);
         const float* s = sum.data() + std::size_t(y) * std::size_t(width) * 3;
         const juce::uint8* vig = vignette.data() + std::size_t(y) * std::size_t(width);
-        const juce::uint8* ca = caustic ? caustics[std::size_t(fa)].data() + std::size_t(causticY[std::size_t(y)]) * std::size_t(cw) : nullptr;
-        const juce::uint8* cb = caustic ? caustics[std::size_t(fb)].data() + std::size_t(causticY[std::size_t(y)]) * std::size_t(cw) : nullptr;
-        for (int x = 0; x < width; ++x, s += 3) {
+        for (int x = 0; x < width; ++x) {
             float v = float(vig[x]) * (1.0f / 255.0f);
             if (hazy) v *= v;
-            const float k = gain * v;
-            float extra = 0;
-            if (caustic) {
+            exposure[std::size_t(x)] = gain * v;
+        }
+        if (caustic) {
+            const juce::uint8* ca = caustics[std::size_t(fa)].data() + std::size_t(causticY[std::size_t(y)]) * std::size_t(cw);
+            const juce::uint8* cb = caustics[std::size_t(fb)].data() + std::size_t(causticY[std::size_t(y)]) * std::size_t(cw);
+            for (int x = 0; x < width; ++x) {
                 const int cx = causticX[std::size_t(x)];
-                extra = lin[ca[cx]] + blend * (lin[cb[cx]] - lin[ca[cx]]);
+                extra[std::size_t(x)] = lin[ca[cx]] + blend * (lin[cb[cx]] - lin[ca[cx]]);
             }
-            noise ^= noise << 13; noise ^= noise >> 17; noise ^= noise << 5;
-            const int grain = int(noise & 7u) - 3;
+        }
+        int* idx = index.data();
+        for (int x = 0; x < width; ++x)
+            for (int c = 0; c < 3; ++c) {
+                const float value = (s[x * 3 + c] + extra[std::size_t(x)] * tint[c]) * exposure[std::size_t(x)];
+                idx[x * 3 + c] = int(std::clamp(value, 0.0f, top));
+            }
+        auto* row = out.getLinePointer(y);
+        const juce::int8* grainRow = grain.data() + std::size_t(y) * w;
+        for (int x = 0; x < width; ++x) {
+            const int n = grainRow[x];
             auto* p = row + x * out.pixelStride;
-            const int r = std::min(toneSize - 1, int((s[0] + extra * tint[0]) * k));
-            const int g = std::min(toneSize - 1, int((s[1] + extra * tint[1]) * k));
-            const int b = std::min(toneSize - 1, int((s[2] + extra * tint[2]) * k));
-            p[juce::PixelRGB::indexR] = juce::uint8(std::clamp(int(table[0][std::size_t(std::max(0, r))]) + grain, 0, 255));
-            p[juce::PixelRGB::indexG] = juce::uint8(std::clamp(int(table[1][std::size_t(std::max(0, g))]) + grain, 0, 255));
-            p[juce::PixelRGB::indexB] = juce::uint8(std::clamp(int(table[2][std::size_t(std::max(0, b))]) + grain, 0, 255));
+            p[iR] = juce::uint8(std::clamp(int(table[0][std::size_t(idx[x * 3])]) + n, 0, 255));
+            p[iG] = juce::uint8(std::clamp(int(table[1][std::size_t(idx[x * 3 + 1])]) + n, 0, 255));
+            p[iB] = juce::uint8(std::clamp(int(table[2][std::size_t(idx[x * 3 + 2])]) + n, 0, 255));
+            if (argb) p[juce::PixelARGB::indexA] = 255;
         }
     }
 }

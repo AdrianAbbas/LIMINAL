@@ -11,9 +11,17 @@
 // pass over the picture). The editor asks for a look and takes the newest picture when it is
 // ready; it never waits.
 //
+// Pictures are triple-buffered: the worker composites into a back image the editor never sees,
+// then swaps it with the "ready" slot under a short lock; take() swaps "ready" with the image
+// the editor shows. So the editor only ever draws a complete frame, nothing is reallocated per
+// frame, and the worker never writes into a picture that is on screen. The images are ARGB with
+// alpha 255 everywhere (macOS stores even Image::RGB as ARGB; an unwritten alpha byte made every
+// other frame transparent - the GarageBand flicker of 2026-10-31). At most 30 composites a second.
+//
 // Assets: bundled (BinaryData from assets/scenes/<name>/), or the developer's own renders in
 // photographFolder()/<name>/ (same files: <name>_manifest.json, <name>_<pass>.jpg ...), which win.
 #include <juce_graphics/juce_graphics.h>
+#include <array>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -55,7 +63,12 @@ public:
     float causticFps() const { return causticRate; }
 
     void request(const Look&);            // composite this look (the newest request wins)
-    bool take(juce::Image& out);          // the newest finished picture, if there is a new one
+    // The newest finished picture, if there is a new one. It stays complete and unchanged until
+    // the next take() (message thread only).
+    bool take(juce::Image& out);
+    int composites() const { return compositeCount.load(); }   // how many the worker has made
+    double compositeMs() const { return compositeTime.load(); }   // and the time they took
+    static constexpr double minFrameMs = 1000.0 / 30.0;       // the worker's frame cap
     // Tests and snapshots: load and composite on the calling thread.
     juce::Image renderNow(const Look&);
     bool ensureLoaded() { return load(); }   // (blocks while decoding)
@@ -65,7 +78,8 @@ private:
     class Worker;
     bool load();
     void composite(const Look&, juce::Image& into);
-    void addPass(int index, float delta);
+    juce::Image makeImage() const;   // opaque ARGB, the scene's size
+    void addPasses(const std::vector<std::pair<int, float>>& moved);   // (pass, level change)
 
     int placeIndex = 0;
     std::atomic<bool> ready { false }, broken { false };
@@ -77,13 +91,18 @@ private:
     std::vector<std::vector<juce::uint8>> caustics;   // each frame: luminance bytes, cw x ch
     std::vector<float> sum, levelsNow;                // the running linear sum and the levels in it
     std::vector<juce::uint8> vignette;                // per pixel, 255 = untouched
+    std::vector<juce::int8> grain;                    // per pixel, -3..+3 (made on the first composite)
+    unsigned grainFor = 0;
     std::vector<int> causticX, causticY;              // nearest caustic sample per column / row
     std::mutex workLock;                              // the sum and the passes (worker vs renderNow)
     std::mutex handoff;                               // the requested look and the finished image
     Look wanted;
     bool pending = false;
-    juce::Image finished;
+    std::array<juce::Image, 3> buffers;   // [front]: the editor's; [ready]: newest complete; [back]: the worker's
+    int front = 0, readyIndex = 1, back = 2;   // swapped under `handoff` (back is only read by the worker)
     bool fresh = false;
+    std::atomic<int> compositeCount { 0 };
+    std::atomic<double> compositeTime { 0 };
     std::unique_ptr<Worker> worker;
 };
 

@@ -1,6 +1,6 @@
 // Offline tests through the real processBlock. Exit code 0 only if every check passes.
 //   LiminalTests                       run everything
-//   LiminalTests --only a,b            run only some groups (smoke, midi, levels, ...)
+//   LiminalTests --only a,b            run only some groups (smoke, midi, levels, frames, ...)
 //   LiminalTests --snapshot f.png      also write an image of the editor (2x scale)
 //   LiminalTests --render f.wav        render each instrument in the corridor, then dry (listening aid)
 //   LiminalTests --render-places f.wav the same phrase in each environment (listening aid)
@@ -928,6 +928,8 @@ int renderPlaces(const juce::String& path) {
     return writeAudio(beds, file.getSiblingFile(file.getFileNameWithoutExtension() + "-beds.flac")) ? 0 : 1;
 }
 
+#include "FrameTests.h"
+
 } // namespace
 
 // The documentation's screenshots (docs/snapshots): the main view in every place, every
@@ -1119,6 +1121,7 @@ int main(int argc, char** argv) {
     if (run("workflow")) testWorkflow(s);
     if (run("realtime")) testRealtime(s);
     if (run("editor")) testEditor(s, snapshot);
+    if (run("frames")) testFrames(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }
