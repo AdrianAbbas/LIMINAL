@@ -198,3 +198,12 @@ PASSES = [
     {"name": "skylights", "group": "skylights", "kind": "sky", "default": 1.0},
     {"name": "beyond", "group": "beyond", "kind": "lamp", "default": 1.0},
 ]
+
+# Still Water: as rendered; Forgotten Summer: a brighter sun through the windows and skylights;
+# Submerged: the sun far away, the room dim, the light off the water strong.
+CHARACTERS = {
+    "base": [1.0, 1.0, 0.45],
+    "sun": [1.0, 1.7, 0.15],
+    "skylights": [1.0, 1.2, 0.6],
+    "caustics": [1.0, 1.0, 1.8],
+}

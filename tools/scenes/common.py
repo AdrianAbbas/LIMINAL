@@ -119,7 +119,7 @@ def plane(name, centre, size, material, rotation=(0, 0, 0), collection=None):
 
 
 def cylinder(name, centre, radius, height, material, segments=40, collection=None, axis='z'):
-    """A cylinder from `centre` along +z (or along +y with axis='y': rails, pipes)."""
+    """A cylinder from `centre` along +z (or along +y / +x with axis='y' / 'x': rails, pipes, tubes)."""
     cx, cy, z0 = centre
     mesh = bpy.data.meshes.new(name)
     verts, faces = [], []
@@ -129,6 +129,9 @@ def cylinder(name, centre, radius, height, material, segments=40, collection=Non
         if axis == 'y':
             verts.append((cx + u, cy, z0 + v))
             verts.append((cx + u, cy + height, z0 + v))
+        elif axis == 'x':
+            verts.append((cx, cy + u, z0 + v))
+            verts.append((cx + height, cy + u, z0 + v))
         else:
             verts.append((cx + u, cy + v, z0))
             verts.append((cx + u, cy + v, z0 + height))
@@ -215,16 +218,17 @@ def planar_coords(nt, scale=1.0):
     return mix.outputs[1]
 
 
-def tiles(name, tile, grout, size=0.15, grout_width=0.006, roughness=0.18, variation=0.04, glossy=0.5, bump=0.25):
-    """Square grid tiles with grout lines, slight per-tile colour variation, roughness noise."""
+def tiles(name, tile, grout, size=0.15, grout_width=0.006, roughness=0.18, variation=0.04, glossy=0.5, bump=0.25, height=None, offset=0.0):
+    """Grid tiles with grout lines, slight per-tile colour variation, roughness noise. Square by
+    default; `height` and `offset` make running-bond rectangles (subway tiles)."""
     mat, nt, bsdf = _principled(name)
     coords = planar_coords(nt)
     brick = nt.nodes.new("ShaderNodeTexBrick")
-    brick.offset = 0.0
+    brick.offset = offset
     brick.squash = 1.0
     brick.inputs["Scale"].default_value = 1.0
     brick.inputs["Brick Width"].default_value = size
-    brick.inputs["Row Height"].default_value = size
+    brick.inputs["Row Height"].default_value = height or size
     brick.inputs["Mortar Size"].default_value = grout_width
     brick.inputs["Mortar Smooth"].default_value = 0.2
     brick.inputs["Bias"].default_value = 0.0
@@ -491,3 +495,87 @@ def ceiling_panel(name, group, centre, size, z, power, colour, glow=None):
                                  ((x - sx / 2 - t, y - sy / 2), (x - sx / 2, y + sy / 2)), ((x + sx / 2, y - sy / 2), (x + sx / 2 + t, y + sy / 2))]):
         box(f"{name} frame {i}", (a[0], a[1], z - 0.02), (b[0], b[1], z), frame)
     return area_light(name, group, (x, y, z - 0.03), size, power, colour)
+
+
+# --- Part 3 helpers --------------------------------------------------------------------------
+
+def hexa(name, corners, material, collection=None):
+    """A six-sided solid from 8 corners in box() order (bottom 0-3 anticlockwise, top 4-7):
+    sloped things like escalators, stair flights, ramps."""
+    mesh = bpy.data.meshes.new(name)
+    faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+    mesh.from_pydata([tuple(v) for v in corners], [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    (collection or bpy.context.scene.collection).objects.link(obj)
+    if material is not None:
+        obj.data.materials.append(material)
+    return obj
+
+
+def ramp_box(name, x0, x1, y0, y1, z0, z1, thickness, material):
+    """A slab rising from (y0, z0) to (y1, z1), x0..x1 wide, `thickness` deep below its top."""
+    t = thickness
+    return hexa(name, [(x0, y0, z0 - t), (x1, y0, z0 - t), (x1, y1, z1 - t), (x0, y1, z1 - t),
+                       (x0, y0, z0), (x1, y0, z0), (x1, y1, z1), (x0, y1, z1)], material)
+
+
+def stairs(name, x0, x1, y0, z0, run, rise, steps, material, axis=1):
+    """A straight flight of steps going +y (axis 1) from (y0, z0); each step `run` deep, `rise` high."""
+    for k in range(steps):
+        y = y0 + k * run
+        box(f"{name} step {k}", (x0, y, z0 + k * rise - 0.04), (x1, y + run + 0.02, z0 + (k + 1) * rise), material)
+
+
+def dark_glass(name, tint=(0.02, 0.025, 0.03), roughness=0.04):
+    """Shop-window / door glass seen at night: an opaque, mirror-like dark surface (cheaper than
+    real transmission and reads the same in an empty building)."""
+    return matte(name, tint, roughness=roughness, specular=1.0)
+
+
+def metal(name, colour=(0.7, 0.71, 0.72), roughness=0.3):
+    mat, nt, bsdf = _principled(name)
+    bsdf.inputs["Base Color"].default_value = (*colour, 1)
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = 1.0
+    return mat
+
+
+def ribbed(name, colour, pitch=0.08, roughness=0.45, metallic=0.6, direction='Z'):
+    """A roller shutter / corrugated surface: horizontal ribs from a bump wave."""
+    mat, nt, bsdf = _principled(name)
+    bsdf.inputs["Base Color"].default_value = (*colour, 1)
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = metallic
+    coords = planar_coords(nt)
+    wave = nt.nodes.new("ShaderNodeTexWave")
+    wave.wave_type = 'BANDS'
+    wave.bands_direction = 'Y' if direction == 'Z' else 'X'
+    wave.inputs["Scale"].default_value = 1.0 / pitch / 6.28
+    nt.links.new(coords, wave.inputs["Vector"])
+    b = nt.nodes.new("ShaderNodeBump")
+    b.inputs["Strength"].default_value = 0.5
+    b.inputs["Distance"].default_value = 0.01
+    nt.links.new(wave.outputs["Fac"], b.inputs["Height"])
+    nt.links.new(b.outputs["Normal"], bsdf.inputs["Normal"])
+    return mat
+
+
+def downlight(name, group, location, power, colour, angle=70, glow=6.0):
+    """A recessed round ceiling downlight: a small glowing disc and a soft spot below it."""
+    x, y, z = location
+    disc = emitter(name + " glow", colour, glow)
+    p = cylinder(name + " disc", (x, y, z - 0.012), 0.09, 0.01, disc, segments=20)
+    p.visible_shadow = False
+    in_group(group, p)
+    return spot_light(name, group, (x, y, z - 0.03), (0, 0, 0), power, colour, math.radians(angle), radius=0.06, blend=0.6)
+
+
+def tube(name, group, start, end, colour, power, glow=5.0, radius=0.016):
+    """A bare fluorescent tube (or a strip) from start to end along y, with its own light."""
+    (x, y0, z), y1 = start, end
+    mat = emitter(name + " glow", colour, glow)
+    t = cylinder(name, (x, y0, z), radius, y1 - y0, mat, segments=12, axis='y')
+    t.visible_shadow = False
+    in_group(group, t)
+    return area_light(name + " light", group, (x, (y0 + y1) / 2, z - 0.03), (0.08, y1 - y0), power, colour)

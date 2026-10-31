@@ -34,7 +34,7 @@ the checklist below.
   - [x] Part 1 — audio: risers/whooshes/noise waves removed; all ten beds, acoustics and rare events rebuilt to Sections 1–2; default Activity 25 % (rare); Far Away (mall PA / hotel wall); listening render (phrase through ten rooms + 60 s of each bed) — pushed `[skip ci]`
   - [x] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — pushed without `[skip ci]`; **waiting for the developer's approval of the look**
   - [ ] Part 3 (approved 2026-10-31: "the hospital render looks great") — the other seven places and the Character variants. Resume here:
-    - [ ] 3.0 Character lighting from the manifests (per-pass levels and flicker per Character, variant passes) instead of the editor's table; hospital/pool/office manifests moved over
+    - [x] 3.0 Character lighting from the manifests (per-pass levels and flicker per Character, variant passes) instead of the editor's table; hospital/pool/office manifests moved over
     - [ ] 3.1 Mall (`tools/scenes/mall.py`, rendered, packed) — push `[skip ci]`
     - [ ] 3.2 School — push `[skip ci]`
     - [ ] 3.3 Garage — push `[skip ci]`

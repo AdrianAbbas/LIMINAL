@@ -95,3 +95,11 @@ PASSES = [
     {"name": "far", "group": "far", "kind": "tube", "default": 1.0},
     {"name": "failing", "group": "failing", "kind": "failing", "default": 1.0},
 ]
+
+# After Hours: the far bank dimmed; Dream State: the near panels soft, the distance glowing;
+# Infinite Cubicles: every panel the same, the far ones as bright as the near.
+CHARACTERS = {
+    "near": [1.0, 0.75, 1.0],
+    "mid": [1.0, 1.1, 1.0],
+    "far": [0.55, 1.3, 1.25],
+}

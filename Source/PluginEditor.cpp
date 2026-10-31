@@ -1653,30 +1653,10 @@ void MainView::paint(juce::Graphics& g) {
     }
 }
 
-// How a Character lights a photographic scene, per light group (1 = as rendered).
 bool MainView::photoPlace(int place) {
     auto& known = photoKnown[std::size_t(std::clamp(place, 0, 9))];
     if (known < 0) known = ui::PhotoScene::available(place) ? 1 : 0;
     return known == 1;
-}
-
-static float photoLevel(int place, int character, const juce::String& pass) {
-    switch (place) {
-    case 0:   // hospital: after hours, half the corridor is off; something wrong, the far bank is dead
-        if (character == 1) return pass == "near" ? 0.55f : pass == "mid" ? 0.35f : pass == "far" ? 0.2f : pass == "base" ? 1.4f : 1.0f;
-        if (character == 2) return pass == "far" ? 0.0f : pass == "mid" ? 0.7f : pass == "exit" ? 1.6f : 1.0f;
-        return 1.0f;
-    case 4:   // pool: a bright summer afternoon; or under the surface, the sun far away
-        if (character == 1) return pass == "sun" ? 1.7f : pass == "skylights" ? 1.2f : 1.0f;
-        if (character == 2) return pass == "sun" ? 0.15f : pass == "base" ? 0.45f : pass == "skylights" ? 0.6f : pass == "caustics" ? 1.8f : 1.0f;
-        return 1.0f;
-    case 8:   // office: after hours only the near bank; a dream; every panel the same forever
-        if (character == 0) return pass == "far" ? 0.55f : 1.0f;
-        if (character == 1) return pass == "near" ? 0.75f : pass == "mid" ? 1.1f : pass == "far" ? 1.3f : 1.0f;
-        return pass == "far" ? 1.25f : 1.0f;
-    default:
-        return 1.0f;
-    }
 }
 
 // The photographic scene, one frame: every light group's level from the music (notes swell the
@@ -1704,14 +1684,9 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     }
     const bool settleNow = settle && (!photoImage.isValid() || character != photoCharacterSent);
     if (settleNow && photo->ensureLoaded()) {   // tests and snapshots: the first picture of a place or Character, composited now
-        auto look = photo->defaultLook();
-        const auto& passes = photo->passes();
-        for (std::size_t i = 0; i < passes.size(); ++i) look.levels[i] *= photoLevel(place, character, passes[i].name);
-        const auto& ch = dsp::character(place, character);
-        look.light = ch.light;
+        auto look = photo->characterLook(character);   // the Character's light (from the manifest)
+        look.light = dsp::character(place, character).light;
         look.grade = grade.getARGB();
-        look.character = character;
-        look.causticLevel *= photoLevel(place, character, "caustics");
         photoImage = photo->renderNow(look);
         photoNeedsFrost = true;
     }
@@ -1726,7 +1701,7 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     if (!still) {
         if (notes != photoNotesSeen) {   // the nearest bank of lights swells with the note
             for (std::size_t i = 0; i < passes.size(); ++i)
-                if (passes[i].kind != "base" && passes[i].kind != "failing") {
+                if (passes[i].kind != "base" && passes[i].kind != "failing" && passes[i].level(character) > 0.05f) {
                     photoSwell[i] = std::max(photoSwell[i], 0.08f + 0.22f * processor.meters.velocity.load());
                     break;
                 }
@@ -1738,8 +1713,8 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     photoEventsSeen = events;
     auto look = photo->defaultLook();
     for (std::size_t i = 0; i < passes.size(); ++i) {
-        float level = passes[i].defaultLevel * photoLevel(place, character, passes[i].name);
-        if (passes[i].kind == "failing") level *= 0.02f + 0.98f * photoLamp * photoLamp * photoLamp;
+        float level = passes[i].defaultLevel * passes[i].level(character);   // how the Character lights this group
+        if (passes[i].flickers(character)) level *= 0.02f + 0.98f * photoLamp * photoLamp * photoLamp;
         if (!still) {
             level *= 1.0f + photoSwell[i];
             const auto a = passes[i].anchor;   // the light under the mouse warms a little
@@ -1752,7 +1727,7 @@ void MainView::animatePhoto(bool still, juce::RectangleList<int>& dirty) {
     look.light = ch.light;
     look.grade = grade.getARGB();
     look.character = character;
-    look.causticLevel *= photoLevel(place, character, "caustics");
+    look.causticLevel *= photo->causticCharacter(character);
     if (photo->hasCaustics() && !still) {   // two steps per caustic frame: smooth, and no composite every tick
         const double steps = 2.0 * double(photo->causticFrames());
         look.causticPhase = float(std::floor(std::fmod(clock * double(photo->causticFps()) / double(photo->causticFrames()), 1.0) * steps) / steps);

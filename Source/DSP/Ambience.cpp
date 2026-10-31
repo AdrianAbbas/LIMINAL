@@ -70,6 +70,7 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
         minGapSeconds = 25.0f; meanGapSeconds = 60.0f;
         add(Kind::paChime, 1.0f, 1.0f);
         add(Kind::shutter, 0.8f, 1.0f);
+        add(Kind::flicker, 0.3f, 1.0f);   // a gallery downlight failing (Part 3: the hum sags with it)
         break;
     case Place::school:     // tubes humming, a wall clock ticking once a second, a radiator
         airLevel = 0.005f; airHz = 700.0f;
@@ -112,6 +113,7 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
         minGapSeconds = 25.0f; meanGapSeconds = 65.0f;
         add(Kind::liftChime, 1.0f, 1.0f);
         add(Kind::doorClose, 1.0f, 1.0f);
+        add(Kind::flicker, 0.3f, 1.0f);   // a sconce's bulb failing: the hum sags with it
         break;
     case Place::subway:     // tunnel airflow, the substation's transformer, rails humming far off
         airLevel = 0.014f; airHz = 180.0f;
@@ -155,6 +157,7 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
         minGapSeconds = 30.0f; meanGapSeconds = 75.0f;
         add(Kind::ghostNote, 1.0f, 1.0f);
         add(Kind::wrongWall, 0.7f, 1.0f);
+        add(Kind::flicker, 0.4f, 1.0f);   // the light from nowhere falters, and the hum with it
         break;
     }
     characterRate = 1;
@@ -697,8 +700,11 @@ Ambience::Out Ambience::tick() {
             hl += v * (1.0f + b);
             hr += v * (1.0f - b);
         }
-        l += humLevel * hl;
-        r += humLevel * hr * 0.92f;
+        // Where nothing buzzes (incandescent sconces, downlights, the impossible room's light from
+        // nowhere) a failing light is heard as the mains hum sagging with it.
+        const float sag = buzzLevel > 0.0f ? 1.0f : 0.55f + 0.45f * lampNow;
+        l += humLevel * sag * hl;
+        r += humLevel * sag * hr * 0.92f;
     }
     // The failing tube: a few quick flicks, then steady again.
     if (stutterFlicks > 0 && --stutterCountdown <= 0) {

@@ -64,10 +64,35 @@ def pack(exr, jpg, halation=0.0, scale=1.0):
     return float(x.max())
 
 
+def apply_characters(manifest, module):
+    """Each Character's light (Part 3): per pass, its level for Characters 1-3 (`CHARACTERS`,
+    1 = as rendered; a variant pass is 0 except for its Character) and whether it flickers with
+    the hum (`FLICKER`). The plug-in reads both from the manifest."""
+    levels = getattr(module, "CHARACTERS", {})
+    flicker = getattr(module, "FLICKER", {})
+    for p in manifest["passes"]:
+        p["characters"] = [round(float(v), 3) for v in levels.get(p["name"], [1.0, 1.0, 1.0])]
+        if p["name"] in flicker:
+            p["flicker"] = [bool(v) for v in flicker[p["name"]]]
+        else:
+            p.pop("flicker", None)
+    if "caustics" in manifest:
+        manifest["caustics"]["characters"] = [round(float(v), 3) for v in levels.get("caustics", [1.0, 1.0, 1.0])]
+
+
 def main():
     name = sys.argv[1]
     preview = "--preview" in sys.argv
     module = __import__(name)
+    if "--characters-only" in sys.argv:   # re-write the Character table of a packed scene, no render
+        path = os.path.join(ROOT, "assets", "scenes", name, f"{name}_manifest.json")
+        with open(path) as f:
+            manifest = json.load(f)
+        apply_characters(manifest, module)
+        with open(path, "w") as f:
+            json.dump(manifest, f, indent=2)
+        print("characters written", path)
+        return
     built = module.build()
     scene = bpy.context.scene
     if preview:
@@ -105,13 +130,14 @@ def main():
         manifest["caustics"] = {"frames": frames, "fps": 5, "default": 0.6}   # slow and faint: light, not motion
     manifest["headroom"] = HEADROOM
     manifest["scene"] = name
+    apply_characters(manifest, module)
     # A small picture for the plug-in's film strip of places: every pass at its default level.
     total = None
     for p in manifest["passes"]:
         jpg = os.path.join(assets, f"{name}_{p['name']}.jpg")
         if os.path.exists(jpg):
             x = np.asarray(Image.open(jpg).convert("RGB"), dtype=np.float32) / 255.0
-            x = np.where(x <= 0.04045, x / 12.92, np.power((x + 0.055) / 1.055, 2.4)) * p.get("default", 1.0)
+            x = np.where(x <= 0.04045, x / 12.92, np.power((x + 0.055) / 1.055, 2.4)) * p.get("default", 1.0) * p["characters"][0]
             total = x if total is None else total + x
     if total is not None:
         y = np.clip(total / HEADROOM / (1.0 + total / HEADROOM * 0.45) * 1.12, 0, 1)

@@ -116,8 +116,15 @@ private:
 const char* PhotoScene::sceneName(int place) {
     switch (place) {
     case 0: return "hospital";
+    case 1: return "mall";
+    case 2: return "school";
+    case 3: return "garage";
     case 4: return "pool";
+    case 5: return "hotel";
+    case 6: return "subway";
+    case 7: return "supermarket";
     case 8: return "office";
+    case 9: return "impossible";
     default: return nullptr;
     }
 }
@@ -169,6 +176,10 @@ bool PhotoScene::load() {
         pass.kind = p["kind"].toString();
         pass.defaultLevel = float(double(p.getProperty("default", 1.0)));
         if (const auto* a = p["anchor"].getArray(); a != nullptr && a->size() == 2) pass.anchor = { float(double((*a)[0])), float(double((*a)[1])) };
+        if (const auto* levels = p["characters"].getArray(); levels != nullptr)   // Part 3: each Character's light
+            for (int k = 0; k < std::min(3, levels->size()); ++k) pass.characters[std::size_t(k)] = std::max(0.0f, float(double((*levels)[k])));
+        if (const auto* flick = p["flicker"].getArray(); flick != nullptr)
+            for (int k = 0; k < std::min(3, flick->size()); ++k) pass.flicker[std::size_t(k)] = bool((*flick)[k]);
         auto image = decode(juce::String(name) + "_" + pass.name + ".jpg");
         if (!image.isValid()) continue;
         if (image.getWidth() != width || image.getHeight() != height) image = image.rescaled(width, height);
@@ -198,6 +209,8 @@ bool PhotoScene::load() {
     if (const auto* frames = manifest["caustics"]["frames"].getArray()) {
         causticRate = float(double(manifest["caustics"].getProperty("fps", 5.0)));
         causticDefault = float(double(manifest["caustics"].getProperty("default", 1.0)));
+        if (const auto* levels = manifest["caustics"]["characters"].getArray(); levels != nullptr)
+            for (int k = 0; k < std::min(3, levels->size()); ++k) causticCharacters[std::size_t(k)] = std::max(0.0f, float(double((*levels)[k])));
         double r = 0, g = 0, b = 0;
         for (const auto& f : *frames) {
             const auto image = decode(f.toString());
@@ -257,6 +270,14 @@ PhotoScene::Look PhotoScene::defaultLook() const {
     Look look;
     for (const auto& p : passList) look.levels.push_back(p.defaultLevel);
     look.causticLevel = causticDefault;
+    return look;
+}
+
+PhotoScene::Look PhotoScene::characterLook(int character) const {
+    auto look = defaultLook();
+    for (std::size_t i = 0; i < passList.size(); ++i) look.levels[i] *= passList[i].level(character);
+    look.causticLevel *= causticCharacter(character);
+    look.character = character;
     return look;
 }
 

@@ -492,17 +492,16 @@ double meanBrightness(const juce::Image& a) {
 
 void testPhotoScenes(Suite& s) {
     s.section("photographic scenes (Direction Update 2)");
-    const int photographic[] { 0, 4, 8 };
-    int available = 0;
-    for (int place = 0; place < dsp::placeCount; ++place) available += ui::PhotoScene::available(place) ? 1 : 0;
-    s.check(ui::PhotoScene::available(0) && ui::PhotoScene::available(4) && ui::PhotoScene::available(8) && available == 3,
-            "the hospital, the pool and the office have photographic scenes (bundled light passes)", std::to_string(available) + " places");
+    std::vector<int> photographic;
+    for (int place = 0; place < dsp::placeCount; ++place)
+        if (ui::PhotoScene::available(place)) photographic.push_back(place);
+    s.check(photographic.size() >= 3, "the photographic scenes are bundled (Part 3 adds the other seven one by one)", std::to_string(photographic.size()) + " places");
     for (const int place : photographic) {
         const std::string name = ui::PhotoScene::sceneName(place);
         ui::PhotoScene scene(place);
         const auto t0 = std::chrono::steady_clock::now();
         const bool loaded = scene.ensureLoaded();
-        const auto look = scene.defaultLook();
+        const auto look = scene.characterLook(0);
         const auto picture = scene.renderNow(look);
         const double first = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         const auto& passes = scene.passes();
@@ -536,17 +535,25 @@ void testPhotoScenes(Suite& s) {
         const double again = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count() / 5.0;
         s.metric(name + " composite with one light changed (worker thread in the editor)", again, " ms");
         s.check(again < 250.0, name + ": a composite costs under 250 ms here (it runs on the scene's own thread)", num(again, 1) + " ms");
-        // The Characters light it differently.
-        std::vector<juce::Image> graded;
+        // The Characters light it differently: their light per group alone (no grade), then with the grade.
+        std::vector<juce::Image> lit, graded;
         for (int c = 0; c < dsp::characterCount; ++c) {
-            auto l = look;
+            auto l = scene.characterLook(c);
+            lit.push_back(scene.renderNow(l));
             l.grade = dsp::character(place, c).grade;
             l.light = dsp::character(place, c).light;
-            l.character = c;
             graded.push_back(scene.renderNow(l));
         }
-        const double closest = std::min({ meanDifference(graded[0], graded[1]), meanDifference(graded[0], graded[2]), meanDifference(graded[1], graded[2]) });
+        const auto closestOf = [](const std::vector<juce::Image>& v) { return std::min({ meanDifference(v[0], v[1]), meanDifference(v[0], v[2]), meanDifference(v[1], v[2]) }); };
+        const double closestLit = closestOf(lit), closest = closestOf(graded);
+        s.metric(name + " Characters, closest pair: light alone / with the grade", closestLit * 100.0, (" / " + num(closest * 100.0, 1) + " %").c_str());
+        s.check(closestLit > 0.01, name + ": each Character lights the scene differently (its own light per group, before any grade)", num(closestLit * 100.0, 1) + " %");
         s.check(closest > 0.02, name + ": each Character grades the photograph differently", num(closest * 100.0, 1) + " %");
+        int flickering = 0;
+        for (int c = 0; c < dsp::characterCount; ++c)
+            for (const auto& pass : passes) flickering += pass.flickers(c) && pass.level(c) > 0.05f ? 1 : 0;
+        if (place != 4)   // (the pool has no tubes: its light is the sun and the water)
+            s.check(flickering >= 2, name + ": a light flickers with the hum (in at least two of its Characters)", std::to_string(flickering) + " (pass, Character) pairs");
         if (scene.hasCaustics()) {   // the water's light drifts and loops without a seam
             auto a = look, b = look, last = look;
             b.causticPhase = 0.5f;
@@ -961,11 +968,11 @@ int writeSnapshots(const juce::String& path) {
     }
     // Direction Update 2: the photographic scenes - each light group alone, the Characters, the
     // failing tube off and on, the caustic loop.
-    for (const int place : { 0, 4, 8 }) {
+    for (int place = 0; place < dsp::placeCount; ++place) {
         if (!ui::PhotoScene::available(place)) continue;
         ui::PhotoScene scene(place);
         if (!scene.ensureLoaded()) continue;
-        const auto look = scene.defaultLook();
+        const auto look = scene.characterLook(0);
         const auto full = scene.renderNow(look);
         if (!full.isValid()) continue;
         const juce::String name = ui::PhotoScene::sceneName(place);
@@ -991,10 +998,9 @@ int writeSnapshots(const juce::String& path) {
         {
             juce::Graphics g(characters);
             for (int c = 0; c < dsp::characterCount; ++c) {
-                auto l = look;
+                auto l = scene.characterLook(c);
                 l.grade = dsp::character(place, c).grade;
                 l.light = dsp::character(place, c).light;
-                l.character = c;
                 g.drawImage(scene.renderNow(l), c * w, 0, w, h, 0, 0, full.getWidth(), full.getHeight());
                 g.setColour(juce::Colours::white.withAlpha(0.85f));
                 g.setFont(juce::FontOptions(13.0f));
@@ -1038,10 +1044,9 @@ int writeSnapshots(const juce::String& path) {
                     static std::unique_ptr<ui::PhotoScene> photo;
                     if (photo == nullptr || photo->place() != place) photo = std::make_unique<ui::PhotoScene>(place);
                     photo->ensureLoaded();
-                    auto l = photo->defaultLook();
+                    auto l = photo->characterLook(c);
                     l.grade = dsp::character(place, c).grade;
                     l.light = dsp::character(place, c).light;
-                    l.character = c;
                     g.drawImage(photo->renderNow(l), juce::Rectangle<float>(float(c * w), float(place * h), float(w), float(h)), juce::RectanglePlacement::fillDestination);
                 } else {
                     const auto sc = ui::renderPlace(place, c, w, h, 1.0f);

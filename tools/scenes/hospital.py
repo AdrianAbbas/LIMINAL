@@ -114,3 +114,15 @@ PASSES = [
     {"name": "failing", "group": "failing", "kind": "failing", "default": 1.0},
     {"name": "exit", "group": "exit", "kind": "sign", "default": 1.0},
 ]
+
+# Each Character's light (levels for Characters 1-3; the plug-in reads them from the manifest).
+# Sterile Silence: every panel; After Hours: half the corridor off, the night's daylight colder;
+# Something Wrong: the far bank dead and the middle bank flickering with the hum.
+CHARACTERS = {
+    "base": [1.0, 1.4, 1.0],
+    "near": [1.0, 0.55, 1.0],
+    "mid": [1.0, 0.35, 0.7],
+    "far": [1.0, 0.2, 0.0],
+    "exit": [1.0, 1.0, 1.6],
+}
+FLICKER = {"mid": [False, False, True]}

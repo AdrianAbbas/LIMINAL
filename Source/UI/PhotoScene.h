@@ -21,6 +21,7 @@
 // Assets: bundled (BinaryData from assets/scenes/<name>/), or the developer's own renders in
 // photographFolder()/<name>/ (same files: <name>_manifest.json, <name>_<pass>.jpg ...), which win.
 #include <juce_graphics/juce_graphics.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <memory>
@@ -35,6 +36,10 @@ public:
         juce::String name, kind;            // kind: base, tube, failing, sign, lamp, sun, sky
         juce::Point<float> anchor { -1, -1 };   // where the light group sits (0..1 of the picture)
         float defaultLevel = 1;
+        std::array<float, 3> characters { 1, 1, 1 };   // its level under each of the place's Characters
+        std::array<bool, 3> flicker {};                // flickers with the hum's stutter (kind "failing" always)
+        bool flickers(int character) const { return kind == "failing" || flicker[std::size_t(std::clamp(character, 0, 2))]; }
+        float level(int character) const { return characters[std::size_t(std::clamp(character, 0, 2))]; }
     };
     // What to show. Levels are per pass (base first), 1 = as rendered.
     struct Look {
@@ -61,6 +66,7 @@ public:
     bool hasCaustics() const { return !caustics.empty(); }
     int causticFrames() const { return int(caustics.size()); }
     float causticFps() const { return causticRate; }
+    float causticCharacter(int character) const { return causticCharacters[std::size_t(std::clamp(character, 0, 2))]; }
 
     void request(const Look&);            // composite this look (the newest request wins)
     // The newest finished picture, if there is a new one. It stays complete and unchanged until
@@ -73,6 +79,10 @@ public:
     juce::Image renderNow(const Look&);
     bool ensureLoaded() { return load(); }   // (blocks while decoding)
     Look defaultLook() const;
+    // The default look under one of the place's Characters: its light per group (the manifest's
+    // per-Character levels; variant passes are 0 except for their Character). Grade and light are
+    // the caller's (dsp::character).
+    Look characterLook(int character) const;
 
 private:
     class Worker;
@@ -86,6 +96,7 @@ private:
     int width = 0, height = 0, cw = 0, ch = 0;
     float headroom = 1, causticRate = 5, causticDefault = 1;
     juce::Colour causticTint { 0xffcff8f0 };
+    std::array<float, 3> causticCharacters { 1, 1, 1 };
     std::vector<Pass> passList;
     std::vector<std::vector<juce::uint8>> pixels;     // each pass: sRGB bytes, RGB
     std::vector<std::vector<juce::uint8>> caustics;   // each frame: luminance bytes, cw x ch

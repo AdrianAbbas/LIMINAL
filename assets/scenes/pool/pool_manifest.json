@@ -6,7 +6,12 @@
       "name": "base",
       "kind": "base",
       "default": 0.75,
-      "peak": 0.687
+      "peak": 0.687,
+      "characters": [
+        1.0,
+        1.0,
+        0.45
+      ]
     },
     {
       "name": "sun",
@@ -16,7 +21,12 @@
         0.5,
         0.5
       ],
-      "peak": 2.05
+      "peak": 2.05,
+      "characters": [
+        1.0,
+        1.7,
+        0.15
+      ]
     },
     {
       "name": "skylights",
@@ -26,7 +36,12 @@
         0.5,
         0.5
       ],
-      "peak": 5.026
+      "peak": 5.026,
+      "characters": [
+        1.0,
+        1.2,
+        0.6
+      ]
     },
     {
       "name": "beyond",
@@ -36,7 +51,12 @@
         0.5,
         0.5
       ],
-      "peak": 2.756
+      "peak": 2.756,
+      "characters": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
   ],
   "caustics": {
@@ -67,7 +87,12 @@
       "pool_caustic_23.jpg"
     ],
     "fps": 5,
-    "default": 0.6
+    "default": 0.6,
+    "characters": [
+      1.0,
+      1.0,
+      1.8
+    ]
   },
   "headroom": 0.7071067811865476,
   "scene": "pool",
