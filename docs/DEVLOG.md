@@ -33,7 +33,19 @@ the checklist below.
 - [ ] **Direction Update 2 — real liminal spaces (sound + visuals)** (2026-10-30)
   - [x] Part 1 — audio: risers/whooshes/noise waves removed; all ten beds, acoustics and rare events rebuilt to Sections 1–2; default Activity 25 % (rare); Far Away (mall PA / hotel wall); listening render (phrase through ten rooms + 60 s of each bed) — pushed `[skip ci]`
   - [x] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — pushed without `[skip ci]`; **waiting for the developer's approval of the look**
-  - [ ] Part 3 (after approval) — the other seven places and the Character variants
+  - [ ] Part 3 (approved 2026-10-31: "the hospital render looks great") — the other seven places and the Character variants. Resume here:
+    - [ ] 3.0 Character lighting from the manifests (per-pass levels and flicker per Character, variant passes) instead of the editor's table; hospital/pool/office manifests moved over
+    - [ ] 3.1 Mall (`tools/scenes/mall.py`, rendered, packed) — push `[skip ci]`
+    - [ ] 3.2 School — push `[skip ci]`
+    - [ ] 3.3 Garage — push `[skip ci]`
+    - [ ] 3.4 Hotel (Room 404's door ajar) — push `[skip ci]`
+    - [ ] 3.5 Subway — push `[skip ci]`
+    - [ ] 3.6 Supermarket — push `[skip ci]`
+    - [ ] 3.7 Impossible Room — push `[skip ci]`
+    - [ ] 3.8 All 30 Character variants checked by eye (`photo-<place>-characters.jpg`)
+    - [ ] 3.9 Audio re-check against Section 1's hard rules, ten rooms x three Characters; listening render updated
+    - [ ] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
+    - [ ] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
