@@ -1,0 +1,110 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 1.0,
+      "peak": 0.812,
+      "characters": [
+        1.0,
+        0.6,
+        0.7
+      ]
+    },
+    {
+      "name": "near",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4739,
+        0.7668
+      ],
+      "peak": 2.612,
+      "characters": [
+        1.0,
+        1.1,
+        0.25
+      ]
+    },
+    {
+      "name": "mid",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4832,
+        0.7748
+      ],
+      "peak": 1.864,
+      "characters": [
+        1.0,
+        1.1,
+        0.2
+      ]
+    },
+    {
+      "name": "far",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4803,
+        0.7768
+      ],
+      "peak": 1.366,
+      "characters": [
+        1.0,
+        1.1,
+        0.15
+      ]
+    },
+    {
+      "name": "ceiling",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4775,
+        0.7401
+      ],
+      "peak": 8.629,
+      "characters": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "failing",
+      "kind": "failing",
+      "default": 1.0,
+      "anchor": [
+        0.4585,
+        0.7749
+      ],
+      "peak": 1.69,
+      "characters": [
+        1.0,
+        1.0,
+        0.6
+      ]
+    },
+    {
+      "name": "room404",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.6449,
+        0.6715
+      ],
+      "peak": 1.258,
+      "characters": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "hotel",
+  "thumbnail": "hotel_thumb.jpg"
+}
