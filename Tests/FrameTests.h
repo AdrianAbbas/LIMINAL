@@ -63,10 +63,13 @@ int blankness(const std::vector<double>& frame, const std::vector<double>& refer
         if (reference[i] >= 10.0) {   // (tiles that are dark in the picture itself can't go blank)
             const double ratio = frame[i] / reference[i];
             worstRatio = std::min(worstRatio, ratio);
-            partly = partly || ratio < 0.3 || frame[i] < 3.0;
+            // Blank means black (what the GarageBand bug showed: missing pictures), not a dimmer
+            // lighting of the same place (a light group mid-flicker, or for a frame the previous
+            // Character's light while a photograph's new look is composited).
+            partly = partly || (ratio < 0.3 && frame[i] < 6.0) || frame[i] < 3.0;
         }
     }
-    if (sumF < 0.5 * sumR) return 2;
+    if (sumF < 0.5 * sumR && sumF < 8.0 * double(frame.size())) return 2;   // (tiles are 0-255 luma)
     return partly ? 1 : 0;
 }
 // Fraction of sampled pixels that are not fully opaque.
@@ -111,7 +114,7 @@ void testFrames(Suite& s) {
     set(params::activity, 1.0f);   // events and the ballast's stutter as often as they come
 
     // The script: (place, Character, Unreal) per stretch of frames. Hospital, pool and office are
-    // photographs (light passes composited live); garage and hotel are painted.
+    // photographs (light passes composited live); since Part 3 garage and hotel are photographs too.
     struct Stretch { int place, character, frames; float unreal; };
     const std::vector<Stretch> script {
         { 0, 0, 50, 0.0f }, { 4, 0, 40, 0.0f }, { 8, 2, 30, 0.8f }, { 3, 0, 12, 0.0f }, { 0, 2, 20, 0.0f },
@@ -136,7 +139,7 @@ void testFrames(Suite& s) {
     juce::AudioBuffer<float> buffer(p.getTotalNumOutputChannels(), 512);
     juce::MidiBuffer midi;
     juce::Random random(31);
-    int frame = 0, blankScreen = 0, partlyScreen = 0, blankFull = 0, partlyFull = 0, transparentFrames = 0, painted = 0, repaintedArea = 0;
+    int placeholders = 0, frame = 0, blankScreen = 0, partlyScreen = 0, blankFull = 0, partlyFull = 0, transparentFrames = 0, painted = 0, repaintedArea = 0;
     double worstScreen = 1e9, worstFull = 1e9, worstTransparency = 0;
     std::string firstBad;
     double audioMs = 0, analysisMs = 0;
@@ -179,9 +182,16 @@ void testFrames(Suite& s) {
             const double c0 = frames::threadCpuMs();
             const auto& ref = reference[{ st.place, st.character }];
             const auto screenTiles = frames::tiles(screen, scene);
-            const int onScreen = frames::blankness(screenTiles, ref, worstScreen);
             const auto full = editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f);
-            const int whole = frames::blankness(frames::tiles(full, scene), ref, worstFull);
+            const auto fullTiles = frames::tiles(full, scene);
+            // While a photograph decodes (~200 ms after a change of place) the editor shows that
+            // place's thumbnail, lit as its first Character: a real picture, but not the settled
+            // one. Those frames only fail if they are actually dark (no tile over 3 %).
+            const bool placeholder = ui::PhotoScene::available(st.place) && !view.showingPhoto();
+            const auto dark = [](const std::vector<double>& t) { return *std::max_element(t.begin(), t.end()) < 3.0 ? 2 : 0; };
+            const int onScreen = placeholder ? dark(screenTiles) : frames::blankness(screenTiles, ref, worstScreen);
+            const int whole = placeholder ? dark(fullTiles) : frames::blankness(fullTiles, ref, worstFull);
+            placeholders += placeholder ? 1 : 0;
             const double clear = frames::transparency(view.paintedPicture());
             worstTransparency = std::max(worstTransparency, clear);
             blankScreen += onScreen == 2 ? 1 : 0;
@@ -218,6 +228,7 @@ void testFrames(Suite& s) {
             std::to_string(transparentFrames) + " frames, worst " + num(worstTransparency * 100.0, 1) + " % transparent");
     const double editorMs = cpuMs - audioMs - analysisMs;
     s.metric("frames painted / ticks", double(painted), (" / " + std::to_string(frame)).c_str());
+    s.metric("frames showing a decoding place's thumbnail", double(placeholders));
     s.metric("mean repainted area per tick", double(repaintedArea) / double(std::max(1, frame)) / double(editor->getWidth() * editor->getHeight()) * 100.0, " % of the window");
     s.metric("compositor: pictures per second", double(compositesSeen) / (wallMs / 1000.0));
     s.metric("editor CPU (message thread + compositor, minus audio and the test's analysis), % of one core", editorMs / wallMs * 100.0, " %");

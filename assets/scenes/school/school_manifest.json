@@ -96,7 +96,7 @@
     {
       "name": "exit",
       "kind": "sign",
-      "default": 1.0,
+      "default": 2.5,
       "anchor": [
         0.479,
         0.4469

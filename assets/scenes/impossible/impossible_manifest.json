@@ -1,0 +1,90 @@
+{
+  "width": 1440,
+  "height": 1080,
+  "passes": [
+    {
+      "name": "base",
+      "kind": "base",
+      "default": 0.6,
+      "peak": 0.675,
+      "characters": [
+        1.0,
+        0.85,
+        0.2
+      ]
+    },
+    {
+      "name": "ceiling",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.5809,
+        0.1485
+      ],
+      "peak": 11.221,
+      "characters": [
+        0.5,
+        1.0,
+        1.8
+      ],
+      "flicker": [
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "stairs",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.006,
+        0.352
+      ],
+      "peak": 22.567,
+      "characters": [
+        0.3,
+        0.8,
+        1.6
+      ]
+    },
+    {
+      "name": "inner",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.6905,
+        0.4485
+      ],
+      "peak": 2.872,
+      "characters": [
+        0.4,
+        1.0,
+        0.0
+      ],
+      "flicker": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "beyond",
+      "kind": "lamp",
+      "default": 1.0,
+      "anchor": [
+        0.4399,
+        0.4514
+      ],
+      "peak": 0.99,
+      "characters": [
+        1.0,
+        1.2,
+        2.0
+      ]
+    }
+  ],
+  "headroom": 0.7071067811865476,
+  "scene": "impossible",
+  "thumbnail": "impossible_thumb.jpg"
+}

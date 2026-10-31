@@ -30,10 +30,10 @@ the checklist below.
   - [x] Part 1: ten procedural scenes (`UI/SceneArt`), graded per Character; resizable editor (MainView scaled, 85–150 %, 960x720); main view: film strip of places, Character chips, instrument objects, four ring knobs, page tabs; lights that answer notes/events/Character flicker/mouse; Unreal tape-slip; PLACE view shows room/materials/processing (350 checks pass)
   - [x] Part 2: snapshots of every place (and Characters, window sizes) in `docs/snapshots/`, editor tests for art/animation cost, DEVLOG section, push without `[skip ci]`
 - [x] Final handoff: per milestone, what to listen for and look at in GarageBand (end of this file)
-- [ ] **Direction Update 2 — real liminal spaces (sound + visuals)** (2026-10-30)
+- [x] **Direction Update 2 — real liminal spaces (sound + visuals)** (2026-10-30, Part 3 2026-10-31) — *waiting for the developer's GarageBand look and listen*
   - [x] Part 1 — audio: risers/whooshes/noise waves removed; all ten beds, acoustics and rare events rebuilt to Sections 1–2; default Activity 25 % (rare); Far Away (mall PA / hotel wall); listening render (phrase through ten rooms + 60 s of each bed) — pushed `[skip ci]`
   - [x] Part 2 — photoreal pipeline (Blender/Cycles, light passes composited live, flicker synced with the hum, water caustic loop): Pool, Office, Hospital prototype, snapshots — pushed without `[skip ci]`; **waiting for the developer's approval of the look**
-  - [ ] Part 3 (approved 2026-10-31: "the hospital render looks great") — the other seven places and the Character variants. Resume here:
+  - [x] Part 3 (approved 2026-10-31: "the hospital render looks great") — the other seven places and the Character variants. Resume here:
     - [x] 3.0 Character lighting from the manifests (per-pass levels and flicker per Character, variant passes) instead of the editor's table; hospital/pool/office manifests moved over
     - [x] 3.1 Mall (`tools/scenes/mall.py`, rendered, packed) — push `[skip ci]`
     - [x] 3.2 School — push `[skip ci]`
@@ -41,11 +41,11 @@ the checklist below.
     - [x] 3.4 Hotel (Room 404's door ajar) — push `[skip ci]`
     - [x] 3.5 Subway — push `[skip ci]`
     - [x] 3.6 Supermarket — push `[skip ci]`
-    - [ ] 3.7 Impossible Room — push `[skip ci]`
-    - [ ] 3.8 All 30 Character variants checked by eye (`photo-<place>-characters.jpg`)
+    - [x] 3.7 Impossible Room — push `[skip ci]`
+    - [x] 3.8 All 30 Character variants checked by eye (`photo-<place>-characters.jpg`)
     - [x] 3.9 Audio re-check against Section 1's hard rules, ten rooms x three Characters (new test group `rules`: done, 6/6; five Character beds lowered, flicker events + hum sag in mall/hotel/impossible); listening render updated
-    - [ ] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
-    - [ ] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
+    - [x] 3.10 Snapshots of every place and Character in `docs/snapshots/`; asset size; editor CPU; tests green
+    - [x] 3.11 DEVLOG section + handoff; final push **without** `[skip ci]`
 - [x] **Hotfix 2026-10-31 — scene flicker / blank frames and yellow pool water in GarageBand** (see the section at the end) — *waiting for the developer's GarageBand check*
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
@@ -1135,3 +1135,52 @@ stutters with the hum). Click **POOL**: the water should stay **turquoise** when
 picture replaces the thumbnail, the light on the ceiling drifting slowly. Click **OFFICE**,
 then a painted place (e.g. GARAGE) and back. Please report any blank or flashing frame, any
 wrong colour, and whether the MacBook Air stays cool with the window open.
+
+
+---
+
+## Direction Update 2, Part 3 — the other seven places and all 30 Characters (2026-10-31)
+
+The developer approved the photographic prototype ("the hospital render looks great"). This part
+renders the other seven places to the same standard, gives every Character its own light,
+re-checks the sound against Section 1 in every place and Character, and refreshes the snapshots.
+
+### What changed
+
+| | |
+|---|---|
+| `tools/scenes/` | Seven new scene scripts, all procedural (no downloaded assets): **mall** (two-level atrium under a long skylight, polished stone, glass balustrades, stopped escalators, closed shops with half-lowered shutters, still fountain; passes base/atrium/shops/lastshop/fountain/failing), **school** (locker hallway, vinyl tile, wired-glass doors, bulletin board, wall clock, an open classroom with low sun; near/mid/far/failing/classroom/exit), **garage** (low concrete deck, pillars with hazard bands, bay lines, pipes, sodium pools with dark gaps, a cold-lit lift lobby, exit sign, a parked car's headlights; near/mid/far/cold/failing/exit/headlights), **hotel** (patterned carpet, damask wallpaper, brass sconces, numbered doors, night window, **door 404 ajar with its room lit**; near/mid/far/ceiling/failing/room404), **subway** (running-bond tiles with a coloured band, riveted columns, yellow edge strip, track bed and rails, name panels, tunnel mouth with red signals and a train light; near/mid/far/failing/signs/tunnel/train), **supermarket** (gondola aisles stocked unevenly, crosswise tube rows, open-web joists and ducts, a wall of glowing fridges, a checkout lane; near/mid/far/failing/fridges/checkout), **impossible** (pastel room lit evenly from nowhere, stairs climbing into a wall, a door in the ceiling ajar, a door high on the wall, a room inside the room, and through the doorway the same room again; ceiling/stairs/inner/beyond). `common.py`: sloped solids, stairs, running-bond tiles, dark glass, metal, ribbed shutters, downlights, tubes, x-axis cylinders. `render.py`: `--pack-only`, `--characters-only`, the Character table in the manifest. `preview.py`: `character=N`, `--sheet`. |
+| Characters (all 30) | Each scene script ends with `CHARACTERS` (each light group's level under Characters 1-3) and `FLICKER` (which group follows the hum's stutter under which Character); render.py writes them into the manifest, and the plug-in reads them (`PhotoScene::Pass::characters/flicker`, `characterLook()`), replacing the editor's old table for hospital/pool/office. Variants as light groups switched on for one Character: hotel **Room 404** (door ajar, light spilling across the corridor), mall **Closing Time** (the last shop lit, shutter half up), school **Childhood Memory** (low sun out of the classroom), garage **Distant Movement / Pursuit** (headlights), subway **Approaching** (a light in the tunnel), hospital **Something Wrong** (far bank dead, middle bank flickering with the hum), supermarket **Closing Shift** (far rows off, one till lit), impossible **Unstable** (the inner room and ceiling door flicker), etc. The plug-in's grade per Character still applies on top. |
+| Audio | **Flicker events** added to mall, hotel and impossible room (the three places that had a failing light in the picture but no stutter in the sound); where nothing buzzes (incandescent sconces, downlights, the light from nowhere) the **mains hum sags** with the failing light instead. Five Characters' rooms were too loud against the instruments (8.5-10 dB under the phrase): hospital Something Wrong, mall Endless, garage Distant Movement, supermarket Nostalgia and Fluorescent Nightmare lowered (bed and/or hum), keeping them distinct (Something Wrong and Fluorescent Nightmare: quieter air and drones, the hum kept forward; Distant Movement: a brighter bed). |
+| Tests | New group **`rules`** (`Tests/CharacterTests.h`, own shard): Section 1 in all 10 places x 3 Characters. Editor group: every place is photographic, each Character lights the scene differently before any grade, a light flickers with the hum in every place but the pool. Frames test: "blank" now means actually black (the GarageBand bug), not a dimmer lighting of the same place; frames that show a decoding place's thumbnail are counted and judged by darkness. |
+| Listening render | `--render-places` adds **`u2-rooms-characters.flac`**: all 30 Characters, the phrase then the room alone, 20 s each (CI uploads it with the other two). |
+| Snapshots | `docs/snapshots/`: `place-NN-*.jpg` (all ten now photographs in the editor), `photo-<place>.jpg`, `photo-<place>-light-passes.jpg`, `photo-<place>-characters.jpg` (the three Characters, light + grade), `photo-<place>-flicker.jpg` (nine places with a failing light), `photo-pool-caustics.jpg`, `characters-all-30.jpg` (fixed: 4:3 cells; before, rows overlapped and labels sat on the wrong row). Looked at by eye. |
+
+### Tested (Linux, this container): 471 checks pass, 0 fail (full suite, on exactly this commit)
+
+- **Audio rules, 30 of 30** for each: bed -64..-36 dBFS at Activity 0; still (level moves < 2.5 dB; supermarket compressor and impossible silences exempt as before); tonal (over half the energy in spectral peaks); events at default Activity at most 9 in 3 min and never two within 20 s, at 100 % at most 40; no risers/whooshes/noise swells (the air above 2 kHz never 8 dB over its median for more than 1.5 s; impossible room 3 s, its reverb swells after each sound by design); the standard phrase **10.3-27.7 dB over the room** at default settings (closest: subway Approaching).
+- Characters: every pair in a place still clearly differs (30 of 30); environments group 115 pass.
+- Photographs, per place: loads and composites 1440 x 1080; exposed like a photograph at Character 1; every light group changes the picture on its own; each Character's light alone differs (closest pair 2.6 % office ... 10 % mall); decode + first composite 134-383 ms (on the scene's own thread; the thumbnail shows meanwhile); a composite after one light changes ~10 ms.
+- **Asset size: 3.8 MB for all ten scenes** (hospital 288 KB, mall 392, school 416, garage 268, pool 724, hotel 364, subway 500, supermarket 420, office 232, impossible 244) - budget 80 MB. Linux VST3 binary with the scenes: 16.9 MB.
+- **Editor CPU** (frames test: 240 real-time frames at 30 fps, lights changing almost every frame, ten place/Character switches in 8 s, this container's software renderer): **58 % of one core** (prototype hotfix: 67-70 %), of which painting 14 % (7.5 ms a painted frame) and compositing on its own thread 24 % (14.7 ms a picture, 16 pictures a second). 0 blank, 0 partly blank, 0 transparent frames; nothing written into a picture the editor holds (triple-buffered). In normal playing (one place, notes now and then) composites stop whenever the lights are still.
+- Rendering: Blender 5.2.3 (`pip install bpy`), Cycles CPU, 80 samples + OIDN, 1440 x 1080: 20-27 min per scene (mall 27, school 31, garage 23, hotel 25, subway 26, supermarket 24, impossible 20).
+
+### Report-only misses (two attempts each)
+
+- **Subway tunnel signals** (the `tunnel` pass): two red lamps ~70 m away change the whole picture by under 0.0003 on average, even at 15x. Kept at 1x (they read as two red points); the check is report-only for that pass.
+- The older misses are unchanged (place vs strongest control per instrument, Unreal in the impossible room, piano velocity to filter).
+
+### Decisions (recorded instead of asking)
+
+- **Variants as light groups, geometry rendered once**: e.g. door 404 is ajar in all three hotel Characters, but only Room 404 lights its room (in the others it is a dark gap). One render set per place keeps the bundle at 3.8 MB and switching Characters instant.
+- **Flicker for every place with a lamp**: Section 1 asks for the hum's flicker to follow the light; places whose lights do not buzz get a hum sag instead of adding a buzz that Section 2 does not describe.
+- The pool keeps no failing light (Section 2: sunlight and water).
+- No note was given on the pool/office look (the placeholder in the request was left empty); they are unchanged apart from the Character data moving into their manifests.
+
+### Not verified here
+
+macOS: the look on the MacBook Air's Retina screen, decode times there (the slowest here, school 383 ms, shows the thumbnail meanwhile), CPU and heat in GarageBand, and whether the new flicker/hum sag in mall, hotel and impossible room feel in sync. Nothing was listened to here (no audio output); the listening render is in the Linux CI artifact.
+
+### For the developer's GarageBand check
+
+Install **LIMINAL-macOS-Universal** from the Actions run of this commit (`bash install-mac.sh`). Click through all ten places in the film strip and the three Character chips in each; look for Room 404 (hotel, third chip: the lit gap halfway down the right wall), the mall's last open shop (first chip), the school's sun from the open classroom (second chip), the garage headlights (second and third), the light in the subway tunnel (third). Set Activity to 100 % in the mall, hotel or impossible room and watch a light falter with the hum. Listen to `u2-rooms-characters.flac` from the Linux artifact for all thirty rooms. Please report anything that looks fake, any blank or flashing frame, and whether the MacBook Air stays cool.

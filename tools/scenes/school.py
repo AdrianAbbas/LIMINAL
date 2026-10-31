@@ -156,7 +156,7 @@ PASSES = [
     {"name": "far", "group": "far", "kind": "tube", "default": 1.0},
     {"name": "failing", "group": "failing", "kind": "failing", "default": 1.0},
     {"name": "classroom", "group": "classroom", "kind": "sun", "default": 1.0},
-    {"name": "exit", "group": "exit", "kind": "sign", "default": 1.0},
+    {"name": "exit", "group": "exit", "kind": "sign", "default": 2.5},
 ]
 
 # After Class: the tubes on, a little sun from the open classroom. Childhood Memory: a warm

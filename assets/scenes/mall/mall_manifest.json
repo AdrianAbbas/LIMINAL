@@ -18,8 +18,8 @@
       "kind": "lamp",
       "default": 1.0,
       "anchor": [
-        0.365,
-        0.7164
+        0.5,
+        0.5
       ],
       "peak": 21.959,
       "characters": [
@@ -33,10 +33,10 @@
       "kind": "sign",
       "default": 1.0,
       "anchor": [
-        0.4672,
-        0.3926
+        0.5,
+        0.5
       ],
-      "peak": 0.0,
+      "peak": 3.009,
       "characters": [
         0.5,
         0.0,
@@ -48,10 +48,10 @@
       "kind": "lamp",
       "default": 1.0,
       "anchor": [
-        0.8028,
-        0.5214
+        0.5,
+        0.5
       ],
-      "peak": 0.16,
+      "peak": 4.984,
       "characters": [
         1.0,
         0.0,

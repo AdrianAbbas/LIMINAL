@@ -132,7 +132,7 @@ PASSES = [
     {"name": "far", "group": "far", "kind": "lamp", "default": 1.0},
     {"name": "cold", "group": "cold", "kind": "tube", "default": 1.0},
     {"name": "failing", "group": "failing", "kind": "failing", "default": 1.0},
-    {"name": "exit", "group": "exit", "kind": "sign", "default": 1.0},
+    {"name": "exit", "group": "exit", "kind": "sign", "default": 2.5},
     {"name": "headlights", "group": "headlights", "kind": "lamp", "default": 1.0},
 ]
 

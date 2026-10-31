@@ -144,7 +144,7 @@ def hole_cut(scene, cx, cy):
         c.box("ceiling d", (x1, y0, H), (W, y1, H + 0.1), mat)
 
 
-BASE_DEFAULT = 1.0
+BASE_DEFAULT = 0.6   # the light from nowhere, a little below white
 
 PASSES = [
     {"name": "ceiling", "group": "ceiling", "kind": "lamp", "default": 1.0},
