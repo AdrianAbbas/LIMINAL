@@ -56,6 +56,12 @@ the checklist below.
   - [x] Part 1 — parameters `vhs` (Off / Light / Heavy, default Light) and `vhs_warble` (off); `UI/Vhs` (static bake in the composite, animated tape layers, glitch schedule, camcorder OSD); `dsp::TapeWarble`; test groups `vhs` and `cpu` — pushed `[skip ci]`
   - [x] Part 2 — control on the PERFORM page, fast screen-size copy, snapshots of every place at Off / Light / Heavy in `docs/snapshots/` — pushed `[skip ci]`
   - [x] Part 3 — editor CPU before/after, DEVLOG section + handoff; final push **without** `[skip ci]`
+- [ ] **Effects from the developer's pedal captures (2026-10-31, night)** — **blocked: the captures are not in `AdrianAbbas/Samples`** (see `docs/PEDAL_CAPTURES.md`)
+  - [x] Part 1 — inventory: Samples @ `476bfe1` (whole history) has no effect captures and no dry/reamped phrases; nothing elsewhere on the account; expected layout written down — push `[skip ci]`
+  - [ ] Part 2 — quality-check tools (glitch detection, click repair, sweep choice, noise floor), validated on a synthetic capture
+  - [ ] Part 3 — deconvolution + measurement tools (validated on synthetic units with known answers); real-time non-uniform partitioned convolver + tests; real-unit IRs/measurements **blocked**
+  - [ ] Part 4 — rooms: **blocked** (nothing captured to use)
+  - [ ] Part 5 — listening render: **blocked** (before = after); DEVLOG handoff; final push without `[skip ci]`
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
