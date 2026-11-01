@@ -126,6 +126,7 @@ public:
         last = 0;
     }
     void configure(const ModProfile& p, double startPhase = 0.0) { prof = p; phase = startPhase; }
+    void reset() { std::fill(line.begin(), line.end(), 0.0f); write = 0; last = 0; }
     float tick(float in) {
         phase += prof.rateHz / sr;
         phase -= std::floor(phase);

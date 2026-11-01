@@ -47,7 +47,7 @@ juce_add_plugin(LIMINAL
     COPY_PLUGIN_AFTER_BUILD FALSE)
 target_sources(LIMINAL PRIVATE
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
-    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp Source/DSP/Convolver.cpp
+    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp Source/DSP/Convolver.cpp Source/DSP/Captures.cpp
     Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp Source/UI/Vhs.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 # Photographic scenes (Direction Update 2): light passes rendered offline by tools/scenes and
@@ -59,6 +59,20 @@ if(LIMINAL_SCENE_FILES)
     target_compile_definitions(LIMINAL PRIVATE LIMINAL_HAS_SCENES=1)
 else()
     target_compile_definitions(LIMINAL PRIVATE LIMINAL_HAS_SCENES=0)
+endif()
+# The developer's effect captures (pedal-capture milestone): impulse responses and measured
+# profiles made by tools/captures/prepare.py from the PRIVATE Samples repository (CI: SAMPLES_TOKEN).
+# Never committed. Without them the rooms sound exactly as before.
+set(LIMINAL_CAPTURES_DIR "${CMAKE_CURRENT_BINARY_DIR}/captures" CACHE PATH "Prepared effect captures (tools/captures/prepare.py)")
+if(EXISTS "${LIMINAL_CAPTURES_DIR}/profiles.json")
+    file(GLOB LIMINAL_CAPTURE_FILES "${LIMINAL_CAPTURES_DIR}/*.wav" "${LIMINAL_CAPTURES_DIR}/profiles.json")
+    juce_add_binary_data(LiminalCaptures HEADER_NAME CaptureData.h NAMESPACE CaptureData SOURCES ${LIMINAL_CAPTURE_FILES})
+    target_link_libraries(LIMINAL PRIVATE LiminalCaptures)
+    target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_CAPTURES=1)
+    message(STATUS "LIMINAL: effect captures embedded from ${LIMINAL_CAPTURES_DIR}")
+else()
+    target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_CAPTURES=0)
+    message(STATUS "LIMINAL: no effect captures (${LIMINAL_CAPTURES_DIR}) - the rooms keep their previous sound")
 endif()
 target_compile_definitions(LIMINAL PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0

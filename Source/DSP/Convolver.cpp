@@ -18,57 +18,43 @@ int log2i(int n) {
 }
 }  // namespace
 
-void Convolver::load(const float* ir, int len, double sampleRate, double maxSeconds) {
-    length = std::max(1, std::min(len, int(maxSeconds * sampleRate)));
-    std::vector<float> h(ir, ir + std::min(len, length));
-    h.resize(std::size_t(length), 0.0f);
-    if (len > length) {   // capped by Quality: fade out over the last 5 %
-        const int fade = std::max(1, length / 20);
-        for (int i = 0; i < fade; ++i) h[std::size_t(length - fade + i)] *= 0.5f + 0.5f * std::cos(3.14159265f * float(i) / float(fade));
-    }
-
-    head.assign(headSize, 0.0f);
-    for (int i = 0; i < std::min(headSize, length); ++i) head[std::size_t(headSize - 1 - i)] = h[std::size_t(i)];
-    headHistory.assign(2 * headSize, 0.0f);
-
-    // Stage layout: partition P at offset 2P (stage 0: P = headSize at offset headSize).
-    stages.clear();
+std::vector<Convolver::Layout> Convolver::layoutFor(int length) {
+    // Partition P at offset 2P (stage 0: P = headSize at offset headSize).
+    std::vector<Layout> out;
     int offset = headSize, partition = headSize;
     while (offset < length) {
-        Stage st;
-        st.partition = partition;
-        st.offset = offset;
         const int nextPartition = std::min(partition * growth, maxPartition);
-        int end = (nextPartition > partition) ? 2 * nextPartition : length;
-        if (nextPartition == partition) end = length;
-        end = std::min(end, length);
-        st.parts = std::max(1, (end - offset + partition - 1) / partition);
-        st.fftSize = 2 * partition;
-        st.slices = partition / headSize;
-        const int index = int(stages.size());   // 0 for the first stage
-        st.fftSlice = st.slices == 1 ? 0 : std::min(index, st.slices / 2 - 1);
-        st.ifftSlice = st.slices == 1 ? 0 : st.slices - std::max(1, index);
+        const int end = std::min(nextPartition > partition ? 2 * nextPartition : length, length);
+        const int parts = std::max(1, (end - offset + partition - 1) / partition);
+        out.push_back({ partition, offset, parts });
+        offset += parts * partition;
+        partition = nextPartition;
+    }
+    return out;
+}
+
+void Convolver::prepareLayout(int len) {
+    layoutLength = std::max(1, len);
+    headHistory.assign(2 * headSize, 0.0f);
+    stages.clear();
+    for (const auto& l : layoutFor(layoutLength)) {
+        Stage st;
+        st.index = int(stages.size());
+        st.partition = l.partition;
+        st.offset = l.offset;
+        st.parts = l.parts;
+        st.fftSize = 2 * l.partition;
+        st.slices = l.partition / headSize;
+        st.fftSlice = st.slices == 1 ? 0 : std::min(st.index, st.slices / 2 - 1);
+        st.ifftSlice = st.slices == 1 ? 0 : st.slices - std::max(1, st.index);
         st.fft = std::make_unique<juce::dsp::FFT>(log2i(st.fftSize));
         const std::size_t bins = std::size_t(st.fftSize + 2);
-        st.filters.assign(bins * std::size_t(st.parts), 0.0f);
         st.fdl.assign(bins * std::size_t(st.parts), 0.0f);
         st.frame.assign(std::size_t(2 * st.fftSize), 0.0f);
         st.acc.assign(bins, 0.0f);
-        // Each partition's spectrum (zero-padded to 2P). JUCE's inverse real FFT divides by the
-        // size, so the filters stay unscaled.
-        std::vector<float> work(std::size_t(2 * st.fftSize));
-        for (int k = 0; k < st.parts; ++k) {
-            std::fill(work.begin(), work.end(), 0.0f);
-            const int a = offset + k * partition;
-            for (int i = 0; i < partition && a + i < length; ++i) work[std::size_t(i)] = h[std::size_t(a + i)];
-            st.fft->performRealOnlyForwardTransform(work.data(), true);
-            std::memcpy(&st.filters[bins * std::size_t(k)], work.data(), bins * sizeof(float));
-        }
-        offset += st.parts * partition;
+        st.gains.assign(std::size_t(st.parts), 1.0f);
         stages.push_back(std::move(st));
-        partition = nextPartition;
     }
-
     const int maxP = stages.empty() ? headSize : stages.back().partition;
     const int ringIn = ceilPow2(2 * maxP + 8 * headSize);   // + the FFT slice's lag
     const int ringOut = ceilPow2(4 * maxP + 2 * headSize);
@@ -76,7 +62,87 @@ void Convolver::load(const float* ir, int len, double sampleRate, double maxSeco
     outRing.assign(std::size_t(ringOut), 0.0f);
     inMask = ringIn - 1;
     outMask = ringOut - 1;
+    spectra = nullptr;
     reset();
+}
+
+std::unique_ptr<ConvolverSpectra> Convolver::analyse(const float* ir, int len, int layoutLen) {
+    auto sp = std::make_unique<ConvolverSpectra>();
+    sp->layoutLength = std::max(1, layoutLen);
+    sp->length = std::max(1, std::min(len, sp->layoutLength));
+    const int length = sp->length;
+    sp->head.assign(headSize, 0.0f);
+    for (int i = 0; i < std::min(headSize, length); ++i) sp->head[std::size_t(headSize - 1 - i)] = ir[i];
+    for (const auto& l : layoutFor(sp->layoutLength)) {
+        const int fftSize = 2 * l.partition;
+        juce::dsp::FFT fft(log2i(fftSize));
+        const std::size_t bins = std::size_t(fftSize + 2);
+        std::vector<float> filters(bins * std::size_t(l.parts), 0.0f), work(std::size_t(2 * fftSize));
+        // Each partition's spectrum (zero-padded to 2P). JUCE's inverse real FFT divides by the
+        // size, so the filters stay unscaled.
+        for (int k = 0; k < l.parts; ++k) {
+            const int a = l.offset + k * l.partition;
+            if (a >= length) break;
+            std::fill(work.begin(), work.end(), 0.0f);
+            for (int i = 0; i < l.partition && a + i < length; ++i) work[std::size_t(i)] = ir[a + i];
+            fft.performRealOnlyForwardTransform(work.data(), true);
+            std::memcpy(&filters[bins * std::size_t(k)], work.data(), bins * sizeof(float));
+        }
+        sp->stages.push_back(std::move(filters));
+    }
+    return sp;
+}
+
+void Convolver::setSpectra(const ConvolverSpectra* s) {
+    spectra = (s != nullptr && s->layoutLength == layoutLength) ? s : nullptr;
+    updateGains();
+    reset();
+}
+
+void Convolver::setLengthCap(double seconds, double sampleRate) {
+    const int cap = std::max(headSize, int(seconds * sampleRate));
+    if (cap == capSamples) return;
+    capSamples = cap;
+    updateGains();
+}
+
+void Convolver::setDecayShape(double k, double sampleRate) {
+    const double perSample = k / sampleRate;
+    if (std::abs(perSample - decayK) < 1e-12) return;
+    decayK = perSample;
+    updateGains();
+}
+
+void Convolver::updateGains() {
+    const int len = spectra == nullptr ? 0 : std::min(spectra->length, capSamples);
+    const bool capped = spectra != nullptr && capSamples < spectra->length;
+    const double fadeStart = capped ? 0.8 * capSamples : 1e30;
+    for (auto& st : stages)
+        for (int k = 0; k < st.parts; ++k) {
+            const int a = st.offset + k * st.partition;
+            float g = a < len ? 1.0f : 0.0f;
+            if (g > 0.0f && a + st.partition / 2 > fadeStart) {
+                const double x = std::min(1.0, (a + st.partition / 2 - fadeStart) / (capSamples - fadeStart));
+                g = float(0.5 + 0.5 * std::cos(3.141592653589793 * x));
+            }
+            if (g > 0.0f && decayK != 0.0) g *= float(std::exp(-decayK * double(a + st.partition / 2)));
+            st.gains[std::size_t(k)] = g;
+        }
+    for (auto& st : stages) st.active = std::any_of(st.gains.begin(), st.gains.end(), [](float g) { return g > 0.0f; });
+}
+
+void Convolver::load(const float* ir, int len, double sampleRate, double maxSeconds) {
+    const int length = std::max(1, std::min(len, int(maxSeconds * sampleRate)));
+    std::vector<float> h(ir, ir + std::min(len, length));
+    h.resize(std::size_t(length), 0.0f);
+    if (len > length) {   // capped: fade out over the last 5 %
+        const int fade = std::max(1, length / 20);
+        for (int i = 0; i < fade; ++i) h[std::size_t(length - fade + i)] *= 0.5f + 0.5f * std::cos(3.14159265f * float(i) / float(fade));
+    }
+    own = analyse(h.data(), length, length);
+    prepareLayout(length);
+    capSamples = 1 << 30;
+    setSpectra(own.get());
 }
 
 void Convolver::reset() {
@@ -97,13 +163,16 @@ void Convolver::reset() {
 void Convolver::mac(Stage& st, int from, int to) {
     const std::size_t bins = std::size_t(st.fftSize + 2);
     float* acc = st.acc.data();
+    const auto& filters = spectra->stages[std::size_t(st.index)];
     for (int k = from; k < to; ++k) {
+        const float g = st.gains[std::size_t(k)];
+        if (g == 0.0f) continue;   // past the IR or the Quality cap
         // Partition k multiplies the input spectrum from k frames ago.
         const int slot = (st.fdlHead - k + st.parts) % st.parts;
         const float* x = &st.fdl[bins * std::size_t(slot)];
-        const float* hk = &st.filters[bins * std::size_t(k)];
+        const float* hk = &filters[bins * std::size_t(k)];
         for (std::size_t b = 0; b < bins; b += 2) {
-            const float xr = x[b], xi = x[b + 1], hr = hk[b], hi = hk[b + 1];
+            const float xr = x[b], xi = x[b + 1], hr = g * hk[b], hi = g * hk[b + 1];
             acc[b] += xr * hr - xi * hi;
             acc[b + 1] += xr * hi + xi * hr;
         }
@@ -117,6 +186,7 @@ void Convolver::mac(Stage& st, int from, int to) {
 // T + offset) - ahead of the reader, since offset >= 2P and ifftSlice < S. Stage s does its FFT
 // in slice s and its inverse FFT in slice S - s, so no two stages' FFTs share a block.
 void Convolver::runSlice(Stage& st, int slice) {
+    if (!st.active) return;   // entirely past the IR or the Quality cap
     const std::size_t bins = std::size_t(st.fftSize + 2);
     const int S = st.slices;
     if (slice == st.fftSlice) {
@@ -165,10 +235,11 @@ void Convolver::runSlice(Stage& st, int slice) {
 }
 
 void Convolver::process(const float* in, float* out, int samples) {
-    if (head.empty()) {
-        if (in != out) std::memcpy(out, in, sizeof(float) * std::size_t(samples));
+    if (spectra == nullptr) {
+        std::fill(out, out + samples, 0.0f);
         return;
     }
+    const float* head = spectra->head.data();
     for (int n = 0; n < samples; ++n) {
         const float x = in[n];
         // Head: direct form against a mirrored history (contiguous headSize window).
@@ -177,7 +248,7 @@ void Convolver::process(const float* in, float* out, int samples) {
         headPos = (headPos + 1) & (headSize - 1);
         const float* w = &headHistory[std::size_t(headPos)];   // oldest .. newest
         float y = 0.0f;
-        for (int i = 0; i < headSize; ++i) y += w[i] * head[std::size_t(i)];
+        for (int i = 0; i < headSize; ++i) y += w[i] * head[i];
         inRing[std::size_t(time & inMask)] = x;
         float& o = outRing[std::size_t(time & outMask)];
         y += o;
