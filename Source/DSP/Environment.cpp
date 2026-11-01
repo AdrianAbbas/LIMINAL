@@ -41,6 +41,9 @@ Profile makeMall() {
     f.grit = 0.35f; f.gainDb = -4.0f;
     p.wetDb = 4.5f;
     p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the chorus-modulator + reverb patch as the atrium's late field (its ~6.3 s fits the
+    // mall's 6-8 s), and its measured modulation as a slow, subtle width.
+    p.capture.ir = captureChorusVerb; p.capture.irDb = -24.8f; p.capture.roomLate = 0.4f; p.capture.widthMix = 0.3f;
     return p;
 }
 Profile makeSchool() {
@@ -57,6 +60,8 @@ Profile makeSchool() {
     // (no echo of its own since the signatures: the lockers and the tape are the school's; discrete slaps are the garage's)
     p.wetDb = -1.0f;
     p.ambienceTrim = 2.24f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the measured tape echo, worn and faint - a hallway remembered.
+    p.capture.tape = 1; p.capture.tapeDb = -14.0f; p.capture.tapeFeedbackDb = -6.0f; p.capture.tapeLowPassHz = 6000.0f;
     return p;
 }
 Profile makeGarage() {
@@ -73,6 +78,8 @@ Profile makeGarage() {
     // (the slap-back off the pillars is the garage's signature now: DSP/Signature)
     p.wetDb = -0.5f;
     p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the dark reverb + delay patch, its tail shortened to ~3 s, under the concrete.
+    p.capture.ir = captureDarkHallShort; p.capture.irDb = -26.7f; p.capture.roomLate = 0.3f;
     return p;
 }
 Profile makePool() {
@@ -89,6 +96,9 @@ Profile makePool() {
     e.leftMs = 151.0f; e.rightMs = 233.0f; e.feedback = 0.35f; e.level = 0.3f; e.lowPassHz = 9500.0f; e.highPassHz = 250.0f;
     p.wetDb = 2.0f;
     p.ambienceTrim = 2.51f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the shimmer patch (static take, ~4.5 s) as the tiled tail, with its own octave
+    // loop kept very low: alive, not moving.
+    p.capture.ir = captureShimmer; p.capture.irDb = -29.2f; p.capture.roomLate = 0.6f; p.capture.shimmerDb = -18.0f;
     return p;
 }
 Profile makeHotel() {
@@ -106,6 +116,8 @@ Profile makeHotel() {
     f.highPassHz = 70.0f; f.lowPassHz = 480.0f; f.steep = true; f.resonanceHz = 165.0f; f.resonanceQ = 1.6f; f.resonanceDb = 6.0f; f.gainDb = -5.0f;
     p.wetDb = -3.0f;
     p.ambienceTrim = 2.82f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the measured tape echo, very faint, through the wall.
+    p.capture.tape = 1; p.capture.tapeDb = -20.0f; p.capture.tapeFeedbackDb = -8.0f; p.capture.tapeLowPassHz = 2400.0f;
     return p;
 }
 Profile makeSubway() {
@@ -122,6 +134,8 @@ Profile makeSubway() {
     // (the echoes down the tunnel are the subway's signature now: DSP/Signature)
     p.wetDb = 1.0f;
     p.ambienceTrim = 2.24f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the measured tape echo at its own feedback: repeats receding down the tunnel, darker each time.
+    p.capture.tape = 1; p.capture.tapeDb = -12.0f; p.capture.tapeLowPassHz = 9000.0f;
     return p;
 }
 Profile makeSupermarket() {
@@ -138,6 +152,8 @@ Profile makeSupermarket() {
     // (the speaker grid and the floor are the supermarket's signature now: DSP/Signature)
     p.wetDb = -1.0f;
     p.ambienceTrim = 1.41f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the measured modulation as a subtle width on the room.
+    p.capture.widthMix = 0.25f;
     return p;
 }
 Profile makeOffice() {
@@ -173,6 +189,8 @@ Profile makeImpossible() {
     p.shimmerSemis = 12.0f;   // (only Unreal feeds the shimmer: the tail climbing an octave)
     p.bloomSeconds = 1.4f;
     p.ambienceTrim = 1.78f;   // the bed: 10-15 dB under the instruments (pool, hotel, impossible room: quieter)
+    // Captures: the dark reverb + delay patch as captured (~6.6 s) - too big for the room, as it should be.
+    p.capture.ir = captureDarkHall; p.capture.irDb = -29.5f; p.capture.roomLate = 0.4f;
     return p;
 }
 const std::array<Profile, placeCount> profiles { makeHospital(), makeMall(), makeSchool(), makeGarage(), makePool(),
@@ -630,7 +648,94 @@ void EnvironmentChain::prepare(double sampleRate) {
     killStep = float(1.0 / (0.03 * sr));
     quietLimit = int(sr);
     evo.prepare(sr);
+    if (bank != nullptr && bank->available()) {   // the captures' state (the spectra are the bank's, shared)
+        capL.prepareLayout(bank->layoutLength());
+        capR.prepareLayout(bank->layoutLength());
+        tapeL.prepare(sr);
+        tapeR.prepare(sr);
+        widthL.prepare(sr);
+        widthR.prepare(sr);
+        octave.prepare(sr);
+        capPrepared = true;
+    } else {
+        capPrepared = false;
+    }
     configure(current, characterNow, 1, evolutionSeedNow);
+}
+
+void EnvironmentChain::setQuality(int q) {
+    quality = q;
+    room.setQuality(q);
+    ambience.setQuality(q);
+    captureDecayNow = -1;
+    updateCaptureDecay();
+}
+
+// The captures follow the room's decay controls like the algorithmic room does: the Character's
+// decay x Scale (x evolution) = d. The captured tail's RT60 becomes RT60 x d (an exponential
+// envelope on its partitions); the tape echo loses (measured dB per repeat) / d.
+void EnvironmentChain::updateCaptureDecay() {
+    const float d = std::clamp(captureCharDecay * captureScale, 0.2f, 4.0f);
+    if (captureDecayNow > 0.0f && std::abs(d / captureDecayNow - 1.0f) < 0.02f) return;
+    captureDecayNow = d;
+    if (captureIr) {   // partition gains only: the captured RT60 x d (lengthening at most 1.5x)
+        const double rt = std::max(0.2, double(bank->rt60(shaped.capture.ir)));
+        const double k = 6.907755 * (1.0 / (rt * std::min(1.5f, d)) - 1.0 / rt);
+        capL.setDecayShape(k, sr);
+        capR.setDecayShape(k, sr);
+        capL.setLengthCap(Convolver::maxSecondsFor(quality), sr);
+        capR.setLengthCap(Convolver::maxSecondsFor(quality), sr);
+    }
+    if (captureTape) {   // no allocation: the darkening filter is re-solved in place
+        auto tp = tapeBase;
+        tp.feedbackDb = std::min(-0.5f, tp.feedbackDb / d);
+        tapeL.configure(tp);
+        tp.echoMs *= 1.04f;
+        tapeR.configure(tp);
+    }
+}
+
+// The captures this place uses (allocation-free: the bank's spectra are swapped in by pointer).
+void EnvironmentChain::configureCaptures() {
+    const auto& c = shaped.capture;
+    const bool have = capPrepared && bank != nullptr && bank->available() && !CaptureBank::disabled();
+    captureIr = have && c.ir >= 0 && bank->spectra(c.ir, 0) != nullptr;
+    if (capPrepared) {
+        capL.setSpectra(captureIr ? bank->spectra(c.ir, 0) : nullptr);
+        capR.setSpectra(captureIr ? bank->spectra(c.ir, 1) : nullptr);
+    }
+    if (captureIr) shaped.room.lateLevel *= c.roomLate;   // the captured tail takes over part of the late field
+    capGain = dbGain(std::isnan(CaptureBank::irLevelOverrideDb()) ? c.irDb : CaptureBank::irLevelOverrideDb());
+    captureShimmer = captureIr && c.shimmerDb > -80.0f;
+    shimmerGain = captureShimmer ? dbGain(c.shimmerDb) : 0.0f;
+    shimmerBack = 0;
+    captureTape = have && c.tape > 0;
+    if (captureTape) {
+        tapeBase = bank->tape();
+        tapeBase.feedbackDb = std::min(-0.5f, tapeBase.feedbackDb + c.tapeFeedbackDb);
+        // (configured in updateCaptureDecay; the right side 4 % later: a stereo image, the same tape)
+        tapeL.reset();
+        tapeR.reset();
+        tapeLpL.setHz(c.tapeLowPassHz, sr);
+        tapeLpR.setHz(c.tapeLowPassHz, sr);
+        tapeLpL.z = tapeLpR.z = 0;
+    }
+    tapeGain = dbGain(c.tapeDb + character(int(current), characterNow).wetDb);   // the Character's wet level, like the room
+    captureWidth = have && c.widthMix > 0.0f;
+    if (captureWidth) {
+        auto mp = bank->mod();
+        mp.mix = 1.0f;
+        mp.feedback = 0.0f;
+        mp.baseMs = 2.0f + mp.depthMs;
+        widthL.reset();
+        widthR.reset();
+        widthL.configure(mp, 0.0);
+        widthR.configure(mp, 0.25);   // a quarter cycle apart: the sides move differently
+    }
+    widthMix = c.widthMix;
+    captureCharDecay = character(int(current), characterNow).decay;
+    captureDecayNow = -1;
+    updateCaptureDecay();
 }
 
 void EnvironmentChain::configure(Place place, int characterIndex, unsigned seed, unsigned evolutionSeed) {
@@ -643,6 +748,7 @@ void EnvironmentChain::configure(Place place, int characterIndex, unsigned seed,
     controlClock = 0;
     wetLive = wetLiveTarget = 1;
     ambienceLive = 1;
+    configureCaptures();
     echo.configure(p->echo);
     if (signature != nullptr) signature->configure(place, characterNow, seed + 31u);
     room.configure(p->room, seed + unsigned(place) * 7919u);
@@ -677,6 +783,8 @@ void EnvironmentChain::setLive(const Live& l) {
     // Scale: the room grows or shrinks (decay and level); evolution moves it a little.
     const float scale = (l.macros.scale - 0.5f) * 2.0f * r.scale;
     room.setDecayScale(std::pow(2.0f, scale + 0.3f * evo.spatial()));
+    captureScale = std::pow(2.0f, scale + 0.3f * evo.spatial());
+    updateCaptureDecay();
     wetLiveTarget = std::pow(10.0f, (4.0f * scale + 1.5f * evo.spatial()) / 20.0f);
     echo.setBoost(0.8f * u * f.echo, 0.3f * u * f.echo, u * f.echoShift);
     shimmerExtra = u * f.shimmer;
@@ -727,14 +835,34 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
             send.r *= g;
         }
         const Stereo echoed = echo.tick({ ebufL[std::size_t(i)], ebufR[std::size_t(i)] }, 1.0f);
-        const Stereo wet = room.tick({ send.l + 0.5f * echoed.l + amb.send.l * ag + shimmerIn, send.r + 0.5f * echoed.r + amb.send.r * ag + shimmerIn });
+        Stereo tape { 0.0f, 0.0f };
+        if (captureTape) {   // the measured tape echo, fed like the place's echo
+            const float in = 0.5f * (send.l + send.r) * tapeGain;
+            tape = { tapeLpL.lp(tapeL.tick(in)), tapeLpR.lp(tapeR.tick(in)) };
+        }
+        Stereo wet = room.tick({ send.l + 0.5f * (echoed.l + tape.l) + amb.send.l * ag + shimmerIn, send.r + 0.5f * (echoed.r + tape.r) + amb.send.r * ag + shimmerIn });
+        if (captureIr) {   // the captured tail (zero latency, one sample at a time)
+            float il = send.l + 0.5f * (echoed.l + tape.l), ir = send.r + 0.5f * (echoed.r + tape.r);
+            float cl = 0.0f, cr = 0.0f;
+            capL.process(&il, &cl, 1);
+            capR.process(&ir, &cr, 1);
+            // The shimmer: one octave up, on the captured tail, feed-forward (a loop around a long
+            // IR can run away at its spectral peaks; this can't).
+            const float up = captureShimmer ? shimmerGain * octave.tick(0.5f * (cl + cr)) : 0.0f;
+            wet.l += capGain * (cl + up);
+            wet.r += capGain * (cr + up);
+        }
+        if (captureWidth) {
+            wet.l = (1.0f - widthMix) * wet.l + widthMix * widthL.tick(wet.l);
+            wet.r = (1.0f - widthMix) * wet.r + widthMix * widthR.tick(wet.r);
+        }
         if (p->shimmerFeedback + shimmerExtra > 0.0f)   // the tail, shifted up, fed back in: it climbs as it fades
             shimmerIn = std::min(0.6f, p->shimmerFeedback + shimmerExtra) * amount * shimmer.tick(0.5f * (wet.l + wet.r));
         const float sp = space[i];
         const float keep = 1.0f - 0.45f * sp;
         const float ambL = amb.dry.l * ag, ambR = amb.dry.r * ag;
-        const float l = (keep * ambL + echoed.l + sp * wetGain * wetLive * wet.l) * outFade;
-        const float r = (keep * ambR + echoed.r + sp * wetGain * wetLive * wet.r) * outFade;
+        const float l = (keep * ambL + echoed.l + tape.l + sp * wetGain * wetLive * wet.l) * outFade;
+        const float r = (keep * ambR + echoed.r + tape.r + sp * wetGain * wetLive * wet.r) * outFade;
         outL[i] += l + signatureFade * outFade * (sigL[std::size_t(i)] - dryL[i]);
         outR[i] += r + signatureFade * outFade * (sigR[std::size_t(i)] - dryR[i]);
         ambienceOut[i] += 0.5f * (ambL * ambL + ambR * ambR);

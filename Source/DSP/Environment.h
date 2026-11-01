@@ -17,6 +17,7 @@
 // while the new one fades in. Buffers are allocated in prepare(); switching never
 // allocates.
 #include "DSP/Ambience.h"
+#include "DSP/Captures.h"
 #include "DSP/Characters.h"
 #include "DSP/Filters.h"
 #include "DSP/Space.h"
@@ -77,6 +78,19 @@ struct Profile {
     float ambienceTrim = 1; // the bed's overall level
     float shimmerSemis = 0, shimmerFeedback = 0;   // pitch-shifted room output fed back into the room
     float bloomSeconds = 0;   // the impossible room: the tail swells after the note (seconds to grow), 0 = off
+    // The developer's effect captures (pedal-capture milestone; used only when the build has
+    // them - DSP/Captures). Each room's own room/echo/signature stays; these add to it.
+    struct Capture {
+        int ir = captureNone;      // a captured response for the late tail (CaptureIr)
+        float irDb = -60;          // its level (the IRs have unit energy) into the wet, before Space
+        float roomLate = 1;        // the algorithmic room's late tail x this when the IR is in (reflections kept)
+        float shimmerDb = -90;     // octave-up loop around the captured tail (the shimmer pedal's own, measured)
+        int tape = 0;              // 1: the measured tape echo
+        float tapeDb = -90;        // its send level
+        float tapeFeedbackDb = 0;  // added to the measured feedback per repeat (fewer repeats in a small room)
+        float tapeLowPassHz = 20000;   // heard through the room (the hotel's wall)
+        float widthMix = 0;        // the measured modulation as a subtle stereo width on the wet
+    } capture;
 };
 
 const Profile& profile(Place);
@@ -199,7 +213,8 @@ public:
         float ambienceGain = 1;   // Presence: the place's sounds recede as the instruments come near
     };
     void setLive(const Live&);
-    void setQuality(int q) { room.setQuality(q); ambience.setQuality(q); }
+    void setQuality(int q);
+    void setCaptures(const CaptureBank* b) { bank = b; }   // before prepare()
     void resetEvolution();
     void resetEvolution(unsigned seed) { evolutionSeedNow = seed; resetEvolution(); }
     const Evolution& evolution() const { return evo; }
@@ -246,6 +261,20 @@ private:
     float outFade = 1, killStep = 0.001f;
     std::vector<float> sbufL, sbufR, ebufL, ebufR, sigL, sigR, sigSendL, sigSendR;
     std::unique_ptr<Signature> signature;
+    // Captures (pedal-capture milestone).
+    const CaptureBank* bank = nullptr;
+    void configureCaptures();
+    void updateCaptureDecay();   // Character decay x Scale -> the tail's length and the tape's repeats (real-time safe)
+    TapeEchoProfile tapeBase;
+    float captureCharDecay = 1, captureScale = 1, captureDecayNow = -1;
+    bool capPrepared = false, captureIr = false, captureTape = false, captureWidth = false, captureShimmer = false;
+    Convolver capL, capR;
+    TapeEcho tapeL, tapeR;
+    ModVoice widthL, widthR;
+    OctaveShifter octave;
+    OnePole tapeLpL, tapeLpR;
+    float capGain = 0, tapeGain = 0, shimmerGain = 0, shimmerBack = 0, widthMix = 0;
+    int quality = 1;
 };
 
 // Two chains and the cross-fade between them.
@@ -256,6 +285,7 @@ public:
     void setLive(const EnvironmentChain::Live&);
     void maintain();   // call on a fixed control grid (between process calls)
     void setQuality(int q) { for (auto& c : chains) c.setQuality(q); }
+    void setCaptures(const CaptureBank* b) { for (auto& c : chains) c.setCaptures(b); }
     void resetEvolution() { chains[std::size_t(active)].resetEvolution(evolutionSeed); }
     void setEvolutionSeed(unsigned s) { evolutionSeed = s; }
     const EnvironmentChain& current() const { return chains[std::size_t(active)]; }

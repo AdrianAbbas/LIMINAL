@@ -70,7 +70,36 @@ void testConvolver(Suite& s) {
             lens << juce::String(c.irLength() / rate, 2) << " s ";
             ok = ok && std::abs(c.irLength() / rate - dsp::Convolver::maxSecondsFor(q)) < 0.01;
         }
-        s.check(ok, "Quality scales the IR length (Eco 1.5 s, Standard 3.5 s, High 8 s)", lens.toStdString());
+        s.check(ok, "Quality scales the IR length (Eco 2 s, Standard 6 s, High 8 s)", lens.toStdString());
+    }
+    {   // 3b. Shared spectra + the real-time length cap: two convolvers on one IR's spectra equal
+        // a private one; a 1 s cap fades the tail (nothing after 1 s, the first 0.8 s untouched).
+        const auto h = testIr(3.0, 2.0, 9);
+        const int layout = int(rate * 4.0);
+        auto spectra = dsp::Convolver::analyse(h.data(), int(h.size()), layout);
+        dsp::Convolver a, b, ref;
+        a.prepareLayout(layout);
+        b.prepareLayout(layout);
+        ref.load(h.data(), int(h.size()), rate, 10.0);
+        a.setSpectra(spectra.get());
+        b.setSpectra(spectra.get());
+        std::vector<float> x(std::size_t(rate * 3.5), 0.0f), ya(x.size()), yb(x.size()), yr(x.size());
+        x[0] = 1.0f;
+        a.process(x.data(), ya.data(), int(x.size()));
+        ref.process(x.data(), yr.data(), int(x.size()));
+        double d = 0;
+        for (std::size_t i = 0; i < h.size(); ++i) d = std::max(d, double(std::abs(ya[i] - yr[i])));
+        allocationProbe::calls = 0;
+        allocationProbe::enabled = true;
+        b.setLengthCap(1.0, rate);
+        b.process(x.data(), yb.data(), int(x.size()));
+        allocationProbe::enabled = false;
+        double after = 0, early = 0;
+        for (std::size_t i = std::size_t(rate * 1.0) + 8192; i < yb.size(); ++i) after = std::max(after, double(std::abs(yb[i])));
+        for (std::size_t i = 0; i < std::size_t(rate * 0.75); ++i) early = std::max(early, double(std::abs(yb[i] - h[i])));
+        s.check(d < 1e-5 && after < 1e-9 && early < 1e-5 && allocationProbe::calls == 0,
+                "shared spectra play exactly; the Quality cap fades the tail in real time without allocating",
+                "shared vs own " + juce::String(d, 8).toStdString() + ", after the cap " + juce::String(after, 10).toStdString() + ", first 0.75 s " + juce::String(early, 8).toStdString());
     }
     {   // 4. Real-time safety and CPU (stereo, Standard, 3.5 s IR, 128-sample host blocks).
         dsp::StereoConvolver sc;
@@ -95,7 +124,7 @@ void testConvolver(Suite& s) {
         allocationProbe::enabled = false;
         s.check(allocationProbe::calls == 0, "convolution never allocates on the audio thread", std::to_string(allocationProbe::calls) + " allocations");
         const double avg = total / blocks, budget = 128.0 / rate * 1e6;
-        s.check(avg / budget < 0.05, "stereo 3.5 s IR costs under 5 % of one core here (Standard)",
+        s.check(avg / budget < 0.05, "stereo 6 s IR costs under 5 % of one core here (Standard)",
                 juce::String(100.0 * avg / budget, 2).toStdString() + " % average, " + juce::String(sc.opsPerSample(), 0).toStdString() + " ops/sample");
         const double phaseWorst = *std::max_element(byPhase.begin(), byPhase.end());
         s.report(phaseWorst / budget < 0.25, "no structural CPU spikes: the costliest block position in the stage cycle (averaged) uses < 25 % of its budget",
@@ -195,6 +224,26 @@ int runCaptureModel(const juce::String& model, const juce::File& in, const juce:
     juce::AudioBuffer<float> buf(int(rd->numChannels), int(rd->lengthInSamples));
     rd->read(&buf, 0, buf.getNumSamples(), 0, true, true);
     juce::AudioBuffer<float> res(2, buf.getNumSamples());
+    if (model.startsWith("tape-measured:")) {   // the measured profile from prepare.py's profiles.json; dry + wet at wetDb
+        const auto json = juce::JSON::parse(juce::File(model.fromFirstOccurrenceOf(":", false, false).upToLastOccurrenceOf("@", false, false)));
+        const float wetDb = model.fromLastOccurrenceOf("@", false, false).getFloatValue();
+        const auto t = json["tape"];
+        dsp::TapeEchoProfile p;
+        p.echoMs = float(double(t["echoMs"])); p.feedbackDb = float(double(t["feedbackDb"])); p.darkeningDb = float(double(t["darkeningDb"]));
+        p.wowHz = float(double(t["wowHz"])); p.wowCents = float(double(t["wowCents"])); p.flutterHz = float(double(t["flutterHz"]));
+        p.flutterCents = float(double(t["flutterCents"])); p.drive = float(double(t["drive"]));
+        dsp::TapeEcho te;
+        te.prepare(rd->sampleRate);
+        te.configure(p);
+        te.reset();
+        const float g = std::pow(10.0f, wetDb / 20.0f);
+        for (int i = 0; i < buf.getNumSamples(); ++i) {
+            const float x = buf.getSample(0, i);
+            const float y = x + g * te.tick(x);
+            res.setSample(0, i, y);
+            res.setSample(1, i, y);
+        }
+    } else
     if (model == "tape" || model == "tape-static" || model == "tape-linear") {
         dsp::TapeEcho te;
         te.prepare(rd->sampleRate);
@@ -217,5 +266,183 @@ int runCaptureModel(const juce::String& model, const juce::File& in, const juce:
     std::unique_ptr<juce::AudioFormatWriter> w(wav.createWriterFor(new juce::FileOutputStream(out), rd->sampleRate, 2, 32, {}, 0));
     if (w == nullptr) return 3;
     w->writeFromAudioSampleBuffer(res, 0, res.getNumSamples());
+    return 0;
+}
+
+// --capture-levels: each room's output for the standard phrase, captures off vs on (level matching).
+double rmsDbOf(const Signal& s, std::size_t from, std::size_t to) {
+    double e = 0;
+    to = std::min(to, s.first.size());
+    for (std::size_t i = from; i < to; ++i) e += 0.5 * (double(s.first[i]) * s.first[i] + double(s.second[i]) * s.second[i]);
+    return 10.0 * std::log10(e / double(std::max<std::size_t>(1, to - from)) + 1e-20);
+}
+
+std::array<Signal, 2> placeWithAndWithout(int place, double seconds = 10.0) {
+    std::array<Signal, 2> out;
+    for (int on = 0; on < 2; ++on) {
+        dsp::CaptureBank::disabled() = on == 0;
+        auto rig = rigIn(place);
+        rig->set(params::ambience, params::minDb);
+        rig->render(0.5);
+        out[std::size_t(on)] = rig->render(seconds, standardPhrase(rig->time + 0.3));
+    }
+    dsp::CaptureBank::disabled() = false;
+    return out;
+}
+
+double peakOf(const Signal& s) {
+    double p = 0;
+    for (std::size_t i = 0; i < s.first.size(); ++i) p = std::max({ p, double(std::abs(s.first[i])), double(std::abs(s.second[i])) });
+    return p;
+}
+
+int captureLevels() {
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        const auto s = placeWithAndWithout(place);
+        const std::size_t n = s[0].first.size(), tail = n - std::size_t(48000 * 3);
+        std::cout << placeNames[place] << ": total " << juce::String(rmsDbOf(s[1], 0, n) - rmsDbOf(s[0], 0, n), 2)
+                  << " dB, last 3 s " << juce::String(rmsDbOf(s[1], tail, n) - rmsDbOf(s[0], tail, n), 2) << " dB (off "
+                  << juce::String(rmsDbOf(s[0], 0, n), 1) << " dBFS; last 3 s off/on " << juce::String(rmsDbOf(s[0], tail, n), 1) << " / "
+                  << juce::String(rmsDbOf(s[1], tail, n), 1) << "; peak on " << juce::String(20.0 * std::log10(peakOf(s[1]) + 1e-12), 1) << " dBFS)\n";
+    }
+    return 0;
+}
+
+// --capture-match: the IR level that keeps each IR room's total output for the standard phrase
+// where it was (energies add: off = base + g^2 (one - base)).
+int captureMatch() {
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        if (dsp::profile(dsp::Place(place)).capture.ir < 0) continue;
+        const auto off = placeWithAndWithout(place)[0];
+        dsp::CaptureBank::irLevelOverrideDb() = -200.0f;
+        const auto base = placeWithAndWithout(place)[1];
+        dsp::CaptureBank::irLevelOverrideDb() = 0.0f;
+        const auto one = placeWithAndWithout(place)[1];
+        dsp::CaptureBank::irLevelOverrideDb() = std::numeric_limits<float>::quiet_NaN();
+        const std::size_t n = off.first.size();
+        const double eo = std::pow(10.0, rmsDbOf(off, 0, n) / 10), eb = std::pow(10.0, rmsDbOf(base, 0, n) / 10), e1 = std::pow(10.0, rmsDbOf(one, 0, n) / 10);
+        const double g2 = (eo - eb) / std::max(1e-30, e1 - eb);
+        std::cout << placeNames[place] << ": base (IR muted) " << juce::String(10 * std::log10(eb / eo), 2) << " dB vs before; IR level for a match "
+                  << (g2 > 0 ? juce::String(10 * std::log10(g2), 1) + " dB" : juce::String("none (the room alone is already louder)")) << "\n";
+    }
+    return 0;
+}
+
+// Group `captures`: the developer's effect captures in the rooms (only when the build has them).
+void testCaptures(Suite& s) {
+    s.section("captures in the rooms (pedal-capture milestone)");
+    {
+        LiminalProcessor p;
+        p.setRateAndBufferSizeDetails(48000.0, 512);
+        p.prepareToPlay(48000.0, 512);
+#if LIMINAL_HAS_CAPTURES
+        s.check(true, "this build embeds the effect captures");
+#else
+        s.report(false, "this build embeds the effect captures (the SAMPLES_TOKEN secret is needed in CI) - the rest of this group is skipped");
+        return;
+#endif
+    }
+    // 1. Unchanged rooms are bit-exact; the changed ones change; every room keeps its level.
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        const auto& c = dsp::profile(dsp::Place(place)).capture;
+        const bool uses = c.ir >= 0 || c.tape > 0 || c.widthMix > 0.0f;
+        const auto both = placeWithAndWithout(place);
+        const std::size_t n = both[0].first.size();
+        const double diff = maxDiff(both[0], both[1]);
+        const double level = rmsDbOf(both[1], 0, n) - rmsDbOf(both[0], 0, n);
+        if (!uses) {
+            s.check(diff == 0.0, std::string(placeNames[place]) + ": no capture, exactly as before");
+            continue;
+        }
+        s.check(diff > 1e-4, std::string(placeNames[place]) + ": its capture is audible", "max difference " + juce::String(diff, 4).toStdString());
+        s.check(std::abs(level) < 1.5, std::string(placeNames[place]) + ": level-matched to before (standard phrase, +/- 1.5 dB)", juce::String(level, 2).toStdString() + " dB");
+    }
+    // 2. Stable tails: 30 s after the phrase, every capture room has died away (no runaway loops).
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        auto rig = rigIn(place);
+        rig->set(params::ambience, params::minDb);
+        rig->render(10.0, standardPhrase(rig->time + 0.3));
+        const auto mid = rig->render(5.0);
+        rig->render(20.0);
+        const auto late = rig->render(5.0);
+        const double a = rmsDbOf(mid, 0, mid.first.size()), b = rmsDbOf(late, 0, late.first.size());
+        s.check(b < a - 6.0 || b < -90.0, std::string(placeNames[place]) + ": the tail dies away (no runaway)", juce::String(a, 1).toStdString() + " -> " + juce::String(b, 1).toStdString() + " dBFS");
+    }
+    // 3. Switching through every place and every Quality on the audio thread never allocates.
+    {
+        Rig rig;
+        rig.render(0.5, { { rig.time + 0.01, on(60, 90) } });
+        juce::AudioBuffer<float> buffer(2, 512);
+        juce::MidiBuffer none;
+        allocationProbe::calls = 0;
+        allocationProbe::enabled = true;
+        for (int place = 0; place < dsp::placeCount; ++place)
+            for (int q = 0; q < 3; ++q) {
+                rig.p->parameters.getParameter(params::environment)->setValueNotifyingHost(rig.p->parameters.getParameter(params::environment)->convertTo0to1(float(place)));
+                rig.p->parameters.getParameter(params::quality)->setValueNotifyingHost(rig.p->parameters.getParameter(params::quality)->convertTo0to1(float(q)));
+                for (int b = 0; b < 40; ++b) rig.p->processBlock(buffer, none);
+            }
+        allocationProbe::enabled = false;
+        s.check(allocationProbe::calls == 0, "switching every place and Quality with the captures in never allocates", std::to_string(allocationProbe::calls) + " allocations");
+    }
+    // 4. CPU in each capture room, before and after (report-only), 16 notes sounding.
+    for (int place : { 1, 2, 3, 4, 6, 7, 9 }) {
+        double pct[2] {};
+        for (int on_ = 0; on_ < 2; ++on_) {
+            dsp::CaptureBank::disabled() = on_ == 0;
+            auto rig = rigIn(place);
+            std::vector<Event> ev;
+            for (int i = 0; i < 16; ++i) ev.push_back({ rig->time + 0.01, on(36 + 3 * i, 90) });
+            rig->render(0.2, ev);
+            juce::AudioBuffer<float> buffer(2, 512);
+            juce::MidiBuffer none;
+            const auto t0 = std::chrono::steady_clock::now();
+            const int blocks = int(5.0 * 48000.0 / 512.0);
+            for (int b = 0; b < blocks; ++b) rig->p->processBlock(buffer, none);
+            pct[on_] = 100.0 * std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() / 5.0;
+        }
+        dsp::CaptureBank::disabled() = false;
+        s.metric(std::string(placeNames[place]) + ": CPU % of one core, before -> after (16 notes, Standard)", pct[1], (" % (before " + juce::String(pct[0], 1) + " %)").toRawUTF8());
+    }
+}
+
+// --render-captures f.wav: the same piano phrase through all ten rooms, before (captures off) and
+// after (captures in): f-before.wav, f-after.wav, f-ab.wav (each room: before, then after) and a
+// cue sheet saying which capture each room uses.
+int renderCaptures(const juce::String& path) {
+    const char* what[] { "(no capture)", "chorus-modulator + reverb tail, measured modulation as width", "measured tape echo, worn and faint",
+                         "dark reverb + delay tail, shortened to ~3 s", "shimmer (static take) tail + its octave, low", "measured tape echo, faint, through the wall",
+                         "measured tape echo, receding", "measured modulation as width", "(no capture)", "dark reverb + delay tail, as captured" };
+    Signal before, after, ab;
+    juce::String cues = "The same piano phrase through all ten rooms, 12 s each + 1 s silence. Before = previous sound, after = with the captures.\n";
+    const auto add = [](Signal& to, const Signal& part) {
+        to.first.insert(to.first.end(), part.first.begin(), part.first.end());
+        to.second.insert(to.second.end(), part.second.begin(), part.second.end());
+        to.first.insert(to.first.end(), 48000, 0.0f);
+        to.second.insert(to.second.end(), 48000, 0.0f);
+    };
+    for (int place = 0; place < dsp::placeCount; ++place) {
+        std::array<Signal, 2> parts;
+        for (int on_ = 0; on_ < 2; ++on_) {
+            dsp::CaptureBank::disabled() = on_ == 0;
+            auto rig = rigIn(place);
+            rig->render(2.5);   // the bed is in (default Ambience)
+            parts[std::size_t(on_)] = rig->render(12.0, standardPhrase(rig->time + 0.3));
+        }
+        dsp::CaptureBank::disabled() = false;
+        const std::size_t n = parts[0].first.size();
+        cues << juce::String(double(before.first.size()) / 48000.0, 0) << " s (before/after files), " << juce::String(double(ab.first.size()) / 48000.0, 0)
+             << " s (A/B file)  " << placeNames[place] << ": " << what[place] << "  [level after - before "
+             << juce::String(rmsDbOf(parts[1], 0, n) - rmsDbOf(parts[0], 0, n), 2) << " dB]\n";
+        add(before, parts[0]);
+        add(after, parts[1]);
+        add(ab, parts[0]);
+        add(ab, parts[1]);
+    }
+    const juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+    const auto sib = [&](const char* suffix, const char* ext) { return file.getSiblingFile(file.getFileNameWithoutExtension() + suffix + ext); };
+    if (!writeAudio(before, sib("-before", ".wav")) || !writeAudio(after, sib("-after", ".wav")) || !writeAudio(ab, sib("-ab", ".wav"))) return 1;
+    sib("-cues", ".txt").replaceWithText(cues);
+    std::cout << cues;
     return 0;
 }

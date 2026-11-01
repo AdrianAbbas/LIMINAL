@@ -148,6 +148,7 @@ private:
     dsp::HollowDrone drone;
     std::atomic<float>* droneSettings[7] {};
     std::atomic<float>* soloParam = nullptr;
+    dsp::CaptureBank captures;   // the developer's effect captures (built in prepareToPlay)
     dsp::Environments environments;
     std::atomic<float>* environmentChoice = nullptr;
     std::atomic<float>* environmentAmount = nullptr;

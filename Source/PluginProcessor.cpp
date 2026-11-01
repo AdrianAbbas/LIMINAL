@@ -208,6 +208,8 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     environments.setAmount(environmentAmount->load());
     samplePosition = 0;
     lastSeed = evolutionSeed->load();
+    captures.build(sampleRate);
+    environments.setCaptures(&captures);
     environments.prepare(sampleRate, selectedPlace(), selectedCharacter(), unsigned(lastSeed));
     applyQuality();
     juce::ignoreUnused(samplesPerBlock);

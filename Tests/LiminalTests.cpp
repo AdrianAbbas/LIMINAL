@@ -1157,6 +1157,9 @@ int main(int argc, char** argv) {
         else if (arg == "--only" && i + 1 < argc) only = juce::StringArray::fromTokens(argv[++i], ",", "");
         else if (arg == "--render" && i + 1 < argc) return renderPhrase(argv[++i]);
         else if (arg == "--render-places" && i + 1 < argc) return renderPlaces(argv[++i]);
+        else if (arg == "--capture-levels") return captureLevels();
+        else if (arg == "--capture-match") return captureMatch();
+        else if (arg == "--render-captures" && i + 1 < argc) return renderCaptures(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
             const auto cwd = juce::File::getCurrentWorkingDirectory();
@@ -1178,6 +1181,8 @@ int main(int argc, char** argv) {
             return 0;
         }
     }
+    // LIMINAL_NO_CAPTURES=1: the rooms' previous sound (baseline comparisons).
+    if (std::getenv("LIMINAL_NO_CAPTURES") != nullptr) dsp::CaptureBank::disabled() = true;
     const auto run = [&](const char* name) { return only.isEmpty() || only.contains(name); };
     Suite s;
     if (run("parameters")) testParameters(s);
@@ -1212,6 +1217,7 @@ int main(int argc, char** argv) {
     if (run("vhs")) testVhs(s);
     if (run("cpu")) testEditorCpu(s);
     if (run("convolver")) testConvolver(s);
+    if (run("captures")) testCaptures(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }
