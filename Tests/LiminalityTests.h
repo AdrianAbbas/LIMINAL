@@ -678,6 +678,33 @@ void testLiminality(Suite& s) {
                 "Environment Amount 0: no nudge; LIMINALITY 0 %: clean in every room; 100 %: 2.5x (deeply unsettling)");
     }
 
+    s.section("liminality: musical (the same loudness, near the note)");
+    {   // it changes the character, not the level: the fragile piano phrase at 0 / 40 / 100 %
+        const auto level = [&](int place, float macro) {
+            std::unique_ptr<Rig> rig;
+            if (place < 0) {
+                rig = dryRig();
+            } else {
+                rig = rigIn(place);
+                rig->set(params::ambience, params::minDb);
+            }
+            rig->set(params::liminality, macro);
+            rig->render(0.3);
+            return toDb(rms(rig->render(11.0, fragilePhrase(rig->time + 0.2))));
+        };
+        const double clean = level(-1, 0.0f), mid = level(-1, 0.4f) - clean, full = level(-1, 1.0f) - clean;
+        s.check(std::abs(mid) < 1.5 && std::abs(full) < 1.5, "the dry piano phrase keeps its loudness at LIMINALITY 40 % and 100 % (+/- 1.5 dB)",
+                num(mid, 2) + " / " + num(full, 2) + " dB");
+        std::string rooms;
+        bool within = true;
+        for (const int place : { 2, 5, 9 }) {
+            const double base = level(place, 0.0f), at40 = level(place, 0.4f) - base, at100 = level(place, 1.0f) - base;
+            rooms += std::string(placeNames[place]) + " " + num(at40, 1) + "/" + num(at100, 1) + " ";
+            within = within && std::abs(at40) < 3.0 && std::abs(at100) < 3.0;
+        }
+        s.report(within, "in the school, hotel and impossible room too (+/- 3 dB at 40 / 100 %)", rooms + "dB");
+    }
+
     s.section("liminality: determinism, clicks, real time, CPU");
     {   // two instances, all six instruments, macro 100 %
         auto a = dryRig(), b = dryRig();

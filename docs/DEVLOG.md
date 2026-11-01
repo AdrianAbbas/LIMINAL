@@ -62,10 +62,10 @@ the checklist below.
   - [x] Part 3 — IRs (3) + measurements + tape/modulation profiles (`tools/captures/prepare.py`); emulation vs reamped phrases (`compare_models.py`); convolver: shared spectra, real-time Quality cap + decay reshaping; `Source/DSP/Captures` (bank built in prepareToPlay) — push `[skip ci]`
   - [x] Part 4 — rooms: mall, school, garage, pool, hotel, subway, supermarket, impossible room use captures (hospital, office unchanged, bit-exact); level-matched within +/-0.8 dB; follows Character decay/Scale/wet; test group `captures`; CI fetches + prepares the captures with `SAMPLES_TOKEN` — push `[skip ci]`
   - [x] Part 5 — listening render before/after/A-B (`--render-captures`, CI test-logs artifact); CPU; plugin size; DEVLOG; final push without `[skip ci]`
-- [ ] **Liminality — unstable, detuned, half-remembered instruments** (2026-11-01; section at the end)
+- [x] **Liminality — unstable, detuned, half-remembered instruments** (2026-11-01; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] Part 1 — shared stage `DSP/Liminality` (note side through a small hook in `DSP/Instrument.h`, audio side before Distance), ten controls per instrument + the LIMINALITY macro (61 parameters), room/Character nudges, processor routing (timing queue, host-timeline clock, reseed on relocation), test group `liminality` — push `[skip ci]`
   - [x] Part 2 — editor: the big LIMINALITY knob on the scene's lower left, a SOUND / LIMINALITY switch on each instrument's page (its ten controls), snapshots `docs/snapshots/liminality-*.jpg` — push `[skip ci]`
-  - [ ] Part 3 — listening render (piano phrase at 0/40/100 %, dry + three rooms), CPU, DEVLOG section + handoff; final push **without** `[skip ci]`
+  - [x] Part 3 — level kept (Wear's level match, Unevenness make-up), listening render `--render-liminality` (piano phrase at 0/40/100 %, dry + school, hotel, impossible room), CPU, DEVLOG section + handoff; final push **without** `[skip ci]`
 
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
@@ -1628,3 +1628,107 @@ The upload (Samples @ `7e4234d`) and everything measured from it: `docs/PEDAL_CA
    pool's shimmer (still, not moving), the school/hotel faint worn repeats, the subway's repeats
    receding and darkening, the garage's dark tail.
 3. Change Quality (Eco/Standard/High) while a chord rings: the captured tails shorten/lengthen.
+
+## Liminality: unstable, detuned, half-remembered instruments (2026-11-01)
+
+Request: make the instruments themselves feel liminal (old tape, a neglected piano in an empty
+building, a memory that is slightly wrong) as a shared stage on every instrument, after the voice
+and before the environment, so it also works for the sampled instruments still to come. Ten
+controls per instrument, one LIMINALITY macro, room and Character nudges; the environments
+themselves untouched.
+
+### What changed
+| Where | What |
+|---|---|
+| `DSP/Liminality.h/.cpp` (new) | One stage per instrument. **Note side**: Detune (mostly per key, a little per strike; up to ~30 cents at 100 %), Sour Notes (a 5 % / 16 % chance at 40 / 100 % of 32-62 cents off; never more than 85 cents from the key), Unevenness (a few notes clearly quieter, some duller or brighter), Timing (notes held back 0-60 ms at 100 %; each note-off follows its note by the same delay), Drift (slow wander, ~0.05-0.3 Hz, back and forth around the note), Wow & Flutter (wow 0.55-0.85 Hz + flutter 6.5-12.5 Hz), Warble (each held voice wavers on its own, growing in after the attack). **Audio side**: Ghost (a copy 55-95 ms later, a constant ~4-13 cents off, darker, placed elsewhere), Warble's swell + faint chorus, Fade (held notes lose their highs over seconds, slight blur; a new note is clear again), Wear (lost highs and lows, soft saturation, hiss and crackle only under the playing, occasional tiny dropouts, and a slow 1 s level match so worn does not mean quieter). Bypassed exactly when every amount is 0. |
+| `DSP/Instrument.h` | The hook: `NoteShape` handed over before `noteOn` (cents, tone, seed), `LiminalPitch` each control tick (instrument-wide cents, warble depth, `wander`), `VoiceShape` + `shapeCents()` per voice, `reseed()`. All six instruments apply it where they already apply pitch bend; a sampler needs only a per-voice playback-rate offset and a tone filter. `Wander::start()` now resets its hold timer (a voice slot no longer carries its last note's wander). |
+| The six instruments | Their own random pitch movement (piano age wobble, synth oscillator drift + wow, glass wobble, choir drift + vibrato, music box motor, drone drift) is scaled by `wander` = the instrument's Liminality Drift / Wow (full from 30 %): **at LIMINALITY 0 nothing moves**. Tone: piano hammer corner, synth cutoff, glass/box brightness, choir tilt/darkness, drone cutoff. |
+| `Parameters` | `liminality` (macro, default 40 %) and `<instrument>_lim_<detune|drift|wow|warble|ghost|wear|timing|uneven|sour|fade>` (60, defaults 35-45 %). Appended; nothing renamed. Effective amount = own x macro/40 % x the room's nudge (scaled by Environment Amount x that instrument's Environment Influence), clamped to 150 %. |
+| `PluginProcessor` | Stage after the voices, before Distance and the effects; held-back notes start at their exact sample (render split at each); the stage's clock follows the host's timeline while it plays; on a jump every stage and instrument reseeds from the position. |
+| Nudges | Hospital: detune x1.55. Mall: warble/wow. School: wow x1.6, wear x1.5. Garage: ghost x1.3. Pool: warble x1.7, fade. Hotel: wear x1.4, fade x1.6. Subway: wow, wear, timing. Supermarket: wow, warble, wear. Office: unevenness, timing. Impossible Room: sour x1.8, ghost x1.6. Characters: Something Wrong, Room 404, Beyond Reality ~x1.8-1.9 sour and x1.6-1.7 drift; Nightmare, Unstable, Fluorescent Nightmare also more sour/drift/warble; Forgotten, Nostalgia, Childhood Memory more wow/wear; Submerged, Dream State more warble/fade; Sterile Silence and Familiar a little less. |
+| Editor | The big **LIMINALITY** knob on its own dark glass plate, lower left of the scene. INSTRUMENTS drawer: each instrument's page has **SOUND / LIMINALITY**; the Liminality half shows its ten sliders ("0 = CLEAN - x LIMINALITY KNOB"). Snapshots: `docs/snapshots/liminality-main.jpg`, `liminality-panel-piano.jpg`, `liminality-panel-synth-sound.jpg`. |
+| Tests | New group `liminality` (49 checks + 1 report-only; `scripts/run-tests-parallel.sh` runs it alone, it measures CPU). The test rig now starts at LIMINALITY 0: the older groups measure the instruments' and rooms' own models. Four checks of an instrument's own wander (synth velocity brightness and Drift, music box Pitch Drift, drone Density) run at the default, since that wander only acts while Liminality is up; the music box check now compares two renders with the same Liminality, so the difference is the motor alone. The frame-transition samples skip the knob's plate. CI: render step `--render-liminality`. |
+
+### Tested (Linux, this container): 632 passed, 0 failed (full suite, on exactly this commit's code)
+- **Clean at 0:** the stage alone passes audio bit-identical, decides nothing, hands no pitch; the
+  whole plug-in at LIMINALITY 0 equals every slider at 0 at 100 % (six instruments); the same
+  piano note played now or 3.7 s later is sample-identical (no movement of its own).
+- **Each control, measured** (100 % unless said): Detune mean 9.7 / max 28.9 cents (40 %: 3.9 /
+  11.6), same key 4.2 vs all 11.3 cents spread; all six instruments apply +50 cents as +50 +/- 3.
+  Sour 4.6 % / 17.2 % of notes at 40 / 100 %, all 32-62 cents, max 85.0 with everything at 150 %.
+  Unevenness quietest -10.2 dB, tone spread 0.49; heard on the piano 1.7 dB spread. Timing 40 %:
+  latest 24 ms, spread 7.4 ms; 100 %: 60 ms / 18.4 ms; note lengths unchanged. Drift peak 17.6
+  cents, essentially all under 0.5 Hz, centred. Wow 0.78 Hz, flutter 8.4 Hz, +/-14 cents. Warble:
+  first 100 ms 0.00 cents (no scoop), then 16 cents at 0.78 Hz, voices up to 30 cents apart, 7.3 dB
+  swell. Ghost at 81.9 ms, -12.2 dB, 12.9 cents off. Wear: 12 kHz -9.2, 40 Hz -13.6, 1 kHz 0.0 dB,
+  3rd harmonic -15 dB on loud notes, hiss under the playing and silence after, 3 / 32 dropouts in
+  2 minutes at 40 / 100 % (deepest -8.8 / -23.2 dB). Fade: 6 kHz from -17.9 to -38.0 dB over 6 s
+  held, back to -18.1 dB on the next note. Each control alone changes all six instruments.
+- **Loudness:** dry piano phrase -0.26 / +0.23 dB at 40 / 100 %; school -0.2 / +0.3, hotel -1.7 /
+  -2.3, impossible room 0.0 / +2.1 dB (report-only, +/- 3 dB).
+- **Determinism:** two instances identical; block size 512 vs 97 identical (1.7e-6); the same
+  passage replayed from the host timeline after playing elsewhere: -90.8 dB difference (six
+  instruments).
+- **Clicks:** every control jumping to random values every 133 ms over a tone: 0 clicks (Wear held
+  steady, its own crackle is the only tick: 0 detected either way); LIMINALITY jumped 0 <-> 100 %
+  every 100 ms over a held piano + glass chord: 0 clicks.
+- **Real time / CPU** (this container, one core, six instruments x 16 notes + pedal, room on):
+  no allocation with notes going through the timing queue; LIMINALITY 0 % 27.6 % -> 100 % 29.9 %
+  (+2.3 % of one core for all six stages; an earlier run measured +3.5 %). Editor CPU unchanged
+  within noise (VHS Off 8.5 %, Light 17.1 %, Heavy 16.0 %).
+- **Listening render** (`build/test-logs/liminality-piano.wav` + `.txt` cue sheet in the Linux
+  test-logs artifact; made here too): no NaNs, peak -6.6 dBFS. Held A4 pitch wander: dry 4.1 -> 13.5
+  -> 31.0 cents at 0 / 40 / 100 %; the rooms add their own (school 25 cents already at 0 %: its tape).
+  **Not listened to** (no audio output here).
+
+### Report-only / misses
+- None new. The older report-only misses are unchanged (place-vs-control distance, Presence 4 dB,
+  garage margin, subway lamps, Velocity to Filter).
+- The hotel loses about 2 dB at 100 % (its through-the-wall sound leans on the low end that Wear
+  thins); left as part of "worn".
+
+### Decisions (recorded instead of asking)
+- **Where the stage sits:** per-note things (detune, sour notes, unevenness, timing, warble's
+  pitch) cannot be done on a mixed polyphonic signal, so they go through the hook at the voice;
+  the rest acts on the instrument's output. Both run after the voice and before Distance, effects
+  and room. A sampled instrument gets everything by honouring `NoteShape` / `LiminalPitch` (a pitch
+  ratio and a tone per voice).
+- **Pitch movement only from these controls:** the instruments' own random wander now follows
+  their Liminality Drift / Wow (full from 30 %), so at 0 they are perfectly stable; at the default
+  they move as before. Static tuning that is part of a voice (piano unisons, synth Detune, the box's
+  Wear mistuning) is the instrument's own sound and stays. The rooms' own pitch processing (school
+  tape, impossible room) is the environment and is untouched.
+- **"Early" notes:** a plug-in cannot play a note before it arrives without delaying everything,
+  so Timing only holds notes back; unevenly, so against the average some land early.
+- **Macro scale:** 40 % = each instrument's own amounts, 100 % = 2.5x (the defaults at 100 % are
+  the "deeply unsettling" setting, effective 1.0); per-instrument sliders above their defaults
+  push towards 150 % (broken, on purpose).
+- **Level:** Wear matches its output level to its input over 1 s; Unevenness raises the
+  instrument by its average loss (2.2 dB at 100 %) so only its uneven notes are quieter.
+- **Replays:** the randomness is a function of the host's timeline position; on a jump the
+  instruments' own generators, the synth's chorus sweep/wow and the box's motor restart from the
+  position (a jump while notes sound may be heard as a small step: the host jumped anyway).
+- Songs and presets saved before this have no Liminality values: they open at the default (40 %).
+  Set LIMINALITY to 0 % for the old, clean sound.
+- The Evolution Seed also reseeds Liminality.
+
+### Not verified here
+Everything on macOS (AU build, auval, GarageBand) and by ear: CI builds it; the developer's
+listen is the real check.
+
+### For the developer's GarageBand check
+1. Play a slow piano phrase in the corridor and sweep the **LIMINALITY** knob (lower left):
+   0 % should be perfectly clean and steady; 40 % an old, slightly wrong piano that is still
+   musical; 100 % deeply unsettling (wandering, sour, ghosted, worn), but never a wrong key.
+2. INSTRUMENTS > PIANO > **LIMINALITY**: raise one slider at a time with the macro at 40 %:
+   Detune, Drift (hold a chord for ten seconds), Wow & Flutter, Warble (hold a note: clean
+   attack, then it wavers), Ghost (staccato notes: the late, slightly wrong copy), Wear, Timing
+   (a chord spreads), Unevenness, Sour Notes (play a scale twice), Fade (hold a chord: it
+   dissolves; the next note is clear).
+3. Same phrase in School (wow, wear), Hotel (wear, fade), Hospital (cold detune), Pool (warble),
+   Impossible Room (sour notes, ghost), then Something Wrong / Room 404 / Beyond Reality.
+4. Play the same bars twice in GarageBand and bounce them: the detuned and sour notes should be
+   the same each time.
+5. Listen to `liminality-piano.wav` from the Linux test-logs artifact (cue sheet beside it):
+   one phrase at 0 / 40 / 100 %, dry, then school, hotel, impossible room.
+

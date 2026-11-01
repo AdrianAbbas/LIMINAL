@@ -119,6 +119,7 @@ void Liminality::prepare(double sampleRate, int instrumentIndex) {
     envRelease = float(1.0 - std::exp(-1.0 / (0.45 * sr)));
     dropCoefDown = float(1.0 - std::exp(-1.0 / (0.004 * sr)));
     dropCoefUp = float(1.0 - std::exp(-1.0 / (0.008 * sr)));
+    wearEnvCoef = float(1.0 - std::exp(-1.0 / (1.0 * sr)));
     relocateDecay = float(std::exp(-64.0 / (0.1 * sr)));
     ghostToneL.setHz(4500.0f, sr);
     ghostToneR.setHz(4500.0f, sr);
@@ -155,6 +156,9 @@ void Liminality::reset() {
     resetFilters();
     wearMix = wearMixTarget = 0;
     drive = driveTarget = 1;
+    wearGain = wearGainTarget = 1;
+    wearIn = wearOut = 0;
+    outGain = outGainTarget = 1;
     envelope = 0;
     hissLevel = crackleRate = crackleLevel = crackle = crackleZ = 0;
     dropGain = dropTarget = 1;
@@ -198,6 +202,9 @@ void Liminality::relocate(std::uint64_t clock) {
     lastClock = clock;
     noise.state = mix(salt(99), std::uint32_t(clock) ^ std::uint32_t(clock >> 32)) | 1u;
     dropLeft = 0;          // a dropout in progress ends (ramping back up)
+    // Wear's level match starts again from a typical value for its amount (a replay must match)
+    wearIn = wearOut = 0;
+    wearGain = wearGainTarget = now[lim::wear] > 0.0f ? dbGain(2.5f * std::min(now[lim::wear], 1.0f)) : 1.0f;
     // the ghost's read heads, from the position too (else a replay's ghost would sit elsewhere)
     ghostPos = float(std::fmod(double(clock) * 0.0137, double(ghostWindow)));
     dropTarget = 1.0f;
@@ -264,8 +271,15 @@ void Liminality::control(Instrument& in, std::uint64_t clock) {
     const float ea = now[lim::wear];
     wearMixTarget = std::min(1.0f, 5.0f * ea);
     driveTarget = 1.0f + 2.5f * ea;
-    lowCoef = onePoleCoef(20000.0 * std::exp2(-2.6 * double(ea)), sr);
-    highCoef = onePoleCoef(20.0 * (1.0 + 9.0 * double(ea)), sr);
+    lowCoef = onePoleCoef(20000.0 * std::exp2(-2.3 * double(ea)), sr);
+    highCoef = onePoleCoef(20.0 * (1.0 + 6.0 * double(ea)), sr);
+    // Worn, not quieter: a slow (1 s) level match of what the filters and saturation took away,
+    // held while the instrument is (nearly) silent.
+    if (wearIn > 1.0e-7f) wearGainTarget = std::clamp(std::sqrt(wearIn / std::max(wearOut, 1.0e-12f)), 1.0f, 2.8f);
+    if (ea <= 0.0f) wearGainTarget = 1.0f;
+    // Unevenness takes some notes down: the instrument as a whole is brought back up by its average
+    // loss (about 2.2 dB at 100 %), so only the uneven notes are quieter than before.
+    outGainTarget = dbGain(2.2f * std::min(now[lim::uneven], lim::maxEffective));
     hissLevel = ea > 0.0f ? dbGain(-64.0f + 14.0f * std::min(ea, 1.25f)) : 0.0f;
     crackleRate = ea > 0.08f ? 5.0f * ea : 0.0f;
     crackleLevel = 0.006f * std::min(ea, 1.5f);
@@ -281,12 +295,15 @@ void Liminality::control(Instrument& in, std::uint64_t clock) {
     // Bypassed exactly when nothing on the audio side is doing anything.
     const bool quiet = ghostTarget == 0.0f && ghostGain < 1.0e-6f && warbleChorusTarget == 0.0f && warbleChorus < 1.0e-6f
                        && std::abs(warbleGain - 1.0f) < 1.0e-6f && std::abs(warbleGainStep) < 1.0e-9f && fadeMixTarget == 0.0f && fadeMix < 1.0e-6f
-                       && wearMixTarget == 0.0f && wearMix < 1.0e-6f && dropLeft == 0 && std::abs(dropGain - 1.0f) < 1.0e-6f;
+                       && wearMixTarget == 0.0f && wearMix < 1.0e-6f && dropLeft == 0 && std::abs(dropGain - 1.0f) < 1.0e-6f
+                       && outGainTarget == 1.0f && std::abs(outGain - 1.0f) < 1.0e-6f;
     if (quiet) {
         bypassed = true;
         lineLive = false;
         ghostGain = warbleChorus = fadeMix = wearMix = blurMix = 0;
-        warbleGain = 1;
+        warbleGain = outGain = 1;
+        wearGain = wearGainTarget = 1;
+        wearIn = wearOut = 0;
         warbleGainStep = 0;
         dropGain = dropTarget = 1;
         return;
@@ -326,7 +343,7 @@ void Liminality::noteOn(Instrument& in, int note, float velocity, std::uint64_t 
     d.cents = std::clamp(d.cents, -85.0f, 85.0f);   // always nearer this note than the next key
     if (e[lim::uneven] > 0.0f) {
         const float k2 = key(2), s2 = r(6);
-        const float quietness = 0.55f * k2 * k2 + 0.45f * s2 * s2;
+        const float quietness = 0.55f * k2 * k2 * k2 * k2 + 0.45f * s2 * s2 * s2 * s2;   // most notes near full, a few clearly quieter
         const float dB = -11.0f * e[lim::uneven] * quietness;
         d.velocityScale = std::pow(10.0f, dB / 20.0f / 1.6f);   // the instruments' level goes as ~velocity^1.6
         d.tone = std::clamp(1.2f * e[lim::uneven] * (0.6f * (2.0f * key(3) - 1.0f) + 0.4f * (2.0f * r(7) - 1.0f)), -1.0f, 1.0f);
@@ -484,6 +501,11 @@ void Liminality::process(float* left, float* right, int n) {
             hr2 += highCoef * (xr - hr2);
             float yl = softClip(drive * (xl - hl2)) / drive;
             float yr = softClip(drive * (xr - hr2)) / drive;
+            wearIn += wearEnvCoef * (l * l + r * r - wearIn);
+            wearOut += wearEnvCoef * (yl * yl + yr * yr - wearOut);
+            wearGain += smooth * (wearGainTarget - wearGain);
+            yl *= wearGain;
+            yr *= wearGain;
             if (gate > 1.0e-4f) {
                 const float nl = noise.bipolar(), nr = noise.bipolar();
                 hissZ1 += 0.6f * (nl - hissZ1);   // bright, not harsh
@@ -510,8 +532,9 @@ void Liminality::process(float* left, float* right, int n) {
         // Dropouts (Wear): a quick dip and back.
         if (dropLeft > 0 && --dropLeft == 0) dropTarget = 1.0f;
         dropGain += (dropTarget < dropGain ? dropCoefDown : dropCoefUp) * (dropTarget - dropGain);
-        l *= dropGain;
-        r *= dropGain;
+        outGain += smooth * (outGainTarget - outGain);
+        l *= dropGain * outGain;
+        r *= dropGain * outGain;
         left[i] = l;
         right[i] = r;
         if (lineLive) write = (write + 1) & lineMask;
