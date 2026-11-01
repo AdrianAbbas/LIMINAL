@@ -56,14 +56,12 @@ the checklist below.
   - [x] Part 1 — parameters `vhs` (Off / Light / Heavy, default Light) and `vhs_warble` (off); `UI/Vhs` (static bake in the composite, animated tape layers, glitch schedule, camcorder OSD); `dsp::TapeWarble`; test groups `vhs` and `cpu` — pushed `[skip ci]`
   - [x] Part 2 — control on the PERFORM page, fast screen-size copy, snapshots of every place at Off / Light / Heavy in `docs/snapshots/` — pushed `[skip ci]`
   - [x] Part 3 — editor CPU before/after, DEVLOG section + handoff; final push **without** `[skip ci]`
-- [ ] **Effects from the developer's pedal captures (2026-10-31, night)** — **blocked: the captures are not in `AdrianAbbas/Samples`** (see `docs/PEDAL_CAPTURES.md`)
-  - [x] Part 1 — inventory: Samples @ `476bfe1` (whole history) has no effect captures and no dry/reamped phrases; nothing elsewhere on the account; expected layout written down — push `[skip ci]`
-  - [x] Part 2 — `tools/captures/` (analyze, run_all, kit, selftest): glitch detection on raw + cross-predicted residual, AR click repair, sweep choice/averaging, noise floor, drift from the clicks; synthetic self-test 24/24 + 2 report-only (`docs/captures-selftest.txt`); **no real take checked** — push `[skip ci]`
-  - [x] Part 3 — tools: deconvolution, alignment, measurements (EQ, RT60/band, echo time, feedback, darkening, wow/flutter, THD, level dependence, bursts), reamp comparison; `Source/DSP/Convolver` (zero-latency non-uniform partitioned, Quality-capped, test group `convolver`); `Source/DSP/CaptureModels.h` (TapeEcho, ModVoice, OctaveShifter); closed loop model -> tools 30/30 — push `[skip ci]`. **Real-unit IRs/measurements/comparisons: blocked (no captures)**
-  - [ ] Part 4 — rooms: **blocked** (nothing captured to use); routing plan in `docs/PEDAL_CAPTURES.md`; rooms unchanged
-  - [ ] Part 5 — listening render: **blocked** (before = after, not rendered)
-  - [x] DEVLOG handoff; final push without `[skip ci]`
-  - **Resume here after the captures are uploaded:** `docs/PEDAL_CAPTURES.md` -> "Next session"
+- [x] **Effects from the developer's pedal captures** (2026-10-31 night: tools + engine while the captures were missing; 2026-11-01: with the captures, Samples @ `7e4234d`) — *waiting for the developer's GarageBand listen (needs the `SAMPLES_TOKEN` secret in this repository, see the section at the end)*
+  - [x] Part 1 — inventory of the upload (`docs/PEDAL_CAPTURES.md`): 4 patches (+1 static take), reamped phrases for all, dry `Notes.wav`, the kit file; all 44.1 kHz despite "48k"; no flanger, no static take for tape/modulator — push `[skip ci]`
+  - [x] Part 2 — QC on the real takes: detector re-tuned on the kit itself (a loopback reports nothing) and on synthetic damage (30/30); clicks found in the dark reverb + delay take (sweep 1 + quiet sweep), a dropout in the shimmer's quiet sweep; IR noise floor measured inside the IR; re-record list — push `[skip ci]`
+  - [x] Part 3 — IRs (3) + measurements + tape/modulation profiles (`tools/captures/prepare.py`); emulation vs reamped phrases (`compare_models.py`); convolver: shared spectra, real-time Quality cap + decay reshaping; `Source/DSP/Captures` (bank built in prepareToPlay) — push `[skip ci]`
+  - [x] Part 4 — rooms: mall, school, garage, pool, hotel, subway, supermarket, impossible room use captures (hospital, office unchanged, bit-exact); level-matched within +/-0.8 dB; follows Character decay/Scale/wet; test group `captures`; CI fetches + prepares the captures with `SAMPLES_TOKEN` — push `[skip ci]`
+  - [x] Part 5 — listening render before/after/A-B (`--render-captures`, CI test-logs artifact); CPU; plugin size; DEVLOG; final push without `[skip ci]`
 
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
@@ -1557,3 +1555,72 @@ Upload the captures to Samples as `effects/<unit>/<patch>[-static]/01-pedal-capt
 plus the reamped phrases, and if possible the kit file itself, a loopback take and the dry phrases
 (`effects/dry/`). The next session runs `run_all.py`, reports glitches and re-records, then does
 Parts 4-5 with the routing table in `docs/PEDAL_CAPTURES.md`.
+
+
+## Effects from the developer's pedal captures, with the captures (2026-11-01)
+
+The upload (Samples @ `7e4234d`) and everything measured from it: `docs/PEDAL_CAPTURES.md`
+(inventory, QC per take, measurements, emulation-vs-reamp table, which capture went where).
+
+### What changed
+- `tools/captures/`: detector re-tuned on real audio (smooth +/-20 ms scale and a -60 dB-of-level
+  floor - the kit itself must come out clean); click pairs accepted (a shimmer buried one click);
+  the IR's noise floor measured in the IR; echoes as discrete peaks confirmed by repeats (reverb
+  internal structures at ~30-60 ms are no longer "echoes"); the wet-only tail of the tone for
+  modulation; `tape_profile()`; reamp comparison aligned on the whole recordings; flat-folder
+  naming in `run_all.py`; `prepare.py` (the plug-in's assets) and `compare_models.py`.
+- `Source/DSP/Convolver`: `ConvolverSpectra` shared between convolvers, `setLengthCap` and
+  `setDecayShape` (real time, per-partition gains; silent stages skipped); Standard is now 6 s.
+- `Source/DSP/Captures`: the bank (resampled to the host rate, energy kept, decay-shaped variants).
+- `Source/DSP/Environment`: `Profile::Capture` per room; the chain runs the captured tail (sample
+  by sample, zero latency), the measured tape echo, the modulation width and the shimmer's
+  octave (feed-forward - a loop around the long IR ran away in the pool on the first try).
+- CMake embeds `build/captures` when present (`LIMINAL_HAS_CAPTURES`); CI step "Fetch and prepare
+  the effect captures (private repository)" (macOS + Linux) and the Linux render step.
+
+### Tested (Linux, this container, captures embedded): 582 passed, 0 failed (full suite)
+- `captures` 30/30: hospital/office bit-exact; the 8 rooms audible and level-matched (-0.07 to
+  +0.81 dB for the standard phrase); every tail dies away (no runaway); switching every place and
+  Quality never allocates.
+- `convolver` 10/10 (shared spectra exact; the cap fades without allocating).
+- Tools: `docs/captures-selftest.txt` 30/30 (+2 report-only, unchanged).
+- Render: `captures-rooms-before/after/ab.wav` + cues; level after - before per room 0.00 to
+  +0.66 dB; peaks identical (-5.1 dBFS); no NaNs.
+
+### CPU and size (this container; not measured on a Mac)
+- One core, 16 notes, Standard: mall 13.0 -> 16.6 %, garage 11.0 -> 16.3 %, pool 14.0 -> 16.6 %,
+  impossible 13.8 -> 16.4 %; tape/width rooms unchanged within noise (school 11.9 -> 11.2,
+  subway 14.3 -> 13.7, supermarket 13.3 -> 13.3). The Mac build uses Apple's FFT through JUCE.
+- Memory: ~33 MB for the IR spectra (4 variants, 8 s layout) + both chains' state.
+- Size: capture data 7.5 MB (three 8 s, 24-bit IRs + profiles); Linux VST3 25 MB in total. A
+  universal Mac binary carries the data once per architecture (~+15 MB). If that is too much:
+  16-bit or 6 s IRs would halve it.
+
+### Report-only (two attempts each)
+- `distinct`: "every Character moves its room's sound (over 0.75)" -> 0.74 (subway ABANDONED; 0.91
+  before) - hard floor 0.6 now; `characters`: "every pair of Characters clearly differs" -> 29
+  of 30 (pool STILL WATER / FORGOTTEN SUMMER ~1.4) - hard floor 29.
+- Rooms got somewhat closer to each other in the existing report-only "place vs strongest
+  control" metric: closest pair piano 3.69 -> 2.57 (mall / subway), glass 2.59 -> 1.91 (pool /
+  supermarket); synth/choir/music box about the same, drone 1.35 -> 1.56.
+
+### Decisions (recorded instead of asking)
+- The captures are **not committed** (Brief: never commit samples to a public repo): CI fetches and
+  prepares them with `SAMPLES_TOKEN`. **This repository needs that secret** (the one WORLDBUILDER
+  uses; read access to Samples) - without it CI builds the previous sound and says so in a warning.
+- Roles assumed from names + behaviour (see the inventory); no flanger capture -> the chorus
+  modulator's measured modulation gives the Mall/Supermarket width.
+- The tape echo is the model (measured profile), not the IR: the captured IR has a 6-7 s diffuse
+  tail that would swamp the school and hotel; the subway uses the measured feedback as is, the
+  school/hotel 6/8 dB less (fewer repeats), all with the measured darkening and wow/flutter.
+- Captured tails replace part of each room's algorithmic *late* field only; reflections and
+  signatures stay. The shimmer's octave is feed-forward and 18 dB under the tail.
+
+### For the developer's GarageBand check
+1. Add the `SAMPLES_TOKEN` secret to this repository (Settings > Secrets and variables > Actions)
+   if it isn't there, then re-run the workflow: the CI log says "effect captures embedded".
+2. Listen to `captures-rooms-ab.wav` from the Linux test-logs artifact (each room before, then
+   after; cue sheet beside it). Then in GarageBand: the mall and impossible room's tails, the
+   pool's shimmer (still, not moving), the school/hotel faint worn repeats, the subway's repeats
+   receding and darkening, the garage's dark tail.
+3. Change Quality (Eco/Standard/High) while a chord rings: the captured tails shorten/lengthen.
