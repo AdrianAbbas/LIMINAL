@@ -328,7 +328,7 @@ namespace transitions {
 struct Samples {
     std::vector<float> scene, glass;
 };
-// The scene below the captions and above the strip, and the frosted bands of the strip that have no
+// The scene below the captions and above the strip (minus the LIMINALITY plate), and the frosted bands of the strip that have no
 // controls on them (above the film strip and between it and the knobs), every 4th pixel, RGB.
 Samples sample(const juce::Image& image) {
     Samples out;
@@ -342,7 +342,9 @@ Samples sample(const juce::Image& image) {
                 v.push_back(c.getBlue());
             }
     };
-    add(out.scene, 30, 930, 140, 552, 4);
+    // (not the LIMINALITY knob's plate on the lower left: a control surface, like the captions)
+    add(out.scene, 172, 930, 140, 552, 4);
+    add(out.scene, 30, 172, 140, 420, 4);
     add(out.glass, 40, 920, 566, 573, 2);
     add(out.glass, 40, 920, 627, 633, 2);
     return out;

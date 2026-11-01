@@ -420,14 +420,21 @@ MacroKnob::MacroKnob(juce::AudioProcessorValueTreeState& state, const char* id, 
     attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, id, slider);
     slider.setDoubleClickReturnValue(true, double(parameter->convertFrom0to1(parameter->getDefaultValue())));
 }
-void MacroKnob::resized() { slider.setBounds(getLocalBounds().withTrimmedBottom(26)); }
+void MacroKnob::resized() { slider.setBounds(big ? getLocalBounds().reduced(10, 6).withTrimmedBottom(32) : getLocalBounds().withTrimmedBottom(26)); }
 void MacroKnob::paint(juce::Graphics& g) {
-    auto r = getLocalBounds().removeFromBottom(26);
-    g.setColour(ink.withAlpha(0.7f));
-    g.setFont(font(9.0f, true));
-    g.drawText(label, r.removeFromTop(13), juce::Justification::centred);
-    g.setColour(ink.withAlpha(0.5f));
-    g.setFont(font(9.0f));
+    if (big) {   // the LIMINALITY knob sits on the scene: its own dark glass plate
+        const auto plate = getLocalBounds().toFloat();
+        g.setColour(juce::Colour(0xc407100f));
+        g.fillRect(plate);
+        g.setColour(ink.withAlpha(0.18f));
+        g.drawRect(plate, 1.0f);
+    }
+    auto r = getLocalBounds().reduced(big ? 6 : 0).removeFromBottom(big ? 32 : 26);
+    g.setColour(ink.withAlpha(big ? 0.85f : 0.7f));
+    g.setFont(font(big ? 10.5f : 9.0f, true));
+    g.drawText(label, r.removeFromTop(big ? 16 : 13), juce::Justification::centred);
+    g.setColour(ink.withAlpha(big ? 0.65f : 0.5f));
+    g.setFont(font(big ? 10.0f : 9.0f));
     g.drawText(parameter->getCurrentValueAsText() + " %", r, juce::Justification::centred);
 }
 
@@ -624,7 +631,19 @@ InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& state) {
             page.controls.push_back(std::make_unique<LevelControl>(state, id, label));
             addChildComponent(*page.controls.back());
         }
+        for (int k = 0; k < dsp::lim::count; ++k) {
+            page.liminal.push_back(std::make_unique<LevelControl>(state, params::limId(i, dsp::lim::keys[k]).toRawUTF8(), juce::String(dsp::lim::names[k]).toUpperCase()));
+            addChildComponent(*page.liminal.back());
+        }
     }
+    soundTab.setButtonText("SOUND");
+    liminalTab.setButtonText("LIMINALITY");
+    soundTab.setTooltip("The instrument's own controls");
+    liminalTab.setTooltip("How unstable, detuned and half-remembered this instrument is (0 = clean; scaled by the LIMINALITY knob, nudged by the place)");
+    soundTab.onClick = [this] { showLiminality(false); };
+    liminalTab.onClick = [this] { showLiminality(true); };
+    addAndMakeVisible(soundTab);
+    addAndMakeVisible(liminalTab);
     auto& synth = pages[1];
     synth.glide = std::make_unique<juce::ToggleButton>("GLIDE  (OFF: NOTES START ON PITCH)");
     synth.glideAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(state, params::synthGlide, *synth.glide);
@@ -643,10 +662,18 @@ void InstrumentDrawer::focus(int index) {
         auto& page = pages[std::size_t(i)];
         const bool shown = i == current;
         page.tab.setToggleState(shown, juce::dontSendNotification);
-        for (auto& c : page.controls) c->setVisible(shown);
-        if (page.glide != nullptr) page.glide->setVisible(shown);
+        for (auto& c : page.controls) c->setVisible(shown && !liminalPage);
+        if (page.glide != nullptr) page.glide->setVisible(shown && !liminalPage);
+        for (auto& c : page.liminal) c->setVisible(shown && liminalPage);
     }
+    soundTab.setToggleState(!liminalPage, juce::dontSendNotification);
+    liminalTab.setToggleState(liminalPage, juce::dontSendNotification);
     repaint();
+}
+
+void InstrumentDrawer::showLiminality(bool show) {
+    liminalPage = show;
+    focus(current);
 }
 
 void InstrumentDrawer::paint(juce::Graphics& g) {
@@ -661,21 +688,41 @@ void InstrumentDrawer::paint(juce::Graphics& g) {
     g.drawText("INSTRUMENTS  -  MIDI PLAYS EVERY ONE THAT IS ON", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
     g.setColour(ink.withAlpha(0.12f));
     g.fillRect(16.0f, float(pages[0].tab.getY() - 5), area.getWidth() - 32.0f, 1.0f);
+    // What the sliders on the Liminality half mean.
+    g.setColour(ink.withAlpha(0.4f));
+    g.setFont(font(9.0f));
+    const auto hint = liminalPage ? juce::String("0 = CLEAN  -  x LIMINALITY KNOB") : juce::String();
+    g.drawText(hint, juce::Rectangle<int>(liminalTab.getRight() + 10, liminalTab.getY(), getWidth() - liminalTab.getRight() - 26, liminalTab.getHeight()),
+               juce::Justification::centredRight);
 }
 
 void InstrumentDrawer::resized() {
     auto area = getLocalBounds().reduced(16, 10);
     area.removeFromTop(18);
     for (auto& page : pages) {
-        auto row = area.removeFromTop(32);
+        auto row = area.removeFromTop(30);
         page.on.setBounds(row.removeFromLeft(168).withSizeKeepingCentre(168, 24));
-        page.level->setBounds(row.withSizeKeepingCentre(row.getWidth(), 31));
+        page.level->setBounds(row.withSizeKeepingCentre(row.getWidth(), 30));
     }
     area.removeFromTop(10);
     auto tabs = area.removeFromTop(26);
     const int tabWidth = tabs.getWidth() / count;
     for (auto& page : pages) page.tab.setBounds(tabs.removeFromLeft(tabWidth));
-    area.removeFromTop(8);
+    area.removeFromTop(6);
+    {   // the page's two halves: SOUND and LIMINALITY
+        auto halves = area.removeFromTop(22);
+        soundTab.setBounds(halves.removeFromLeft(70));
+        halves.removeFromLeft(6);
+        liminalTab.setBounds(halves.removeFromLeft(100));
+    }
+    area.removeFromTop(6);
+    // Liminality: ten controls in three columns, four rows.
+    {
+        const int lw = (area.getWidth() - 2 * 16) / 3;
+        for (auto& page : pages)
+            for (std::size_t k = 0; k < page.liminal.size(); ++k)
+                page.liminal[k]->setBounds(area.getX() + int(k % 3) * (lw + 16), area.getY() + int(k / 3) * 38, lw, 36);
+    }
     // Three columns: the six controls in two rows, then any extra row (Glide, Attack).
     const int w = (area.getWidth() - 2 * 16) / 3;
     for (auto& page : pages) {
@@ -1369,6 +1416,7 @@ MainView::MainView(LiminalProcessor& p)
       placeStrip(p.parameters), characterStrip(p.parameters), shelf(p.parameters),
       presenceKnob(p.parameters, params::presence, "PRESENCE"), scaleKnob(p.parameters, params::scale, "SCALE"),
       activityKnob(p.parameters, params::activity, "ACTIVITY"), unrealKnob(p.parameters, params::unreal, "UNREAL"),
+      liminalityKnob(p.parameters, params::liminality, "LIMINALITY"),
       active(p.parameters),
       drawer(p.parameters),
       places(p.parameters),
@@ -1382,6 +1430,9 @@ MainView::MainView(LiminalProcessor& p)
     for (auto* c : { &instrument, &ambience, &space, &master }) addAndMakeVisible(c);
     for (auto* c : std::initializer_list<juce::Component*> { &placeStrip, &characterStrip, &shelf, &presenceKnob, &scaleKnob, &activityKnob, &unrealKnob })
         addAndMakeVisible(c);
+    liminalityKnob.big = true;
+    liminalityKnob.slider.setTooltip("LIMINALITY: how unstable, detuned and half-remembered every instrument is. 0 % clean, 40 % as set per instrument, 100 % deeply unsettling");
+    addAndMakeVisible(liminalityKnob);
     instrumentsButton.onClick = [this] { showInstruments(!drawer.isVisible()); };
     addAndMakeVisible(instrumentsButton);
     environmentButton.onClick = [this] { showEnvironment(!places.isVisible()); };
@@ -1669,6 +1720,7 @@ void MainView::resized() {
     shelf.setBounds(row.removeFromLeft(300));
     row.removeFromLeft(14);
     for (auto* k : { &presenceKnob, &scaleKnob, &activityKnob, &unrealKnob }) k->setBounds(row.removeFromLeft(62).withSizeKeepingCentre(62, 76));
+    liminalityKnob.setBounds(liminalityArea());
     row.removeFromLeft(14);
     power.setBounds(row.removeFromRight(84).withSizeKeepingCentre(84, 28));
     row.removeFromRight(8);

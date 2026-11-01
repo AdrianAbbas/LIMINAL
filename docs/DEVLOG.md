@@ -64,7 +64,7 @@ the checklist below.
   - [x] Part 5 — listening render before/after/A-B (`--render-captures`, CI test-logs artifact); CPU; plugin size; DEVLOG; final push without `[skip ci]`
 - [ ] **Liminality — unstable, detuned, half-remembered instruments** (2026-11-01; section at the end)
   - [x] Part 1 — shared stage `DSP/Liminality` (note side through a small hook in `DSP/Instrument.h`, audio side before Distance), ten controls per instrument + the LIMINALITY macro (61 parameters), room/Character nudges, processor routing (timing queue, host-timeline clock, reseed on relocation), test group `liminality` — push `[skip ci]`
-  - [ ] Part 2 — editor: LIMINALITY on the main screen, the ten controls in each instrument's panel, snapshots — push `[skip ci]`
+  - [x] Part 2 — editor: the big LIMINALITY knob on the scene's lower left, a SOUND / LIMINALITY switch on each instrument's page (its ten controls), snapshots `docs/snapshots/liminality-*.jpg` — push `[skip ci]`
   - [ ] Part 3 — listening render (piano phrase at 0/40/100 %, dry + three rooms), CPU, DEVLOG section + handoff; final push **without** `[skip ci]`
 
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.

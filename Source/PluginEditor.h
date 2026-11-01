@@ -117,6 +117,7 @@ private:
 class MacroKnob final : public juce::Component {
 public:
     MacroKnob(juce::AudioProcessorValueTreeState&, const char* id, juce::String label);
+    bool big = false;   // the LIMINALITY knob: larger lettering
     void paint(juce::Graphics&) override;
     void resized() override;
     juce::Slider slider;
@@ -174,6 +175,10 @@ public:
     void resized() override;
     void focus(int index);
     int focused() const { return current; }
+    // Each instrument's page has two halves: its SOUND (its own controls) and its LIMINALITY
+    // (the ten Liminality controls, 0 = clean, scaled by the LIMINALITY knob on the main screen).
+    void showLiminality(bool show);
+    bool showingLiminality() const { return liminalPage; }
     static constexpr int count = params::instrumentCount;
 
 private:
@@ -185,9 +190,12 @@ private:
         std::vector<std::unique_ptr<LevelControl>> controls;
         std::unique_ptr<juce::ToggleButton> glide;   // the synth only
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> glideAttachment;
+        std::vector<std::unique_ptr<LevelControl>> liminal;   // Liminality (2026-11-01)
     };
     std::array<Page, count> pages;
     int current = 0;
+    bool liminalPage = false;
+    juce::TextButton soundTab, liminalTab;
 };
 
 // The environment drawer: the places as a list (click to go there), what each one does,
@@ -401,6 +409,8 @@ private:
     CharacterStrip characterStrip;
     InstrumentShelf shelf;
     MacroKnob presenceKnob, scaleKnob, activityKnob, unrealKnob;
+    MacroKnob liminalityKnob;   // Liminality (2026-11-01): big, on the scene's lower left
+    juce::Rectangle<int> liminalityArea() const { return { 52, stripArea().getY() - 140, 116, 124 }; }
     // Lights that answer the music and the place (Milestone 4).
     std::array<float, 12> pulse {}, shownPulse {};
     int notesSeen = 0, eventsSeen = 0;

@@ -662,6 +662,36 @@ void testEditor(Suite& s, const juce::String& snapshot) {
                     }
                 }
                 s.check(fine, "the Instruments drawer opens and shows each instrument's page");
+                {   // Liminality (2026-11-01): each page's LIMINALITY half shows its ten controls
+                    auto& d = lm->instrumentDrawer();
+                    int shown = 0;
+                    d.focus(2);
+                    d.showLiminality(true);
+                    for (auto* c : d.getChildren())
+                        if (auto* level = dynamic_cast<LevelControl*>(c); level != nullptr && level->isVisible() && level->getHeight() > 0) ++shown;
+                    const auto shot = lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f);
+                    if (snapshot.isNotEmpty()) {
+                        for (int k : { 0, 2 }) {
+                            d.focus(k);
+                            juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile(snapshot).getSiblingFile(juce::String("editor-") + params::instrumentKeys[k] + "-liminality.png");
+                            file.deleteFile();
+                            juce::FileOutputStream out(file);
+                            juce::PNGImageFormat().writeImageToStream(lm->createComponentSnapshot(lm->getLocalBounds(), true, 2.0f), out);
+                        }
+                    }
+                    // six levels + ten Liminality controls visible; their sliders drive the glass's own parameters
+                    bool bound = false;
+                    for (auto* c : d.getChildren())
+                        if (auto* level = dynamic_cast<LevelControl*>(c); level != nullptr && level->isVisible() && level->getY() > d.getHeight() / 2) {
+                            level->slider.setValue(0.9, juce::sendNotificationSync);   // the first: the glass's Detune
+                            break;
+                        }
+                    if (auto* q = dynamic_cast<LiminalProcessor*>(lm->getAudioProcessor())->parameters.getParameter(params::limId(2, dsp::lim::keys[0])))
+                        bound = std::abs(q->convertFrom0to1(q->getValue()) - 0.9f) < 1e-3f;
+                    s.check(shot.isValid() && shown == 6 + dsp::lim::count && bound, "each instrument's page has a LIMINALITY half: its ten controls, bound to that instrument",
+                            std::to_string(shown) + " controls visible");
+                    d.showLiminality(false);
+                }
                 s.check(lm->instrumentsToggle().getToggleState(), "the INSTRUMENTS button is lit while its drawer is open");
                 s.metric("full 2x repaint with the drawer open (worst of six)", worst, " ms");
                 lm->instrumentDrawer().focus(0);
