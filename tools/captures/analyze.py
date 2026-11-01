@@ -34,6 +34,7 @@ import kit  # noqa: E402
 
 SR = kit.SR
 EPS = 1e-12
+_FULL = {}   # untruncated linear IRs by take (the static take's, for its modulated twin)
 
 
 def _plain(o):
@@ -45,8 +46,13 @@ def to_db(x):
 
 
 def load(path):
-    sr, x = wavfile.read(path)
-    if x.dtype.kind == "i":
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sr, x = wavfile.read(path)
+    if x.dtype == np.int32:      # also 24-bit files (scipy left-justifies them into int32)
+        x = x.astype(np.float64) / 2147483648.0
+    elif x.dtype.kind == "i":
         x = x.astype(np.float64) / float(np.iinfo(x.dtype).max)
     elif x.dtype.kind == "u":
         x = (x.astype(np.float64) - 128.0) / 128.0
@@ -90,7 +96,7 @@ def onsets(m, start, stop, min_gap_s=0.3, rise_db=20.0):
     return [start + o for o in out]
 
 
-def click_triple(cands, spacing=None, last=False):
+def click_triple(cands, spacing=None, last=False, anchor=None):
     """Three equally spaced onsets (the sync clicks), ignoring their echoes. With `spacing`
     (from the kit) the gaps must match it within 2 ms; otherwise any equal spacing >= 0.1 s."""
     best = None
@@ -105,6 +111,23 @@ def click_triple(cands, spacing=None, last=False):
                     t = [c[i], c[j], c[k]]
                     if best is None or (t[0] > best[0] if last else t[0] < best[0]):
                         best = t
+    if best is None and spacing and anchor is not None:
+        # Two of the three (a long tail can bury one): a pair at the kit's spacing (clicks 1-2 or
+        # 2-3) or twice it (1-3); the hypothesis whose first click is nearest the anchor (where
+        # the sweeps say click 1 should be) wins.
+        sp = int(round(spacing * SR))
+        hyps = []
+        for i in range(len(c)):
+            for j in range(i + 1, len(c)):
+                d = c[j] - c[i]
+                if abs(d - sp) <= 0.002 * SR:
+                    hyps += [c[i], c[i] - sp]
+                elif abs(d - 2 * sp) <= 0.002 * SR:
+                    hyps.append(c[i])
+        if hyps:
+            first = min(hyps, key=lambda h: abs(h - anchor))
+            if abs(first - anchor) < 0.25 * SR:
+                best = [first, first + sp, first + 2 * sp]
     return best or []
 
 
@@ -153,16 +176,17 @@ def glitches(x, start, stop, residual=None, thresh=25.0):
             continue
         seg = sig[start:stop]
         d2 = np.abs(np.diff(seg, 2, axis=0)).max(axis=1)
-        blk = int(0.005 * SR)
-        nb = len(d2) // blk
-        if nb < 6:
+        if len(d2) < int(0.05 * SR):
             continue
-        med = np.median(d2[:nb * blk].reshape(nb, blk), axis=1)
-        scale = signal.medfilt(med, 9)
+        # Smooth local scale: RMS of the second difference over +/- 20 ms.
+        win = int(0.04 * SR)
+        scale = np.sqrt(np.maximum(signal.oaconvolve(d2 * d2, np.ones(win) / win, mode="same"), 0))
         floor = max(1e-7, 1e-5 * float(np.abs(seg).max()))   # ignore anything 100 dB below the peak
-        scale = np.maximum(np.repeat(scale, blk), floor)
-        scale = np.concatenate([scale, np.full(len(d2) - len(scale), scale[-1])])
-        hits = np.flatnonzero(d2 > thresh * scale)
+        scale = np.maximum(scale, floor)
+        # ... and anything below -60 dB of the *recording's* local level (+/- 20 ms).
+        raw = np.abs(x[start + 1:stop - 1]).max(axis=1)
+        lv = np.sqrt(np.maximum(signal.oaconvolve(raw * raw, np.ones(win) / win, mode="same"), 0))
+        hits = np.flatnonzero((d2 > 12.0 * scale) & (d2 > 1e-3 * lv))
         found += _group(hits + start + 1, "click", name)
     # Dropped/duplicated buffers: >= 16 identical consecutive samples while the signal is live.
     seg = x[start:stop]
@@ -282,6 +306,13 @@ def noise_floor(x, regions):
             "rms": float(best[0])}
 
 
+def ir_floor(h):
+    """The deconvolved response's own noise floor: RMS of its last 2 s (of 20), where every
+    effect here has died away. Same units as the IR - unlike the recording's floor in dBFS."""
+    tail = h[-2 * SR:]
+    return float(np.sqrt(np.mean(tail ** 2))) + 1e-12
+
+
 def truncate_point(h, floor_rms):
     """After the last 50 ms block whose envelope is above the noise floor + 3 dB (an echo's
     silent gaps between repeats don't end it)."""
@@ -296,11 +327,12 @@ def truncate_point(h, floor_rms):
 
 def schroeder_rt(h, floor_rms, fc):
     b = band(h, fc).mean(axis=1) if h.ndim == 2 else band(h, fc)
-    end = truncate_point(b[:, None], floor_rms * 0.5)
+    floor_rms = ir_floor(b)        # this band's own floor
+    end = truncate_point(b[:, None], floor_rms)
     start = int(max(0.02, 5.0 / fc) * SR)   # past the direct sound (and the band filter's ring)
     e = b[start:end] ** 2
     # Noise compensation: subtract the floor's energy per sample before integrating.
-    e = np.maximum(e - (floor_rms * 0.3) ** 2, 0)
+    e = np.maximum(e - floor_rms ** 2, 0)
     sch = np.cumsum(e[::-1])[::-1]
     if sch[0] <= 0:
         return None
@@ -332,6 +364,66 @@ def third_octave_eq(h):
 
 
 def echoes(h, max_s=2.0):
+    """Discrete echoes: peaks of the 5 ms envelope standing > 8 dB above the smoothed tail (a
+    reverb's own body), confirmed by repeats at 2x, 3x ... the time (+/- 4 %, tape wow). Falls back
+    to the envelope autocorrelation (clean echoes without a reverb) when none stand out."""
+    m = h.mean(axis=1) if h.ndim == 2 else h
+    w = SR // 200
+    n = min(len(m), int(max_s * 4 * SR)) // w
+    env = to_db(np.sqrt((m[: n * w].reshape(n, w) ** 2).mean(axis=1)))
+    smooth = signal.medfilt(env, 21)
+    excess = env - smooth
+    start = 10   # 50 ms
+    cands = [i for i in range(start, min(n, int(max_s * 200))) if excess[i] > 8 and excess[i] == excess[max(0, i - 4):i + 5].max()]
+    best = None
+    for c in sorted(cands, key=lambda i: -env[i])[:6]:
+        reps = [c]
+        for k in range(2, 13):
+            target = c * k
+            tol = max(2, int(0.04 * target))
+            if target + tol >= n:
+                break
+            win = excess[target - tol: target + tol + 1]
+            j = target - tol + int(np.argmax(win))
+            if excess[j] > 4:
+                reps.append(j)
+            else:
+                break
+        if len(reps) >= 3 and (best is None or len(reps) > len(best)):
+            best = reps
+    if best is None:
+        # One clear repeat (> 15 dB above the tail) whose later repeats dissolve into a diffuse,
+        # modulated tail (tape wow smears them over a 15 s sweep): report the repeat; feedback and
+        # darkening then come from the tail's decay per band (see tape_profile()).
+        strong = [c for c in cands if excess[c] > 15]
+        if strong:
+            c = min(strong)
+            direct = to_db(np.sqrt(np.mean(m[: int(0.005 * SR)] ** 2)))
+            lvl = to_db(np.sqrt(np.mean(m[c * w - int(0.01 * SR): c * w + int(0.01 * SR)] ** 2)))
+            return {"periodic": True, "method": "single repeat, then a diffuse tail", "echo_ms": round(c * w / SR * 1e3, 1),
+                    "first_ms": round(c * w / SR * 1e3, 1), "first_repeat_above_tail_db": round(float(excess[c]), 1),
+                    "first_repeat_re_direct_db": round(float(lvl - direct), 1), "repeats_measured": 1}
+        return {"periodic": False, "method": "no discrete repeats (a reverb)"}
+    k = np.arange(len(best))
+    lv, tilt = [], []
+    half = int(min(best[0] * w / 4, 0.1 * SR))   # +/- a quarter echo period (1/6-octave bands need the length)
+    for r in best:
+        a, b = max(0, r * w - half), r * w + half
+        seg = m[a:b]
+        lv.append(to_db(np.sqrt(np.mean(band(seg, 1000) ** 2))))
+        tilt.append(to_db(np.sqrt(np.mean(band(seg, 4000, 1 / 6) ** 2))) - to_db(np.sqrt(np.mean(band(seg, 500, 1 / 6) ** 2))))
+    # Levels and tilts only from repeats within 45 dB of the first (later ones sit on the floor,
+    # where a high band flattens and the tilt turns back up).
+    keep = [i for i in range(len(best)) if lv[i] > lv[0] - 45.0]
+    k, lv, tilt = np.array(keep), [lv[i] for i in keep], [tilt[i] for i in keep]
+    tau = float(np.polyfit(np.arange(1, len(best) + 1), np.array(best) * w, 1)[0] / SR)
+    return {"periodic": True, "method": "discrete peaks", "echo_ms": round(tau * 1e3, 1), "first_ms": round(best[0] * w / SR * 1e3, 1),
+            "feedback_db_per_repeat_1k": round(float(np.polyfit(k, lv, 1)[0]), 2),
+            "darkening_db_per_repeat": round(float(np.polyfit(k, tilt, 1)[0]), 2),
+            "repeats_measured": len(best), "first_repeat_above_tail_db": round(float(excess[best[0]]), 1)}
+
+
+def _echoes_autocorr(h, max_s=2.0):
     """Echo time from the envelope's autocorrelation; per-repeat level and darkening."""
     m = h.mean(axis=1)
     env = envelope(m, 2.0)[: int(max_s * 4 * SR)]
@@ -344,7 +436,9 @@ def echoes(h, max_s=2.0):
     e -= e[live].mean() if live.any() else 0
     ac = signal.fftconvolve(e, e[::-1], mode="full")[len(e) - 1:]
     ac /= ac[0] + EPS
-    lo, hi = int(0.03 * SR), int(max_s * SR)
+    # From 60 ms: shorter periodicities are the reverbs' own internal delay structure (every
+    # capture here shows one near 30 ms), not echoes a player hears as repeats.
+    lo, hi = int(0.06 * SR), int(max_s * SR)
     lag = lo + int(np.argmax(ac[lo:hi]))
     if ac[lag] < 0.4:
         return {"periodic": False, "autocorr": round(float(ac[lag]), 2)}
@@ -444,18 +538,21 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
 
     # Nominal layout (from the kit reference if given).
     if kit_path:
-        ref = load(kit_path).mean(axis=1)
+        refx = load(kit_path)
+        ref = refx[:, int(np.argmax((refx ** 2).sum(axis=0)))]   # the kit's live channel
         sp, _ = locate_sweeps(ref)
         ref_on = click_triple(onsets(ref, 0, sp[0] - SR // 2, 0.02))
         ref_end = click_triple(onsets(ref, sp[2] + int((kit.SWEEP_S + 2) * SR), len(ref), 0.02))
         nominal = {"clicks": [o / SR for o in ref_on], "end_clicks": [o / SR for o in ref_end],
                    "sweeps": [s / SR for s in sp]}
         rep["layout"] = "measured from the kit reference"
+        kit_sweeps = [ref[s:s + int(kit.SWEEP_S * SR)] for s in sp]
     else:
         lay = kit.layout()
         nominal = {"clicks": lay["clicks"], "end_clicks": lay["end_clicks"],
                    "sweeps": [lay["sweep1"], lay["sweep2"], lay["sweep_quiet"]]}
         rep["layout"] = "assumed (kit.py) - pass --kit with the real kit file"
+        kit_sweeps = None
 
     drift = 1.0
     peaks, heights = locate_sweeps(m)
@@ -466,8 +563,17 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
     rep["sweep_peak_ratio_db"] = round(float(to_db(heights[2] / max(heights[0], heights[1]))), 1)
 
     spacing = nominal["clicks"][1] - nominal["clicks"][0]
-    clicks = click_triple(onsets(m, 0, peaks[0] - SR // 2, 0.02), spacing)
-    ends = click_triple(onsets(m, peaks[2] + int((kit.SWEEP_S + 2) * SR), len(m), 0.02), spacing)
+    a1 = peaks[0] - int((nominal["sweeps"][0] - nominal["clicks"][0]) * SR)
+    a2 = peaks[2] + int((nominal["end_clicks"][0] - nominal["sweeps"][2]) * SR)
+    def find(a, b, anchor):
+        # A long, bright tail (a shimmer's octave over the tone) can hide the rise; retry gentler.
+        for rise in (20.0, 12.0, 8.0):
+            t = click_triple(onsets(m, a, b, 0.02, rise), spacing, anchor=anchor)
+            if t:
+                return t
+        return []
+    clicks = find(0, peaks[0] - SR // 2, a1)
+    ends = find(peaks[2] + int((kit.SWEEP_S + 2) * SR), len(m), a2)
     rep["sync_clicks_s"] = [round(c / SR, 4) for c in clicks]
     rep["end_clicks_s"] = [round(c / SR, 4) for c in ends]
     if len(clicks) == 3 and len(ends) == 3:
@@ -493,7 +599,16 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
 
     seg_len = int((kit.SWEEP_S + kit.TAIL_S) * SR)
     n_ir = int(kit.TAIL_S * SR)
-    refs = [kit.sweep(lv, SR * drift) for lv in (-12.0, -12.0, -24.0)]
+    if kit_sweeps is not None:
+        # The kit file's own sweeps (exact fades, levels and any resampling the kit went through),
+        # stretched to this recorder's clock.
+        refs = []
+        for k in kit_sweeps:
+            refs.append(k if abs(drift - 1) < 1e-7 else
+                        np.interp(np.arange(int(len(k) * drift)) / drift, np.arange(len(k)), k))
+        rep["reference"] = "the kit file's sweeps"
+    else:
+        refs = [kit.sweep(lv, SR * drift) for lv in (-12.0, -12.0, -24.0)]
 
     def seg(i):
         a = max(0, starts[i])
@@ -567,7 +682,7 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
     # IR from the static take if given (modulated patches).
     if static_path:
         st = analyze(static_path, os.path.join(out_dir, "static"), kit_path)
-        sh = load(os.path.join(out_dir, "static", "ir.wav"))
+        sh = _FULL[os.path.abspath(static_path)]
         rep["ir_source"] = "static take: " + os.path.basename(static_path)
         h = h_meas = sh
         rep["ir_from"] = "static take: " + st.get("ir_from", "?")
@@ -578,7 +693,10 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
         h_meas = h
         rep["ir_source"] = "this take"
 
-    cut = min(len(h), truncate_point(h, floor_rms))
+    ir_noise = ir_floor(h)
+    rep["ir_noise_floor_db"] = round(float(to_db(ir_noise)), 1)
+    cut = min(len(h), truncate_point(h, ir_noise))
+    _FULL[os.path.abspath(path)] = h
     hh = h[:cut].copy()
     fade = min(int(0.05 * SR), cut // 4)
     hh[cut - fade:] *= np.linspace(1, 0, fade)[:, None] ** 2
@@ -587,7 +705,7 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
 
     meas = {}
     meas["eq_third_octave_db_re_1k"] = third_octave_eq(h_meas[:cut])
-    meas["rt60_s"] = {str(f): schroeder_rt(h_meas[:cut], floor_rms, f) for f in OCT}
+    meas["rt60_s"] = {str(f): schroeder_rt(h_meas, ir_noise, f) for f in OCT}
     meas["echo"] = echoes(h_meas[:cut])
     # The same from the -24 dBFS sweep: less loop saturation, whose distortion products otherwise
     # land in other repeats' windows. Use this one to fit a model when the two disagree.
@@ -607,6 +725,10 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
     if len(live):
         ta, tb = tone_a + live[0], tone_a + live[-1]
         meas["tone_modulation"] = modulation(x_rep, ta, tb, "tone")
+        # The tone's wet-only tail (after it stops, before the clicks): the effect alone.
+        tail_a, tail_b = tb + int(0.15 * SR), (clicks[0] - int(0.05 * SR)) if clicks else tb + 2 * SR
+        if tail_b - tail_a > SR:
+            meas["tone_tail_modulation"] = modulation(x_rep, tail_a, tail_b, "tone tail (wet only)")
         meas["tone_level_dbfs"] = round(float(to_db(np.sqrt(np.mean(x_rep[ta:tb] ** 2)))), 1)
     # Noise bursts: between the second sweep's tail and the quiet sweep.
     ba, bb = starts[1] + seg_len + int(1.0 * SR), starts[2] - SR // 2
@@ -634,24 +756,79 @@ def analyze(path, out_dir, kit_path=None, static_path=None):
     return rep
 
 
-def compare(dry, wet, ir):
-    """How close `dry * ir` is to the reamped `wet`: alignment, level, 1/3-octave spectral
-    difference and envelope (50 ms) difference, in dB."""
-    sim = signal.oaconvolve(dry, ir, mode="full", axes=0)[: len(wet)]
-    a, b = sim.mean(axis=1), wet.mean(axis=1)
-    lag = int(np.argmax(signal.correlate(b[: 10 * SR], a[: 10 * SR], mode="full", method="fft"))) - (min(len(a), 10 * SR) - 1)
-    a = np.roll(a, lag)
+def align(ref, sig, max_s=60.0):
+    """Lag (samples) of `sig` relative to `ref`: onset envelopes cross-correlated over the whole
+    recordings (10 ms resolution), then refined on the waveforms (+/- 10 ms)."""
+    hop = SR // 100
+    def onset(v):
+        n = len(v) // hop
+        e = np.log10(np.sqrt((v[: n * hop] ** 2).reshape(n, hop).mean(axis=1)) + 1e-6)
+        return np.maximum(np.diff(e, prepend=e[0]), 0)
+    a, b = onset(ref), onset(sig)
+    c = signal.correlate(b, a, mode="full", method="fft")
+    lags = np.arange(-len(a) + 1, len(b))
+    sel = np.abs(lags) <= int(max_s * 100)
+    coarse = int(lags[sel][np.argmax(c[sel])]) * hop
+    # Refine on the waveforms around the coarse lag (a 20 s stretch with music in it).
+    st = int(np.argmax(signal.oaconvolve(ref ** 2, np.ones(SR), mode="same")))
+    st = max(0, min(st - 10 * SR, len(ref) - 20 * SR))
+    r = ref[st: st + 20 * SR]
+    w0 = st + coarse - SR // 100
+    if w0 < 0 or w0 + len(r) + SR // 50 > len(sig):
+        return coarse
+    w = sig[w0: w0 + len(r) + SR // 50]
+    cc = signal.correlate(w, r, mode="valid", method="fft")
+    return w0 - st + int(np.argmax(cc))
+
+
+def tape_profile(meas):
+    """A TapeEcho profile (Source/DSP/CaptureModels.h) from a report's measurements: echo time
+    from the first repeat; feedback per repeat from the 1 kHz decay over one echo period;
+    darkening from the 4 kHz vs 500 Hz decays; wow/flutter from the wet tail's FM."""
+    e = meas.get("echo", {})
+    if not e.get("periodic"):
+        return None
+    tau = e["echo_ms"] / 1e3
+    rt = meas["rt60_s"]
+    per = lambda f: -60.0 * tau / rt[str(f)] if rt.get(str(f)) else None
+    fb = e.get("feedback_db_per_repeat_1k") if e.get("repeats_measured", 0) >= 3 else per(1000)
+    dark = e.get("darkening_db_per_repeat") if e.get("repeats_measured", 0) >= 3 else (
+        per(4000) - per(500) if per(4000) is not None and per(500) is not None else -1.0)
+    mod = (meas.get("tone_tail_modulation") or meas.get("tone_modulation") or {}).get("fm", {})
+    wow, flut = mod.get("wow", {}), mod.get("flutter", {})
+    return {"echoMs": round(e["echo_ms"], 1), "feedbackDb": round(max(-30.0, min(-0.5, fb)), 2),
+            "darkeningDb": round(max(-12.0, min(-0.1, dark)), 2),
+            "wowHz": wow.get("rate_hz", 0.7), "wowCents": round(min(25.0, wow.get("depth_cents", 0.0)), 2),
+            "flutterHz": flut.get("rate_hz", 6.0), "flutterCents": round(min(15.0, flut.get("depth_cents", 0.0)), 2),
+            "drive": 0.2}
+
+
+def compare(dry, wet, ir=None, render=None):
+    """How close the emulation of `dry` (through `ir`, or `render(dry_mono)`) is to the reamped
+    `wet`: alignment, level, 1/3-octave spectral difference and 50 ms envelope difference (dB),
+    over the part both recordings cover."""
+    d = dry.mean(axis=1)
+    sim = render(d) if render is not None else signal.oaconvolve(d[:, None], ir, mode="full", axes=0)[: len(d)].mean(axis=1)
+    b = wet.mean(axis=1)
+    lag = align(sim, b)
+    if lag >= 0:
+        b = b[lag:]
+    else:
+        sim = sim[-lag:]
+    n = min(len(sim), len(b))
+    a, b = sim[:n].copy(), b[:n]
     gain = to_db(np.sqrt(np.mean(b ** 2)) / (np.sqrt(np.mean(a ** 2)) + EPS))
     a *= 10 ** (gain / 20)
     lv = []
     for fc in 1000 * 2 ** (np.arange(-15, 13) / 3.0):
         lv.append((float(to_db(np.sqrt(np.mean(band(b, fc, 1 / 3) ** 2)))), float(to_db(np.sqrt(np.mean(band(a, fc, 1 / 3) ** 2))))))
     top = max(v[0] for v in lv)
-    spec = [w - s for w, s in lv if w > top - 40]   # bands where the music is, not the noise floor
+    spec = [w - s_ for w, s_ in lv if w > top - 40]   # bands where the music is, not the noise floor
     ea, eb = to_db(envelope(a, 50.0)[:: SR // 20]), to_db(envelope(b, 50.0)[:: SR // 20])
     live = eb > eb.max() - 40
-    return {"lag_ms": round(lag / SR * 1e3, 2), "level_db": round(float(gain), 2),
+    return {"lag_ms": round(lag / SR * 1e3, 2), "level_db": round(float(gain), 2), "seconds": round(n / SR, 1),
             "spectral_rms_db": round(float(np.sqrt(np.mean(np.square(spec)))), 2),
+            "spectral_by_band_db": {f"{1000 * 2 ** (k / 3.0):.0f}": round(w - s_, 1) for k, (w, s_) in zip(range(-15, 13), lv) if w > top - 40},
             "envelope_rms_db": round(float(np.sqrt(np.mean((ea[live] - eb[live]) ** 2))), 2)}
 
 

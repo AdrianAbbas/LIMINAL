@@ -17,7 +17,7 @@ import analyze  # noqa: E402
 
 
 def classify(root):
-    takes, phrases, dry, other = [], [], {}, []
+    takes, phrases, dry, other, kit_file = [], [], {}, [], []
     for d, _, files in os.walk(root):
         for f in sorted(files):
             p = os.path.join(d, f)
@@ -27,6 +27,25 @@ def classify(root):
                 other.append(rel); continue
             if parts[0].lower() == "dry":
                 dry[os.path.splitext(f)[0].lower()] = p; continue
+            if len(parts) == 1:   # flat layout (the developer's upload, 2026-11-01)
+                low = f.lower()
+                stem = os.path.splitext(f)[0]
+                if low.startswith("01-pedal-capture-sequence"):
+                    kit_file.append(p); continue
+                if low == "notes.wav":
+                    dry["notes"] = p; continue
+                static = "0 rate" in low or "static" in low
+                for marker, kind in ((" phrases", "phrase"), (" 48k", "sequence")):
+                    if marker in low:
+                        name = stem[: low.index(marker)].strip()
+                        if kind == "sequence":
+                            takes.append({"unit": name, "patch": "-", "static": static, "path": p, "rel": rel})
+                        else:
+                            phrases.append({"unit": name, "patch": "-", "path": p, "rel": rel, "static": static})
+                        break
+                else:
+                    other.append(rel)
+                continue
             unit = parts[0] if len(parts) > 1 else "?"
             patch = "/".join(parts[1:-1]) or os.path.splitext(f)[0]
             static = "static" in rel.lower()
@@ -35,12 +54,13 @@ def classify(root):
                               "static": static, "path": p, "rel": rel})
             else:
                 phrases.append({"unit": unit, "patch": patch, "path": p, "rel": rel})
-    return takes, phrases, dry, other
+    return takes, phrases, dry, other, kit_file
 
 
 def main(root, out, kit_path=None):
     os.makedirs(out, exist_ok=True)
-    takes, phrases, dry, other = classify(root)
+    takes, phrases, dry, other, kit_file = classify(root)
+    kit_path = kit_path or (kit_file[0] if kit_file else None)
     inv = ["| unit | patch | kind | file |", "|---|---|---|---|"]
     for t in takes:
         inv.append(f"| {t['unit']} | {t['patch']} | sequence{' (static)' if t['static'] else ''} | `{t['rel']}` |")
@@ -68,12 +88,15 @@ def main(root, out, kit_path=None):
                     f"- damaged segments: {', '.join(bad) or 'none'}",
                     f"- RT60: {m.get('rt60_s')}", f"- echo: {m.get('echo')}",
                     f"- modulation (tone): {json.dumps(m.get('tone_modulation'))}",
+                    f"- modulation (wet tail): {json.dumps(m.get('tone_tail_modulation'))}",
+                    f"- tape profile: {analyze.tape_profile(m) if m else None}",
                     f"- THD loud/quiet: {m.get('harmonics_loud', {}).get('thd_percent')} / {m.get('harmonics_quiet', {}).get('thd_percent')} %; "
                     f"level dependence: {m.get('level_dependence_db')}", ""]
         import numpy as np  # noqa: E402
         ir = analyze.load(os.path.join(od, "ir.wav"))
         for p in [p for p in phrases if p["unit"] == t["unit"] and p["patch"] == t["patch"]]:
             key = os.path.splitext(os.path.basename(p["path"]))[0].lower()
+            key = key if key in dry else ("notes" if "notes" in dry else key)
             if key in dry:
                 c = analyze.compare(analyze.load(dry[key]), analyze.load(p["path"]), ir)
                 summary.append(f"- reamp `{os.path.basename(p['path'])}` vs IR: {c}")
