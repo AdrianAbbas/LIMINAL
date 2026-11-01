@@ -164,6 +164,8 @@ jobs:
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-places build/test-logs/u2-rooms.wav
       - name: Listening render (pedal captures, one piano phrase through all ten rooms, before and after, with an A/B file and cue sheet)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-captures build/test-logs/captures-rooms.wav
+      - name: Listening render (Liminality, one piano phrase at 0, 40 and 100 percent, dry and in three rooms, with cue sheet)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render-liminality build/test-logs/liminality-piano.wav
       - name: Upload test logs, editor snapshot and listening render
         if: always()
         uses: actions/upload-artifact@v4

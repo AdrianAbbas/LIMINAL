@@ -4,6 +4,7 @@
 //   LiminalTests --snapshot f.png      also write an image of the editor (2x scale)
 //   LiminalTests --render f.wav        render each instrument in the corridor, then dry (listening aid)
 //   LiminalTests --render-places f.wav the same phrase in each environment (listening aid)
+//   LiminalTests --render-liminality f.wav  one piano phrase at LIMINALITY 0/40/100 %, dry and in three rooms
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "Export.h"
@@ -70,6 +71,15 @@ std::string db(double x) { return juce::String(toDb(x), 1).toStdString() + " dB"
 
 struct Event { double at; juce::MidiMessage message; };
 
+// Liminality (2026-11-01): rigs start at LIMINALITY 0 (the older groups measure the instruments' and
+// rooms' own models) unless a check needs the product default: an instrument's own random pitch
+// movement (synth Drift, music box Pitch Drift, drone Instability) only acts while Liminality is up.
+bool liminalDefault = false;
+struct AtLiminalityDefault {
+    AtLiminalityDefault() { liminalDefault = true; }
+    ~AtLiminalityDefault() { liminalDefault = false; }
+};
+
 // A processor driven like a host: fixed blocks, MIDI at sample positions.
 struct Rig {
     std::unique_ptr<LiminalProcessor> p = std::make_unique<LiminalProcessor>();
@@ -79,6 +89,9 @@ struct Rig {
     explicit Rig(double sampleRate = 48000.0, int blockSize = 512, bool mono = false) : rate(sampleRate), block(blockSize) {
         if (mono) p->setBusesLayout({ {}, { juce::AudioChannelSet::mono() } });
         p->setRateAndBufferSizeDetails(rate, block);
+        // The older groups measure the instruments' and rooms' own models: clean (LIMINALITY 0 %).
+        // The liminality group sets it explicitly.
+        if (!liminalDefault) set(params::liminality, 0.0f);
         p->prepareToPlay(rate, block);
     }
     void set(const char* id, float value) {
@@ -181,6 +194,7 @@ double frequency(const std::vector<float>& x, double rate) {
 #include "CharacterTests.h"
 #include "DistinctTests.h"
 #include "WorkflowTests.h"
+#include "LiminalityTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -1160,6 +1174,7 @@ int main(int argc, char** argv) {
         else if (arg == "--capture-levels") return captureLevels();
         else if (arg == "--capture-match") return captureMatch();
         else if (arg == "--render-captures" && i + 1 < argc) return renderCaptures(argv[++i]);
+        else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
             const auto cwd = juce::File::getCurrentWorkingDirectory();
@@ -1218,6 +1233,7 @@ int main(int argc, char** argv) {
     if (run("cpu")) testEditorCpu(s);
     if (run("convolver")) testConvolver(s);
     if (run("captures")) testCaptures(s);
+    if (run("liminality")) testLiminality(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

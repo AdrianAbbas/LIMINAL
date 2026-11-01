@@ -38,6 +38,16 @@ public:
     void allNotesOff() override { pool.allNotesOff(); }
     void allSoundOff() override;
     void render(float* left, float* right, int n) override;
+    // The host jumped: the shared wow, the chorus sweep and the voice count (which side a note
+    // pans to) start again from the new position, so a replay matches.
+    void reseed(std::uint32_t s) override {
+        rng.state = s | 1u;
+        wow = {};
+        wowCents = 0;
+        chorusPhase = float(s >> 8) * (1.0f / 16777216.0f);
+        pool.counter = 0;
+        lastHz = 0;
+    }
     int activeVoices() const override { return pool.active(); }
 
 private:
@@ -48,6 +58,7 @@ private:
         float pulseWidth = 0.5f, lfoPhase = 0, lfoRate = 0.3f;
         std::array<Wander, 3> oscDrift {};
         Wander cutoffDrift;
+        VoiceShape shape;   // Liminality
         float ladder[4] {};
         float g = 0, gStep = 0;   // filter coefficient, ramped across the control period
         float amp = 0, filterEnv = 0;

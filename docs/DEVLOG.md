@@ -62,6 +62,10 @@ the checklist below.
   - [x] Part 3 — IRs (3) + measurements + tape/modulation profiles (`tools/captures/prepare.py`); emulation vs reamped phrases (`compare_models.py`); convolver: shared spectra, real-time Quality cap + decay reshaping; `Source/DSP/Captures` (bank built in prepareToPlay) — push `[skip ci]`
   - [x] Part 4 — rooms: mall, school, garage, pool, hotel, subway, supermarket, impossible room use captures (hospital, office unchanged, bit-exact); level-matched within +/-0.8 dB; follows Character decay/Scale/wet; test group `captures`; CI fetches + prepares the captures with `SAMPLES_TOKEN` — push `[skip ci]`
   - [x] Part 5 — listening render before/after/A-B (`--render-captures`, CI test-logs artifact); CPU; plugin size; DEVLOG; final push without `[skip ci]`
+- [ ] **Liminality — unstable, detuned, half-remembered instruments** (2026-11-01; section at the end)
+  - [x] Part 1 — shared stage `DSP/Liminality` (note side through a small hook in `DSP/Instrument.h`, audio side before Distance), ten controls per instrument + the LIMINALITY macro (61 parameters), room/Character nudges, processor routing (timing queue, host-timeline clock, reseed on relocation), test group `liminality` — push `[skip ci]`
+  - [ ] Part 2 — editor: LIMINALITY on the main screen, the ten controls in each instrument's panel, snapshots — push `[skip ci]`
+  - [ ] Part 3 — listening render (piano phrase at 0/40/100 %, dry + three rooms), CPU, DEVLOG section + handoff; final push **without** `[skip ci]`
 
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 

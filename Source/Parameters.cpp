@@ -1,4 +1,5 @@
 #include "Parameters.h"
+#include "DSP/Liminality.h"
 
 namespace liminal::params {
 
@@ -209,6 +210,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     // The VHS look: Light by default (tuned between light and medium), saved with the song.
     layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { vhs, 1 }, "VHS Look", juce::StringArray { "Off", "Light", "Heavy" }, 1));
     layout.add(toggle(vhsWarble, "VHS Tape Warble", false));
+    // Liminality (2026-11-01).
+    layout.add(amount(liminality, "Liminality", dsp::lim::macroDefault));
+    for (int i = 0; i < instrumentCount; ++i)
+        for (int k = 0; k < dsp::lim::count; ++k) {
+            const auto id = limId(i, dsp::lim::keys[k]);
+            const juce::String name = juce::String(instrumentLabels[i]) + " Liminal " + dsp::lim::names[k];
+            layout.add(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { id, 1 }, name, juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), dsp::lim::defaults[k],
+                juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
+        }
     return layout;
 }
 

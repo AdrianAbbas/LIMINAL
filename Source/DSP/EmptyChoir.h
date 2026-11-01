@@ -36,6 +36,7 @@ public:
     void allNotesOff() override { pool.allNotesOff(); }
     void allSoundOff() override { pool.allSoundOff(sr); }
     void render(float* left, float* right, int n) override;
+    void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active(); }
 
 private:
@@ -44,6 +45,7 @@ private:
         std::array<float, singers> phase {}, inc {}, offset {}, panL {}, panR {};
         std::array<Wander, singers> drift {};
         Wander vowel;
+        VoiceShape shape;   // Liminality
         Svf formL[formants], formR[formants];
         float formGain[formants] {};
         OnePole tiltL, tiltR, darkL, darkR;

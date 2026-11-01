@@ -36,13 +36,15 @@ void HollowDrone::noteOn(int note, float velocity) {
     v.sweep = rng.uniform();
     v.filterL.clear();
     v.filterR.clear();
+    v.shape = takeShape();
     control(v);
 }
 
 void HollowDrone::control(Voice& v) {
     const auto& st = settings;
     const float tick = float(controlPeriod / sr);
-    const float base = noteHz(float(v.note)) * bend;
+    const float base = noteHz(float(v.note)) * bend * cents(shapeCents(v.shape, tick));
+    const float unstable = wander();   // Liminality: no movement of its own at Drift 0
     // Density: 2..7 stacked oscillators, the last one fading in fractionally.
     const float stack = 2.0f + 5.0f * st.density;
     const float spreadCents = 4.0f + 14.0f * st.density;
@@ -57,7 +59,7 @@ void HollowDrone::control(Voice& v) {
             ratio = k == 7 ? 1.5f : 2.0f;   // a fifth and an octave above, with Harmonics
             g = std::clamp(st.harmonics * 1.6f - (k == 7 ? 0.5f : 0.2f), 0.0f, 1.0f) * 0.5f;
         }
-        c += v.drift[i].tick(rng, 0.08f + 0.2f * st.instability, tick) * (1.0f + 22.0f * st.instability);
+        c += v.drift[i].tick(rng, 0.08f + 0.2f * st.instability, tick) * (1.0f + 22.0f * st.instability) * unstable;
         v.inc[i] = std::min(0.45f, base * ratio * cents(c) / float(sr));
         v.gain[i] = g;
         // Each oscillator circles slowly through the stereo field (Movement).
@@ -72,7 +74,7 @@ void HollowDrone::control(Voice& v) {
     // The resonant low-pass: tracks the note, opens with Harmonics, breathes with Movement.
     v.sweep += tick * (0.02f + 0.1f * st.movement);
     if (v.sweep >= 1.0f) v.sweep -= 1.0f;
-    const float octaves = st.movement * 1.2f * std::sin(twoPi * v.sweep) + v.cutoffDrift.tick(rng, 0.1f, tick) * st.instability * 0.7f;
+    const float octaves = st.movement * 1.2f * std::sin(twoPi * v.sweep) + v.cutoffDrift.tick(rng, 0.1f, tick) * st.instability * 0.7f + 0.6f * v.shape.tone;
     const float cutoff = std::clamp(base * (1.5f + 14.0f * st.harmonics * st.harmonics) * std::exp2(octaves) + 120.0f, 60.0f, 16000.0f);
     const float q = 1.2f + 3.0f * st.harmonics;
     v.filterL.set(cutoff, q, sr);

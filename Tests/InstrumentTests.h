@@ -301,7 +301,9 @@ void testSynth(Suite& s) {
         s.check(finite(chord) && peak(chord) < 0.9f, "a five-note chord is unclipped", juce::String(peak(chord), 2).toStdString());
         s.check(windowDb(chord, rate, 0.5, 1.4) > -30.0, "the chord is full (over -30 dBFS)", juce::String(windowDb(chord, rate, 0.5, 1.4), 1).toStdString());
     }
-    {   // Velocity: louder and brighter.
+    {   // Velocity: louder and brighter. (At the Liminality default: with its oscillators perfectly
+        // still the three nearly-unison oscillators' starting phases decide the brightness.)
+        const AtLiminalityDefault liminal;
         auto rig = fresh();
         const auto soft = playNote(*rig, 60, 35, 0.6, 0.6), hard = playNote(*rig, 60, 120, 0.6, 0.6);
         const double range = windowDb(hard, rate, 0.05, 0.5) - windowDb(soft, rate, 0.05, 0.5);
@@ -323,6 +325,7 @@ void testSynth(Suite& s) {
                 juce::String(wobbleDb(still, rate, 0.5, 1.9), 2).toStdString() + " -> " + juce::String(wobbleDb(spread, rate, 0.5, 1.9), 2).toStdString() + " dB");
 
         const auto pitchSpread = [&](float drift) {
+            const AtLiminalityDefault liminal;   // its own Drift acts while Liminality is up
             const auto x = note({ { params::synthDrift, drift }, { params::synthDetune, 0.0f } }, 4.0);
             std::vector<double> p;
             for (double t = 0.3; t < 3.9; t += 0.3) p.push_back(centsBetween(pitchAt(x, rate, t, t + 0.12), 261.63));
@@ -542,19 +545,34 @@ void testBox(Suite& s) {
         const double worn = spread(1.0f), fresh = spread(0.0f);
         s.check(worn > 6.0 && fresh < 2.0, "Wear puts the teeth out of tune with each other", num(fresh, 2) + " -> " + num(worn, 2) + " cents RMS");
     }
-    {   // Pitch Drift: the spring motor wanders.
-        const auto wander = [&](float drift) {
+    {   // Pitch Drift: the spring motor wanders. It acts while Liminality is up (at 0 nothing moves),
+        // so both renders run with the same Liminality (Drift only, the same moments: its own drift
+        // is identical in both) and the difference between them is the motor alone.
+        const AtLiminalityDefault liminal;
+        const auto pitches = [&](float drift) {
             auto rig = soloRig(params::boxOn, { { params::boxWear, 0.0f }, { params::boxDrift, drift } });
+            for (int i = 0; i < params::instrumentCount; ++i)
+                for (int k = 0; k < dsp::lim::count; ++k) {
+                    auto* q = rig->p->parameters.getParameter(params::limId(i, dsp::lim::keys[k]));
+                    q->setValueNotifyingHost(q->convertTo0to1(k == dsp::lim::drift ? 0.4f : 0.0f));
+                }
+            rig->render(0.4);
             std::vector<double> c;
             for (int i = 0; i < 8; ++i) {
                 const auto x = playNote(*rig, 81, 100, 0.25, 0.25);
                 c.push_back(centsBetween(spectralPitch(x, rate, 0.02, 0.25, 880.0), 880.0));
             }
-            const auto [lo, hi] = std::minmax_element(c.begin(), c.end());
+            return c;
+        };
+        const auto range = [](const std::vector<double>& a, const std::vector<double>& b) {
+            std::vector<double> d;
+            for (std::size_t i = 0; i < a.size(); ++i) d.push_back(a[i] - b[i]);
+            const auto [lo, hi] = std::minmax_element(d.begin(), d.end());
             return *hi - *lo;
         };
-        const double steady = wander(0.0f), drifting = wander(1.0f);
-        s.check(drifting > 4.0 && steady < 1.0, "Pitch Drift makes the notes wander over time", num(steady, 2) + " -> " + num(drifting, 2) + " cents range");
+        const auto base = pitches(0.0f);
+        const double steady = range(pitches(0.0f), base), drifting = range(pitches(1.0f), base);
+        s.check(drifting > 4.0 && steady < 1.0, "Pitch Drift makes the notes wander over time (the motor alone)", num(steady, 2) + " -> " + num(drifting, 2) + " cents range");
     }
     const auto play = [&](std::initializer_list<std::pair<const char*, float>> settings) {
         auto rig = soloRig(params::boxOn, settings);
@@ -613,6 +631,7 @@ void testDrone(Suite& s) {
     }
     {
         // Energy beside the fundamental (4-25 cents off) against energy on it (A3, 220 Hz).
+        const AtLiminalityDefault liminal;   // still oscillators: their starting phases would decide
         const auto spread = [&](float density) {
             const auto q = spectrum(hold({ { params::droneDensity, density }, { params::droneInstability, 0.0f } }, 57));
             const double f = 220.0;

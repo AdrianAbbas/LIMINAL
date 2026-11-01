@@ -69,6 +69,7 @@ void FadedSynth::noteOn(int note, float velocity) {
     v.panL = g.l;
     v.panR = g.r;
     v.g = 0;
+    v.shape = takeShape();
     control(v);
     v.g += v.gStep * float(controlPeriod);   // start the filter where it should be
     v.gStep = 0;
@@ -89,9 +90,10 @@ void FadedSynth::control(Voice& v) {
         v.hz = v.targetHz;
     }
     const float spread = 24.0f * std::pow(st.detune, 1.5f);
+    const float shaped = shapeCents(v.shape, tick), unstable = wander();
     static constexpr std::array<float, 3> offsets { -0.5f, 0.5f, 0.15f };
     for (std::size_t k = 0; k < 3; ++k) {
-        const float c = offsets[k] * spread + v.oscDrift[k].tick(rng, 0.25f, tick) * st.drift * 7.0f + wowCents;
+        const float c = offsets[k] * spread + (v.oscDrift[k].tick(rng, 0.25f, tick) * st.drift * 7.0f + wowCents) * unstable + shaped;
         v.inc[k] = std::min(0.45f, v.hz * bend * cents(c) / float(sr));
     }
     v.lfoPhase += v.lfoRate * tick;
@@ -99,7 +101,7 @@ void FadedSynth::control(Voice& v) {
     const float lfo = std::sin(twoPi * v.lfoPhase);
     v.pulseWidth = 0.5f + 0.18f * lfo;
 
-    const float base = 9000.0f * std::pow(500.0f / 9000.0f, st.warmth);
+    const float base = 9000.0f * std::pow(500.0f / 9000.0f, st.warmth) * std::exp2(0.8f * v.shape.tone);
     const float track = std::pow(v.hz / 261.6f, 0.6f);
     const float envOctaves = 0.8f + 1.6f * v.velocity;
     const float wander = 1.0f + st.drift * 0.15f * v.cutoffDrift.tick(rng, 0.2f, tick) + 0.04f * lfo;

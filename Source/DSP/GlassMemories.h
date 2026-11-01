@@ -39,6 +39,7 @@ public:
     void allNotesOff() override { pool.allNotesOff(); }
     void allSoundOff() override { pool.allSoundOff(sr); }
     void render(float* left, float* right, int n) override;
+    void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active(); }
 
 private:
@@ -52,6 +53,7 @@ private:
         float tick = 0, tickDecay = 0, tickPrev = 0;
         Random noise;
         Wander wobble, flutter;
+        VoiceShape shape;   // Liminality
         float flutterNow = 1, wobbleRatio = 1, level = 0;
     };
     void control(Voice&);

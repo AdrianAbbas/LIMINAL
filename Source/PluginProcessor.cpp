@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <cmath>
+#include <limits>
 
 namespace liminal {
 
@@ -82,7 +83,9 @@ LiminalProcessor::LiminalProcessor()
         slot.keyHigh = mirrorOf(params::midiId(i, params::midi::keyHigh));
         slot.velocityVolume = mirrorOf(params::midiId(i, params::midi::velocityVolume));
         slot.velocityFilter = mirrorOf(params::midiId(i, params::midi::velocityFilter));
+        for (int k = 0; k < dsp::lim::count; ++k) slot.limParams[std::size_t(k)] = mirrorOf(params::limId(i, dsp::lim::keys[k]));
     }
+    liminalityMacro = mirrorOf(params::liminality);
     qualityChoice = mirrorOf(params::quality);
     soloParam = raw(params::solo);
     environmentChoice = raw(params::environment);
@@ -204,9 +207,14 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
         slot.share.reset(slot.rack.placeShare());
         slot.gain.reset(slot.targetGain());
         slot.running = slot.enabled();
+        slot.lim.setSeed(std::uint32_t(evolutionSeed->load()) * 2654435761u + 1u);
+        slot.lim.prepare(sampleRate, i);
     }
+    updateLiminality(int(selectedPlace()), selectedCharacter());
+    for (auto& slot : slots) slot.lim.reset();   // starts on the current amounts
     environments.setAmount(environmentAmount->load());
     samplePosition = 0;
+    limClock = 0;
     lastSeed = evolutionSeed->load();
     captures.build(sampleRate);
     environments.setCaptures(&captures);
@@ -239,7 +247,8 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
                 slot.running = true;
                 // Velocity to Volume: 1 = the instrument's own response, 0 = every note alike.
                 const float v = 0.75f + slot.velocityVolume->load() * (m.getFloatVelocity() - 0.75f);
-                in.noteOn(note, std::clamp(v, 0.01f, 1.0f));
+                // Through Liminality: the note's detune, sourness, unevenness and timing.
+                slot.lim.noteOn(in, note, std::clamp(v, 0.01f, 1.0f), samplePosition, limClock);
                 meters.notes.fetch_add(1, std::memory_order_relaxed);
                 meters.velocity.store(m.getFloatVelocity(), std::memory_order_relaxed);
                 slot.rack.noteVelocity(m.getFloatVelocity());
@@ -247,7 +256,7 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
         } else if (!slot.running) {
             continue;
         } else if (m.isNoteOff()) {
-            in.noteOff(m.getNoteNumber());
+            slot.lim.noteOff(in, m.getNoteNumber(), samplePosition);   // follows its note's delay
         } else if (m.isSustainPedalOn()) {
             in.sustain(true);
         } else if (m.isSustainPedalOff()) {
@@ -255,8 +264,10 @@ void LiminalProcessor::handleMidi(const juce::MidiMessage& m) {
         } else if (m.isPitchWheel()) {
             in.pitchBend(m.getPitchWheelValue());
         } else if (m.isAllSoundOff()) {
+            slot.lim.flush(in);
             in.allSoundOff();
         } else if (m.isAllNotesOff() || m.isResetAllControllers()) {
+            slot.lim.flush(in);
             in.allNotesOff();
         }
     }
@@ -342,11 +353,24 @@ void LiminalProcessor::controlTick() {
     effectLive.colour = { u * flavour.shiftMix, u * flavour.wanderPan, u * flavour.wowCents + 3.0f * std::abs(evo.harmonic()), 0.8f * evo.spectral(),
                           farAway->load() };
     for (auto& slot : slots) slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm, effectLive);
+    for (auto& slot : slots) slot.lim.control(*slot.instrument, limClock);   // Liminality's pitch and audio side
+}
+
+// Liminality's amounts per instrument: its own, scaled by the LIMINALITY macro, nudged by the place
+// and its Character (as much as Environment Amount and the instrument's Environment Influence allow).
+void LiminalProcessor::updateLiminality(int place, int character) {
+    const float macro = liminalityMacro->load(), env = environmentAmount->load();
+    for (auto& slot : slots) {
+        dsp::LiminalAmounts own {};
+        for (std::size_t k = 0; k < own.size(); ++k) own[k] = slot.limParams[k]->load();
+        slot.lim.setAmounts(dsp::liminalEffective(own, macro, place, character, env * std::clamp(slot.settings.influence, 0.0f, 1.0f)));
+    }
 }
 
 void LiminalProcessor::renderSegment(float* left, float* right, int n) {
     if (samplePosition % controlPeriod == 0) controlTick();
     samplePosition += std::uint64_t(n);
+    limClock += std::uint64_t(n);
     float* il = scratchL;
     float* ir = scratchR;
     std::fill(il, il + n, 0.0f);
@@ -364,6 +388,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         std::fill(slotSendL, slotSendL + n, 0.0f);
         std::fill(slotSendR, slotSendR + n, 0.0f);
         slot.instrument->render(slotL, slotR, n);
+        slot.lim.process(slotL, slotR, n);   // Liminality: after the voices, before Distance and the room
         slot.stage.process(slotL, slotR, slotSendL, slotSendR, n);
         // The instrument's own effects (and the place's processing of it); the rack makes
         // the room and echo sends. Farther instruments send more to the room.
@@ -389,6 +414,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         if (!slot.enabled() && slot.gain.current < 1.0e-5f) {
             slot.instrument->reset();
             slot.rack.reset();
+            slot.lim.reset();
             slot.running = false;
         }
     }
@@ -458,12 +484,27 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     if (evolutionSeed->load() != lastSeed) {   // a new seed: evolution starts again from it
         lastSeed = evolutionSeed->load();
         environments.setEvolutionSeed(unsigned(lastSeed));
+        for (auto& slot : slots) slot.lim.setSeed(std::uint32_t(lastSeed) * 2654435761u + 1u);
         environments.resetEvolution();
     }
     if (evolutionResetRequest.exchange(false)) environments.resetEvolution();
     if (auto* head = getPlayHead())
-        if (const auto position = head->getPosition())
+        if (const auto position = head->getPosition()) {
             if (const auto bpm = position->getBpm()) hostBpm = std::clamp(*bpm, 20.0, 400.0);
+            // Liminality's clock follows the song while it plays, so a replay or a bounce of the same
+            // passage has the same detuned notes, drift and wow.
+            if (position->getIsPlaying())
+                if (const auto at = position->getTimeInSamples()) {
+                    const auto host = std::uint64_t(std::max<std::int64_t>(0, *at));
+                    if (host != limClock) {
+                        limClock = host;
+                        for (std::size_t i = 0; i < slots.size(); ++i) {
+                            slots[i].lim.relocate(limClock);
+                            slots[i].instrument->reseed(std::uint32_t(limClock * 0x9E3779B97F4A7C15ull >> 32) ^ std::uint32_t(i * 0x85EBCA77u));
+                        }
+                    }
+                }
+        }
     // The macros (Milestone 5). Presence brings the instruments forward (and the place's
     // sounds back); Scale, Activity and Unreal act on the place, each in its own way.
     const dsp::Macros macros { macroParams[0]->load(), macroParams[1]->load(), macroParams[2]->load(), macroParams[3]->load() };
@@ -486,6 +527,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
             slot.running = true;
         }
     }
+    updateLiminality(int(place), characterIndex);
 
     float* left = buffer.getWritePointer(0);
     float* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
@@ -494,8 +536,16 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     auto renderRange = [&](int from, int to) {
         float monoRight[chunk];
         while (from < to) {
-            // Never across a step of the 64-sample control grid (see controlTick).
-            const int n = std::min({ chunk, to - from, controlPeriod - int(samplePosition % controlPeriod) });
+            // Notes held back by Liminality's Timing start at their exact sample.
+            std::uint64_t due = std::numeric_limits<std::uint64_t>::max();
+            for (auto& slot : slots) {
+                if (!slot.running) continue;
+                slot.lim.fireDue(*slot.instrument, samplePosition);
+                due = std::min(due, slot.lim.nextDue());
+            }
+            // Never across a step of the 64-sample control grid (see controlTick), nor past a held-back note.
+            int n = std::min({ chunk, to - from, controlPeriod - int(samplePosition % controlPeriod) });
+            if (due > samplePosition && due - samplePosition < std::uint64_t(n)) n = int(due - samplePosition);
             if (right != nullptr) {
                 renderSegment(left + from, right + from, n);
             } else {

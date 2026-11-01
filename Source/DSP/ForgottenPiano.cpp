@@ -72,6 +72,7 @@ void ForgottenPiano::addEvent(float hz, float q, float seconds, float knock, flo
 void ForgottenPiano::start(Voice& v, int note, float velocity) {
     const auto& st = settings;
     const float age = st.age, det = st.detune, soft = st.softness;
+    v.shape = takeShape();
     const float h1 = keyHash(note, 1), h2 = keyHash(note, 2), h3 = keyHash(note, 3), h4 = keyHash(note, 4), h5 = keyHash(note, 5),
                 h6 = keyHash(note, 6);
 
@@ -83,7 +84,7 @@ void ForgottenPiano::start(Voice& v, int note, float velocity) {
     // dynamics, longer with soft felt. The force pulse low-passes the string's spectrum.
     const float tau = 0.004f * std::exp2(-float(note - 21) / 37.0f) * (1.4f - 0.65f * velocity) * (1.0f + 1.2f * soft);
     const float voicing = 1.0f + (2.0f * h2 - 1.0f) * (0.15f + 0.35f * age);   // uneven hammers
-    const float corner = 1.8f / tau * voicing;
+    const float corner = 1.8f / tau * voicing * std::exp2(0.9f * v.shape.tone);   // Liminality's Unevenness
     // Felt is a stiffening spring: harder blows add disproportionately more upper partials.
     const float slope = 2.5f - 1.8f * velocity + 0.5f * soft;
     const float strike = 0.12f + 0.02f * (2.0f * h3 - 1.0f);    // strike point, fraction of the string
@@ -146,8 +147,8 @@ void ForgottenPiano::start(Voice& v, int note, float velocity) {
     v.damped = false;
     v.wobble.start(rng);
     v.wobbleCents = 0;
-    v.appliedRatio = bend;
-    v.modes.retune(bend, false);
+    v.appliedRatio = bend * cents(shapeCents(v.shape, 0.0f));
+    v.modes.retune(v.appliedRatio, false);
     v.attack = 0;
     v.attackStep = 1.0f / std::max(1.0f, tau * float(sr));
     v.level = gain;
@@ -202,15 +203,16 @@ void ForgottenPiano::pitchBend(int value14bit) {
     bend = bendRatio(value14bit);
     for (auto& v : pool.voices)
         if (v.active()) {
-            v.appliedRatio = bend * cents(v.wobbleCents);
+            v.appliedRatio = bend * cents(v.wobbleCents + v.shape.now);
             v.modes.retune(v.appliedRatio, v.damped);
         }
 }
 
 void ForgottenPiano::control(Voice& v) {
     const bool damp = v.hasDamper && v.releasing();
-    v.wobbleCents = v.wobble.tick(rng, 0.35f, float(controlPeriod / sr)) * (0.3f + 2.5f * settings.age);
-    const float ratio = bend * cents(v.wobbleCents);
+    const float tick = float(controlPeriod / sr);
+    v.wobbleCents = v.wobble.tick(rng, 0.35f, tick) * (0.3f + 2.5f * settings.age) * wander();
+    const float ratio = bend * cents(v.wobbleCents + shapeCents(v.shape, tick));
     if (damp != v.damped || std::abs(ratio - v.appliedRatio) > 2.0e-6f) {
         if (damp && !v.damped && !v.stolen)
             addEvent(380.0f + 200.0f * keyHash(v.note, 8), 4.0f, 0.03f, 0.03f * settings.noise * (1.0f + settings.age),

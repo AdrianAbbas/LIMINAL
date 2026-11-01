@@ -40,7 +40,7 @@ struct Random {
 // drift and pitch instability: a wobble around the note, never a slide into it.
 struct Wander {
     float target = 0, mid = 0, value = 0, coef = 0.001f, hold = 0;
-    void start(Random& rng) { value = mid = target = rng.bipolar() * 0.5f; }
+    void start(Random& rng) { value = mid = target = rng.bipolar() * 0.5f; hold = 0; }   // nothing carried over from a slot's last note
     // Called once per control tick; `rateHz` is roughly how often it turns.
     float tick(Random& rng, float rateHz, float tickSeconds) {
         hold -= tickSeconds * rateHz;
@@ -50,6 +50,24 @@ struct Wander {
         value += coef * (mid - value);
         return value;
     }
+};
+
+// LIMINALITY hook (2026-11-01, DSP/Liminality.h). What the shared Liminality stage asks of an
+// instrument's voices, so it works for every instrument, synthesised or sampled:
+//   - NoteShape, handed over right before noteOn(): the note's fixed pitch offset in cents
+//     (Detune, Sour Notes), its tone (Unevenness: -1 duller .. +1 brighter) and a seed;
+//   - LiminalPitch, set every control tick: the instrument-wide pitch offset (Drift, Wow &
+//     Flutter), the depth of each voice's own Warble, and `wander`, which scales the instrument's
+//     own random pitch movement (0 = none: at Liminality 0 the instrument is perfectly stable).
+// A voice keeps a VoiceShape (takeShape() at note-on) and adds shapeCents() to its pitch on every
+// control tick. With nothing handed over (the instrument used alone) everything is 0 and `wander`
+// is 1: the instrument is exactly what it was.
+struct NoteShape { float cents = 0, tone = 0; std::uint32_t seed = 0; };
+struct LiminalPitch { float cents = 0, warble = 0, wander = 1; };
+struct VoiceShape {
+    float cents = 0, tone = 0;         // fixed for the note
+    float age = 0, phase1 = 0, phase2 = 0, rate = 0.5f;   // its warble
+    float now = 0;                     // the cents applied at the last tick
 };
 
 // The MIDI side of an instrument. Render adds into left/right.
@@ -71,8 +89,49 @@ public:
     void setQuality(int q) { quality = std::clamp(q, 0, 2); }
     int voices(int polyphony) const { return quality == 0 ? std::max(4, polyphony * 5 / 8) : polyphony; }
 
+    // Liminality (see above). `reseed`: the host jumped in the song; the instrument's own randomness
+    // continues from a value derived from the new position, so a replay of a passage matches.
+    virtual void reseed(std::uint32_t) {}
+    void shapeNextNote(const NoteShape& s) { nextShape = s; }
+    void setLiminalPitch(const LiminalPitch& p) { liminal = p; }
+    const LiminalPitch& liminalPitch() const { return liminal; }
+
 protected:
     int quality = 1;
+    NoteShape nextShape;
+    LiminalPitch liminal;
+    float wander() const { return liminal.wander; }
+    // The shape for the note starting now (and forget it: the next note brings its own).
+    VoiceShape takeShape() {
+        VoiceShape v;
+        v.cents = nextShape.cents;
+        v.tone = std::clamp(nextShape.tone, -1.0f, 1.0f);
+        const auto h = [&](int salt) { return keyHash(int(nextShape.seed & 0x7FFFFFFFu), salt); };
+        v.rate = 0.3f + 0.5f * h(901);
+        v.phase1 = h(902);
+        v.phase2 = h(903);
+        nextShape = {};
+        return v;
+    }
+    // The voice's Liminality pitch now, in cents: its fixed offset, the instrument-wide drift and
+    // wow, and its own warble, which grows in over the first second and a half of the note (the
+    // attack stays clean; a wobble around the note, never a slide into it). `tick`: seconds since
+    // the last call (0 at note-on).
+    float shapeCents(VoiceShape& v, float tick) const {
+        v.age += tick;
+        float c = v.cents + liminal.cents;
+        if (liminal.warble > 0.0f) {
+            v.phase1 += v.rate * tick;
+            v.phase2 += v.rate * 2.37f * tick;
+            v.phase1 -= std::floor(v.phase1);
+            v.phase2 -= std::floor(v.phase2);
+            const float x = std::clamp((v.age - 0.12f) / 1.4f, 0.0f, 1.0f);
+            const float grow = x * x * (3.0f - 2.0f * x);
+            c += liminal.warble * grow * (0.75f * std::sin(twoPi * v.phase1) + 0.25f * std::sin(twoPi * v.phase2));
+        }
+        v.now = c;
+        return c;
+    }
 public:
 
     static float bendRatio(int value14bit) {

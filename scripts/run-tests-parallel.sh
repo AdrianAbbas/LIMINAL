@@ -28,6 +28,8 @@ wait
 "$tests" --only cpu > "$logs/14-cpu.txt" 2>&1
 "$tests" --only convolver > "$logs/15-convolver.txt" 2>&1
 "$tests" --only captures > "$logs/16-captures.txt" 2>&1
+# Liminality (2026-11-01): includes its CPU measure, so alone too.
+"$tests" --only liminality > "$logs/17-liminality.txt" 2>&1
 
 passed=0
 failed=0

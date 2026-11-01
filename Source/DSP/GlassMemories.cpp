@@ -32,7 +32,8 @@ void GlassMemories::noteOn(int note, float velocity) {
     auto& v = pool.allocate(note, voices(polyphony), sr, 0.04, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
 
-    const float frag = st.fragility, bright = st.brightness;
+    v.shape = takeShape();
+    const float frag = st.fragility, bright = std::clamp(st.brightness + 0.35f * v.shape.tone, 0.0f, 1.0f);   // tone: Liminality's Unevenness
     // Pitch instability: each strike a little off (fixed for the note), then a slow wander.
     const float f1 = noteHz(float(note)) * cents(rng.bipolar() * st.detune * 15.0f);
     // Strike: a raised-cosine pulse, 4 ms (soft mallet) down to 0.16 ms (hard tick).
@@ -101,9 +102,9 @@ void GlassMemories::noteOn(int note, float velocity) {
     v.flutter.start(rng);
     v.flutterNow = 1;
     v.damped = false;
-    v.wobbleRatio = 1.0f;
-    v.struck.retune(bend, false);
-    v.singing.retune(bend, false);
+    v.wobbleRatio = cents(shapeCents(v.shape, 0.0f));
+    v.struck.retune(bend * v.wobbleRatio, false);
+    v.singing.retune(bend * v.wobbleRatio, false);
     v.level = gain;
 }
 
@@ -118,9 +119,9 @@ void GlassMemories::pitchBend(int value14bit) {
 
 void GlassMemories::control(Voice& v) {
     const float tick = float(controlPeriod / sr);
-    const float wander = v.wobble.tick(rng, 0.4f, tick) * settings.detune * 6.0f;
+    const float wobbleCents = v.wobble.tick(rng, 0.4f, tick) * settings.detune * 6.0f * wander() + shapeCents(v.shape, tick);
     v.flutterNow = 1.0f + 0.12f * v.flutter.tick(rng, 3.0f, tick);   // the rubbed rim's stick-slip unevenness
-    v.wobbleRatio = cents(wander);
+    v.wobbleRatio = cents(wobbleCents);
     v.damped = v.releasing();
     v.struck.retune(bend * v.wobbleRatio, v.damped);
     v.singing.retune(bend * v.wobbleRatio, false);

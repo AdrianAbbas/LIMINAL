@@ -9,6 +9,7 @@
 #include "DSP/LostMusicBox.h"
 #include "DSP/HollowDrone.h"
 #include "DSP/TapeWarble.h"
+#include "DSP/Liminality.h"
 #include "Parameters.h"
 #include "Presets.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -80,6 +81,7 @@ public:
     bool loadUserPreset(const juce::File&);
     juce::Array<juce::File> userPresets() const;
     const dsp::EnvironmentChain& placeNow() const { return environments.current(); }   // audio-thread state (tests)
+    const dsp::Liminality& liminalityOf(int instrument) const { return slots[std::size_t(instrument)].lim; }   // (tests)
 
     static constexpr int stateVersion = 2;   // 2: scenes A/B saved alongside the parameters
 
@@ -100,6 +102,8 @@ private:
         std::atomic<float>* level = nullptr;
         std::atomic<float>* distance = nullptr;   // optional
         dsp::Distance stage;
+        dsp::Liminality lim;                                            // Liminality (2026-11-01)
+        std::array<std::atomic<float>*, dsp::lim::count> limParams {};
         dsp::EffectRack rack;                                           // Milestone 3
         dsp::EffectSettings settings;
         std::array<std::atomic<float>*, params::fx::count> fx {};      // in params::fx::all order
@@ -154,6 +158,9 @@ private:
     std::atomic<float>* environmentAmount = nullptr;
     std::atomic<float>* farAway = nullptr;
     std::atomic<float>* warbleOn = nullptr;
+    std::atomic<float>* liminalityMacro = nullptr;
+    std::uint64_t limClock = 0;   // Liminality's timeline: the host's position while it plays
+    void updateLiminality(int place, int character);
     dsp::TapeWarble warble;
     dsp::Place selectedPlace() const;
     int selectedCharacter() const;

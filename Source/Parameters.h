@@ -156,6 +156,12 @@ inline constexpr const char* keyHigh = "key_high";
 inline constexpr const char* velocityVolume = "vel_volume";   // 1 = the instrument's own response, 0 = every note the same
 inline constexpr const char* velocityFilter = "vel_filter";   // soft notes darker
 } // namespace midi
+// Liminality (2026-11-01, DSP/Liminality.h): the LIMINALITY macro (0 = every instrument clean,
+// 40 % = each instrument's own amounts, 100 % = 2.5x them: deeply unsettling) and per instrument
+// "<instrument>_lim_<control>" (detune, drift, wow, warble, ghost, wear, timing, uneven, sour,
+// fade), each 0 = clean.
+inline constexpr const char* liminality = "liminality";
+inline juce::String limId(int instrument, const char* control) { return juce::String(instrumentKeys[instrument]) + "_lim_" + control; }
 inline juce::String midiId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_" + name; }
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
 

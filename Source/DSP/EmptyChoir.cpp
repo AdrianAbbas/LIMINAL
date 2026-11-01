@@ -54,6 +54,7 @@ void EmptyChoir::noteOn(int note, float velocity) {
     v.noise.uniform();
     for (int f = 0; f < formants; ++f) { v.formL[f].clear(); v.formR[f].clear(); }
     v.tiltL.z = v.tiltR.z = v.darkL.z = v.darkR.z = 0;
+    v.shape = takeShape();
     control(v);
 }
 
@@ -65,11 +66,12 @@ void EmptyChoir::control(Voice& v) {
     v.vibPhase += v.vibRate * tick;
     if (v.vibPhase >= 1.0f) v.vibPhase -= 1.0f;
     const float vibDepth = 5.0f * std::clamp((v.age - 0.5f) / 1.5f, 0.0f, 1.0f);
-    const float vib = vibDepth * std::sin(twoPi * v.vibPhase);
-    const float base = noteHz(float(v.note)) * bend;
+    const float unstable = wander();   // Liminality: no movement of its own at Drift 0
+    const float vib = vibDepth * std::sin(twoPi * v.vibPhase) * unstable;
+    const float base = noteHz(float(v.note)) * bend * cents(shapeCents(v.shape, tick));
     for (int k = 0; k < singers; ++k) {
         const auto i = std::size_t(k);
-        const float c = v.offset[i] * (2.0f + 22.0f * st.detune) + v.drift[i].tick(rng, 0.25f, tick) * (1.5f + 4.0f * st.detune) + vib;
+        const float c = v.offset[i] * (2.0f + 22.0f * st.detune) + v.drift[i].tick(rng, 0.25f, tick) * (1.5f + 4.0f * st.detune) * unstable + vib;
         v.inc[i] = std::min(0.45f, base * cents(c) / float(sr));
         const auto g = panGains((k % 2 == 0 ? -1.0f : 1.0f) * st.width * (0.5f + 0.5f * float(k / 2)));
         v.panL[i] = g.l;
@@ -89,10 +91,10 @@ void EmptyChoir::control(Voice& v) {
         v.formGain[f] = std::pow(10.0f, db / 20.0f);
     }
     // Spectral tilt of the source (brighter with velocity) and the darkness low-pass.
-    const float tilt = 900.0f * std::pow(3.0f, v.velocity) * (1.5f - 1.3f * st.darkness);
+    const float tilt = 900.0f * std::pow(3.0f, v.velocity) * (1.5f - 1.3f * st.darkness) * std::exp2(0.8f * v.shape.tone);
     v.tiltL.setHz(tilt, sr);
     v.tiltR.setHz(tilt, sr);
-    const float dark = 12000.0f * std::pow(700.0f / 12000.0f, st.darkness);
+    const float dark = 12000.0f * std::pow(700.0f / 12000.0f, st.darkness) * std::exp2(0.5f * v.shape.tone);
     v.darkL.setHz(dark, sr);
     v.darkR.setHz(dark, sr);
 }

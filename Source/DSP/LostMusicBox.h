@@ -33,6 +33,14 @@ public:
     void allNotesOff() override { pool.allNotesOff(); }
     void allSoundOff() override { pool.allSoundOff(sr); }
     void render(float* left, float* right, int n) override;
+    // The host jumped: the spring motor and the clockwork start again from the new position.
+    void reseed(std::uint32_t s) override {
+        rng.state = s | 1u;
+        tickRng.state = (s * 2654435761u) | 1u;
+        motor = {};
+        flutter = {};
+        tickCountdown = 0;
+    }
     int activeVoices() const override { return pool.active(); }
 
 private:
@@ -40,6 +48,7 @@ private:
     struct Voice : VoiceBase {
         ModeBank<8> modes;
         float click = 0, clickDecay = 0, level = 0, ratio = 1;
+        VoiceShape shape;   // Liminality
         Svf clickTone;
         Random noise;
     };

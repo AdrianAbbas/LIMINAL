@@ -46,6 +46,7 @@ void LostMusicBox::noteOn(int note, float velocity) {
     auto& v = pool.allocate(note, voices(polyphony), sr, 0.02, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
 
+    v.shape = takeShape();
     // Each tooth's wear is its own and the same every time it is plucked.
     const float wear = st.wear;
     const float mistune = (keyHash(note, 61) * 2.0f - 1.0f) * wear * 28.0f;   // cents
@@ -55,7 +56,7 @@ void LostMusicBox::noteOn(int note, float velocity) {
     const float f1 = noteHz(float(note)) * cents(mistune);
     const float ring = 0.5f * std::pow(12.0f, st.decay) * std::clamp(std::pow(880.0f / f1, 0.45f), 0.35f, 2.5f) * ringVar * dull;
     const float gain = 0.3f * (0.08f + 0.92f * std::pow(velocity, 1.6f)) * uneven;
-    const float bright = std::clamp(st.brightness * 0.8f + velocity * 0.3f, 0.0f, 1.0f);
+    const float bright = std::clamp(st.brightness * 0.8f + velocity * 0.3f + 0.3f * v.shape.tone, 0.0f, 1.0f);
     const float pan = std::clamp(float(note - 79) / 30.0f, -1.0f, 1.0f) * 0.4f;   // low teeth left, high right
     const auto g = panGains(pan);
     const float limit = 0.45f * float(sr);
@@ -76,8 +77,8 @@ void LostMusicBox::noteOn(int note, float velocity) {
     // A bent tooth: the fundamental as a doublet that beats slowly.
     const float beat = wear * (0.4f + 2.5f * keyHash(note, 65));
     v.modes.set(modeCount, 0.35f * wear * gain, 0.0f, twoPi * (f1 + beat) / float(sr), t60(ring * 0.8f, sr), t60(ring * 0.8f, sr), g.l, g.r);
-    v.ratio = 1.0f;
-    v.modes.retune(bend * motorRatio, false);
+    v.ratio = cents(shapeCents(v.shape, 0.0f));
+    v.modes.retune(bend * motorRatio * v.ratio, false);
     // The pin's click: a short noise burst through a small resonance, brighter with Brightness.
     v.click = st.mechanism * 1.2f * gain * (0.5f + bright);
     v.clickDecay = t60(0.015, sr);
@@ -90,7 +91,8 @@ void LostMusicBox::noteOn(int note, float velocity) {
 }
 
 void LostMusicBox::control(Voice& v) {
-    v.modes.retune(bend * motorRatio, false);
+    v.ratio = cents(shapeCents(v.shape, float(controlPeriod / sr)));
+    v.modes.retune(bend * motorRatio * v.ratio, false);
     v.level = v.modes.peak();
 }
 
@@ -101,7 +103,7 @@ void LostMusicBox::render(float* left, float* right, int n) {
         if (clock == 0) {
             const float tick = float(controlPeriod / sr);
             // The spring motor: a slow uneven wander and a faster, smaller flutter.
-            const float c = st.drift * (18.0f * motor.tick(rng, 0.18f, tick) + 4.0f * flutter.tick(rng, 2.5f, tick));
+            const float c = wander() * st.drift * (18.0f * motor.tick(rng, 0.18f, tick) + 4.0f * flutter.tick(rng, 2.5f, tick));
             motorRatio = cents(c);
             bool any = false;
             for (auto& v : pool.voices)

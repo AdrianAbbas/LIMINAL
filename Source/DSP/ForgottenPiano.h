@@ -40,6 +40,7 @@ public:
     void allNotesOff() override;
     void allSoundOff() override;
     void render(float* left, float* right, int n) override;
+    void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active(); }
 
 private:
@@ -52,6 +53,7 @@ private:
         float wobbleCents = 0, appliedRatio = 1;
         float level = 0;
         Wander wobble;
+        VoiceShape shape;   // Liminality
     };
     struct Event {   // a short mechanical sound: noise through a resonator
         Random noise;

@@ -35,6 +35,7 @@ public:
     void allNotesOff() override { pool.allNotesOff(); }
     void allSoundOff() override { pool.allSoundOff(sr); }
     void render(float* left, float* right, int n) override;
+    void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active(); }
 
 private:
@@ -45,6 +46,7 @@ private:
         float subPhase = 0, subInc = 0, sub2Phase = 0, sub2Inc = 0;
         Svf filterL, filterR;
         Wander cutoffDrift;
+        VoiceShape shape;   // Liminality
         float amp = 0, velocity = 0, level = 0, sweep = 0;
     };
     void control(Voice&);
