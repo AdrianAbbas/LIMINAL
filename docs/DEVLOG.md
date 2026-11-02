@@ -2252,3 +2252,7 @@ The first CI run of the library (`5e73aae`) prepared `790 notes in all` and pass
 805 of 806 passed: the `sessions` group could not find its fixture. The test located it from `__FILE__`,
 which ccache's `CCACHE_BASEDIR` turns into a relative path in CI. The test binary now gets the source
 folder from CMake (`LIMINAL_SOURCE_DIR`).
+
+**CI, `43f3955`: green.** `Prepared: 790 notes in all`; Linux full suite **810 passed, 0 failed** and every
+listening render (`library-instruments.flac`, peak -5.2 dBFS, in the test-logs artifact); macOS: build,
+smoke + `recorded` on arm64 57/57, smoke on x86_64 16/16, package, auval and the AU harness, all passed.
