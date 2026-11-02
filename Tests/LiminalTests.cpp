@@ -5,6 +5,7 @@
 //   LiminalTests --render f.wav        render each instrument in the corridor, then dry (listening aid)
 //   LiminalTests --render-places f.wav the same phrase in each environment (listening aid)
 //   LiminalTests --render-liminality f.wav  one piano phrase at LIMINALITY 0/40/100 %, dry and in three rooms
+//   LiminalTests --render-recorded f.wav    Milestone 8: phrase + chords on each instrument, dry, three rooms, LIMINALITY 0/50/100 %
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "Export.h"
@@ -188,6 +189,11 @@ double frequency(const std::vector<float>& x, double rate) {
     }
     return 0.0;
 }
+
+struct BypassRecordings {   // the stand-ins (synthesis), as a build without the recordings
+    explicit BypassRecordings(bool on = true) { samples::Bank::bypassForTests(on); }
+    ~BypassRecordings() { samples::Bank::bypassForTests(std::getenv("LIMINAL_NO_RECORDINGS") != nullptr); }
+};
 
 #include "InstrumentTests.h"
 #include "EnvironmentTests.h"
@@ -1206,6 +1212,9 @@ int main(int argc, char** argv) {
         else if (arg == "--capture-levels") return captureLevels();
         else if (arg == "--capture-match") return captureMatch();
         else if (arg == "--render-captures" && i + 1 < argc) return renderCaptures(argv[++i]);
+        else if (arg == "--render-recorded" && i + 1 < argc) return renderRecorded(argv[++i]);
+        else if (arg == "--probe-chord") return probeChord();
+        else if (arg == "--probe-jump") return probeJump();
         else if (arg == "--probe-clicks" && i + 4 < argc) return probeClicks(argv[i + 1], std::atoi(argv[i + 2]), std::atoi(argv[i + 3]), std::atof(argv[i + 4]));
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
@@ -1231,6 +1240,8 @@ int main(int argc, char** argv) {
     }
     // LIMINAL_NO_CAPTURES=1: the rooms' previous sound (baseline comparisons).
     if (std::getenv("LIMINAL_NO_CAPTURES") != nullptr) dsp::CaptureBank::disabled() = true;
+    // LIMINAL_NO_RECORDINGS=1: the instruments' synthesised stand-ins (a build without SAMPLES_TOKEN).
+    if (std::getenv("LIMINAL_NO_RECORDINGS") != nullptr) samples::Bank::bypassForTests(true);
     const auto run = [&](const char* name) { return only.isEmpty() || only.contains(name); };
     Suite s;
     if (run("parameters")) testParameters(s);

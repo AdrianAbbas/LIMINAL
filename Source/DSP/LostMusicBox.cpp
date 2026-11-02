@@ -155,7 +155,10 @@ void LostMusicBox::render(float* left, float* right, int n) {
             if (!v.active()) continue;
             for (int i = 0; i < m; ++i) {
                 if (v.delay > 0) { --v.delay; continue; }
-                float x = v.tone.tick(v.a.tick() + v.b.tick() + v.top.tick());
+                if (v.topCountdown >= 0 && v.topCountdown-- == 0) v.top.fadeTo(0.0f, 0.3f * float(sr));
+                // The thumb's hard hit rounded off (a soft limit on the first transient only:
+                // the ring is far below it), as a pin plucks a tine.
+                float x = transientCeiling * softClip(v.tone.tick(v.a.tick() + v.b.tick() + v.top.tick()) / transientCeiling);
                 v.env *= v.decayMul;
                 x *= v.env;
                 if (v.click > 1.0e-7f) {
@@ -171,7 +174,9 @@ void LostMusicBox::render(float* left, float* right, int n) {
                 r[i] += x * v.panR;
             }
             if (m == clock) {
-                const bool silent = !v.a.on && !v.b.on && !v.top.on;
+                // The recording is about to end: fade out over its last 50 ms (never a step).
+                const double left = std::max({ v.a.samplesLeft(), v.b.samplesLeft(), v.top.samplesLeft() });
+                const bool silent = (!v.a.on && !v.b.on && !v.top.on) || left < 0.06 * sr;
                 if (!v.stolen && v.delay == 0 && (silent || v.level < 2.0e-5f)) v.steal(0.05, sr);
                 if (v.stolen && v.fade <= 0.0f) v.note = -1;
             }
@@ -228,6 +233,7 @@ bool LostMusicBox::startRecorded(int note, float velocity) {
     const auto mix = layerMix(velocity, tineCentres, kalimba->layers);
     const float pitch = float(note);
     v.a.on = v.b.on = v.top.on = false;
+    v.topCountdown = -1;
     if (wk > 0.0f) {
         const auto* za = kalimba->find(note, (tineCentres[mix.a] + 0.0f), 0.0f);
         const auto* zb = kalimba->find(note, tineCentres[mix.b], 0.0f);
@@ -241,20 +247,28 @@ bool LostMusicBox::startRecorded(int note, float velocity) {
             const float want = pa * pa + pb * pb, got = want + 2.0f * za->corrUp * pa * pb;
             norm = std::sqrt(want / std::max(0.05f * want, got));
         }
-        if (za != nullptr && v.a.start(za, kalimba->rate, sr, pitch, 1.0)) v.a.gain = gain * wk * mix.wa * lv(za) * norm;
-        if (zb != nullptr && zb != za && mix.wb > 0.0f && v.b.start(zb, kalimba->rate, sr, pitch, 1.0)) v.b.gain = gain * wk * mix.wb * lv(zb) * norm;
+        // A pin plucks a tine more softly than a thumb: the first 3 ms ramp in.
+        const float soften = 0.003f * float(sr);
+        if (za != nullptr && v.a.start(za, kalimba->rate, sr, pitch, 1.0, 0.0f)) { v.a.gain = gain * wk * mix.wa * lv(za) * norm; v.a.fadeTo(1.0f, soften); }
+        if (zb != nullptr && zb != za && mix.wb > 0.0f && v.b.start(zb, kalimba->rate, sr, pitch, 1.0, 0.0f)) { v.b.gain = gain * wk * mix.wb * lv(zb) * norm; v.b.fadeTo(1.0f, soften); }
     }
     if (topShare > 0.0f) {
         const int key = std::clamp(note, 21, 108);
         if (const auto* z = piano->onKey(key, 0); z != nullptr && v.top.start(z, piano->rate, sr, pitch, double(std::max(1, z->onset - 32))))
+        {
             v.top.gain = gain * topShare * dbGain(tineDb - 6.0f - z->loudnessDb);
+            // The piano's long note ends in its damper: fade it out before that (0.3 s).
+            v.topCountdown = z->damper > 0 ? std::max(0, int(double(z->damper - z->onset) / double(v.top.inc)) - int(0.35 * sr)) : -1;
+        }
     }
     if (!v.a.on && !v.b.on && !v.top.on) { v.note = -1; return false; }
-    // Decay: the recordings ring as they rang; Decay below its top shortens them (dull teeth more).
+    // Decay: the recordings ring as they rang at the middle of Decay and above; below it they are
+    // shortened (dull teeth always, a little).
     const float f1 = noteHz(float(note));
-    const float ring = 0.5f * std::pow(12.0f, st.decay) * std::clamp(std::pow(880.0f / f1, 0.45f), 0.35f, 2.5f) * 1.8f * (dull ? 0.35f : 1.0f)
-                       * (1.0f + wear * (keyHash(note, 64) - 0.5f) * 1.2f);
-    v.decayMul = st.decay > 0.97f && !dull ? 1.0f : t60(std::max(0.08f, ring), sr);
+    const float pitchFactor = std::clamp(std::pow(880.0f / f1, 0.45f), 0.35f, 2.5f);
+    float extra = st.decay < 0.5f ? std::max(0.1f, 8.0f * st.decay / (0.5f - st.decay + 1.0e-3f)) * pitchFactor : 0.0f;
+    if (dull) extra = extra > 0.0f ? std::min(extra, 0.8f * pitchFactor) : 0.8f * pitchFactor;
+    v.decayMul = extra > 0.0f ? t60(extra, sr) : 1.0f;
     v.env = 1.0f;
     const float bright = std::clamp(st.brightness * 0.8f + velocity * 0.3f + 0.3f * v.shape.tone, 0.0f, 1.0f);
     v.tone.clear();

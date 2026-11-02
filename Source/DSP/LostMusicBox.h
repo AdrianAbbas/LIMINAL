@@ -49,7 +49,8 @@ public:
         tickCountdown = 0;
     }
     int activeVoices() const override { return pool.active() + rpool.active(); }
-    static constexpr float recordedTrimDb = 1.0f;   // level-matched to the stand-in (tests: recorded)
+    static constexpr float transientCeiling = 0.22f;   // a recorded tine's peak, at most
+    static constexpr float recordedTrimDb = -0.8f;   // level-matched to the stand-in (tests: recorded)
 
 private:
     static constexpr int controlPeriod = 64;
@@ -69,6 +70,7 @@ private:
         float panL = 0.7f, panR = 0.7f, env = 1, decayMul = 1, cents = 0, level = 0;
         float click = 0, clickDecay = 0;
         int delay = 0;             // the worn mechanism plays it late
+        int topCountdown = -1;     // the piano note's fade before its recorded damper
         Svf clickTone;
         Random noise;
         VoiceShape shape;

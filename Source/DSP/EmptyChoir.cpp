@@ -118,7 +118,7 @@ void EmptyChoir::render(float* left, float* right, int n) {
     const float attackCoef = 1.0f - std::exp(-1.0f / (0.35f * float(sr)));
     const float releaseCoef = 1.0f - std::exp(-1.0f / (std::max(0.02f, st.release) * 0.22f * float(sr)));
     const float breath = st.breath;
-    const float recordedAttack = 1.0f - std::exp(-1.0f / (0.12f * float(sr)));
+    const float recordedAttack = attackCoef;   // the same swell as the formant choir
     int done = 0;
     while (done < n) {
         if (clock == 0) {
@@ -253,7 +253,8 @@ bool EmptyChoir::startRecorded(int note, float velocity, float share) {
     // sweep again, from elsewhere in its sustain), later, detuned, spread across the room.
     const int vowel = int(std::lround(p));
     const auto* stack = recordings(stackSets[vowel]);
-    for (int k = 0; k < 3; ++k) {
+    const int distant = quality == 0 ? 1 : 3;   // Eco: one distant singer
+    for (int k = 0; k < distant; ++k) {
         auto& rd = v.r[std::size_t(2 + k)];
         const samples::Zone* z = nullptr;
         const samples::Instrument* set = nullptr;
@@ -300,7 +301,7 @@ bool EmptyChoir::startRecorded(int note, float velocity, float share) {
         }
     }
     // Lead + three singers (+ hum) summed by power: the voice's level is the lead's.
-    v.gain = 0.2f * (0.25f + 0.75f * std::pow(vel, 1.5f)) * share * dbGain(recordedTrimDb) / std::sqrt(1.0f + 3.0f * dbGain(2.0f * singerDb));
+    v.gain = 0.2f * (0.25f + 0.75f * std::pow(vel, 1.5f)) * share * dbGain(recordedTrimDb) / std::sqrt(1.0f + float(distant) * dbGain(2.0f * singerDb));
     v.amp = 0;
     // Faded: darker (Darkness, Liminality's Unevenness) and a little distant.
     const float dark = 12000.0f * std::pow(700.0f / 12000.0f, 0.75f * st.darkness) * std::exp2(0.5f * v.shape.tone);

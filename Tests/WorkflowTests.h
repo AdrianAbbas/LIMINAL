@@ -139,6 +139,7 @@ void testWorkflow(Suite& s) {
     {
         std::array<double, 3> cpu {};
         bool stable = true;
+        std::string detail;
         for (int q = 0; q < 3; ++q) {
             Rig rig(rate);
             rig.set(params::quality, float(q));
@@ -147,13 +148,14 @@ void testWorkflow(Suite& s) {
             for (int note = 48; note < 64; ++note) chord.push_back({ 0.05, on(note, 100) });
             const auto x = rig.render(10.0, chord);
             stable &= finite(x) && peak(x) < 1.0f && rms(x) > 1e-3;
+            detail += "q" + std::to_string(q) + " peak " + num(peak(x), 3) + " rms " + num(toDb(rms(x)), 1) + " dB  ";
             juce::AudioBuffer<float> buffer(2, 512);
             juce::MidiBuffer none;
             const auto start = std::chrono::steady_clock::now();
             for (int i = 0; i < int(5.0 * rate / 512); ++i) rig.p->processBlock(buffer, none);
             cpu[std::size_t(q)] = 100.0 * std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() / 5.0;
         }
-        s.check(stable, "a 16-note pedalled chord on all six instruments stays stable for 10 s in Eco, Standard and High");
+        s.check(stable, "a 16-note pedalled chord on all six instruments stays stable for 10 s in Eco, Standard and High", detail);
         s.metric("CPU, 16 held notes on all six, Eco (report-only)", cpu[0], " %");
         s.metric("CPU, 16 held notes on all six, Standard (report-only)", cpu[1], " %");
         s.metric("CPU, 16 held notes on all six, High (report-only)", cpu[2], " %");

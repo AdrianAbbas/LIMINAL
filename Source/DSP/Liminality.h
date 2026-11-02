@@ -140,6 +140,7 @@ private:
     float wl1 = 0, wl2 = 0, wr1 = 0, wr2 = 0, hl1 = 0, hl2 = 0, hr1 = 0, hr2 = 0;
     float envelope = 0, envAttack = 0, envRelease = 0;
     float wearGain = 1, wearGainTarget = 1, wearIn = 0, wearOut = 0, wearEnvCoef = 0;   // Wear's level match
+    int lineWarm = 0;   // samples until the delay line holds history again after a wake-up
     float outGain = 1, outGainTarget = 1;   // Unevenness' make-up (its quiet notes stay quieter than the rest)
     float hissLevel = 0, hissZ1 = 0, hissZ2 = 0, hissH1 = 0, hissH2 = 0;
     float crackleRate = 0, crackleLevel = 0, crackle = 0, crackleZ = 0;

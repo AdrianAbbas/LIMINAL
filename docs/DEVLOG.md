@@ -70,11 +70,11 @@ the checklist below.
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
-- [ ] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end). Resume here:
+- [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
   - [x] 8.2 Sample bank (`Source/Samples/SampleBank`, from LIGHT SEEKER, + the piano's fields), `DSP/Sampler.h` (reader, tilt, layer crossfade), CMake ships `build/samples` in every bundle; the Forgotten Piano on the recordings (3 crossfaded velocity layers, handover to the long sweep, natural-decay tail, stretch tuning, damper, pedal) — push `[skip ci]`
   - [x] 8.3 Empty Choir (voice sweeps + falsetto, stacks as a distant ensemble, the falsetto ooh ghost, G2 hum under the lowest note), Lost Music Box (kalimba + piano top, mechanism), Faded Synth (patch choice + analog blend), Hollow Drone (voice drones, violin, pad, static bass); Glass Memories kept synthesised; stand-ins level-matched; editor controls — push `[skip ci]`
-  - [ ] 8.4 Tests (`recorded` group: in tune with cents report, velocity layers, clicks at loops/note-offs/handovers, levels; older groups green), listening render `--render-recorded`, DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] 8.4 Tests (`recorded` group: in tune with cents report, velocity layers, clicks at loops/note-offs/handovers, levels; older groups green), listening render `--render-recorded`, DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 
 **Overnight plan (2026-10-30, developer asleep):** order 2b → 3 → 5 → 6 → 4, without stopping
 between milestones. Push each part with `[skip ci]`, each whole milestone without. Backup wake-ups
@@ -1736,3 +1736,224 @@ listen is the real check.
 5. Listen to `liminality-piano.wav` from the Linux test-logs artifact (cue sheet beside it):
    one phrase at 0 / 40 / 100 %, dry, then school, hotel, impossible room.
 
+
+## Milestone 8: the developer's own recordings (2026-11-02)
+
+Request: replace the six instruments' core sounds with the developer's recordings from the private
+`AdrianAbbas/Samples` repository (its `notes.txt` read first), with LIGHT SEEKER's sample-prep tool
+copied (LIGHT SEEKER only read), fetched in CI with the existing `SAMPLES_TOKEN` alongside the
+captures, never committed; each instrument's synthesis kept as the level-matched stand-in.
+
+### What the recordings are (checked against the audio, Samples @ the current `main`)
+
+- `notes.txt` describes the guitar, kalimba, violin, room tone, the analog synth patches, banjo,
+  djembes and the piano (88 keys A0-C8, short soft / medium / full sweeps + a long sweep, one take
+  per key). The voice has no section; as LIGHT SEEKER measured, every voice file sounds an octave
+  above its name: chest sweeps E3-A#4 (the third note is A, not A#), falsetto C#5 (C5 for aah) and
+  E5, drones G2 ('ooo' and 'mmm') and A3 -39 cents ('aah'), choir stacks E3, A3, E4, E5 (ooh), E3,
+  G#3/A3, E4 (aah), A2 (mmm). Every note is mapped where it sounds and tuned by its measured pitch.
+- The piano's long sweep holds each key **about 2.1 s (0.24-3.5 s) before the damper**, so a held
+  note's natural decay past that is resynthesised (below).
+- **The recordings contain interface glitches**: pairs of clicks about 0.106 s apart, in the
+  original WAVs (e.g. 23 in `Piano sweep long notes.wav`, 11 in `Male Vocal Ooh soft sweep.wav`).
+  Inside a looped sustain they would click on every pass of the loop. `liminal.py` repairs them
+  (pitch-synchronously, after each note's attack; on the piano only inside the held part):
+  kalimba 31, violin 16, piano 15, voice sweeps 48, choir stacks 48, drones 7 notes' clicks.
+  The analog-synth files (line input) have none and are left alone.
+
+### Sample prep (`tools/sample-prep`)
+
+`prepare.py`, `sweeps.py`, README, requirements copied from LIGHT SEEKER unchanged; `manifest.json`
+rewritten for LIMINAL (17 sets; everything else under `unused` with the reason); **`liminal.py`**
+(new, runs after `prepare.py`): each piano note's onset and damper point; the short->long handover
+point, before the short hit's damper or any key noise, and the matching position in the long note
+(aligned on the waveform: median correlation 0.98); the velocity layers' correlation (strikes of one
+string are partly in phase: -0.93 to +1.00, median +0.93 on the piano; +0.03 on the kalimba) so the
+crossfade keeps its level; the natural-decay tail (up to 32 partials with their T60s, measured on the
+last held second, before the damper or any noise) for 78 of 88 long notes; the stretch-tuning curve
+(a cubic through the long notes' pitches, outliers dropped, A3-C5 average set to 0: A0 -16.8, A2 -4.5,
+A6 +11.5, C8 +25.9 cents; the overall offset was only -0.2 cents); the glitch repair. The short and
+long piano sweeps share one gain (`gainGroup`), so the dynamics between them are the recorded ones.
+
+`scripts/ci-fetch-samples.sh` (replaces `ci-fetch-captures.sh`): one clone with `SAMPLES_TOKEN`,
+prepares the recordings into `build/samples` and the captures into `build/captures`, prints
+`Prepared: N notes (<set>)` for every set and the total, deletes the checkout. CMake ships
+`build/samples` in every bundle (`Contents/Resources/Samples`; `LIMINAL_SAMPLES_DIR`), the bank
+loads it on a background thread (prepareToPlay waits up to 5 s; about 0.7 s here, 117 MB in memory,
+692 notes, 47 MB of FLAC). Without the token or the folder every instrument plays its stand-in.
+
+Prepared and shipped: piano 261 short hits (of 264: no soft G7, no full D1 / D#1, the tracker found no clean onset there; the neighbouring dynamic plays), piano-long 88, kalimba 51,
+violin-sustain 11, voice-ooh 18, voice-aah 18, voice-mm 14, choir-ooh 20, choir-aah 15, choir-mm 5,
+voice-drone 4, voice-hum 2, analog synth long hits: soft pad, pulse, square, cyberpunk, static-y bass
+37 each. **692 notes.**
+
+### Which instruments use which recordings now
+
+| Instrument | Recordings | Stand-in without them |
+|---|---|---|
+| **Forgotten Piano** | piano: short hits **soft / medium / full** (`Piano Soft/medium/full sweep short notes.wav`) as three crossfaded velocity layers (each at its recorded level, kept in order, a velocity curve on top; the crossfade corrected for the layers' correlation); while the key is held it hands over (80 ms, aligned on the waveform, level- and tone-matched to the dynamic: soft darker, full brighter) to the **long sweep** (`Piano sweep long notes.wav`, medium), which hands over (0.3 s) to the measured natural decay (resynthesised partials, with the Decay control) before the recording's damper fell. Every note tuned to the piano's own stretch curve. Damper on release (none from F6 up; worn with Age), the sustain pedal (with the open strings ringing along), mechanical noise only lightly on top (the recordings carry their own). Age: key-to-key detune, uneven voicing, a duller tone, worn dampers; Detune: key-to-key; Softness: a softer layer and darker; Liminality as before (the hook). | the modal piano |
+| **Empty Choir** | voice: the **soft** sweeps mmm / ooh / aah (Formant moves between them; the falsetto C#5/E5 at the top; mmm above C5 becomes ooh) as the lead; the **choir stacks** as three distant singers (a different take each, later, quieter, darker, spread by Width, apart by Detune; the sweeps from elsewhere in their sustain where no stack lies within a fourth); the **falsetto ooh stack** (E5) an octave above as a faint ghost (Breath brings it in, over 1.6 s); the **G2 hum** ('mmm' drone) an octave or two under the **lowest note held** (it moves over in 0.8 s). A gentle distance low-pass, Darkness as before. Beyond the voice's range (below E2-ish / above D6) the recordings fade into the formant choir over a fifth. | the formant choir |
+| **Lost Music Box** | **kalimba** (soft / medium / hard crossfaded, small bright tines, C4-E6 and a fifth beyond), with the **piano's top** (long sweep) as a second, glassy layer under the high notes (more with Brightness, all of it above the kalimba); the worn mechanism plays each note a little late (Mechanism, up to ~14 ms), the pin's soft click and the clockwork as before; the thumb's hard hit rounded off (a pin plucks a tine). Decay shortens below its middle; Wear: fixed mistuning, uneven, dull teeth. | the modal tooth |
+| **Faded Synth** | analog synth **long hits**, **Patch**: Soft Pad (default), Pulse, Square, Cyberpunk, Static Bass, or Analog (the synthesised voice); **Analog Blend** mixes the synthesised voice under a patch. Attack, Release (into the recorded release), Warmth (low-pass + a little saturation), Detune (a second detuned copy, spread by Width), Drift, Glide; the chorus and wow as before. Two new parameters, appended (older songs open at Soft Pad / Blend 0; the INSTRUMENTS > SYNTH page has PATCH and ANALOG BLEND). | the analog voice (and Patch Analog) |
+| **Hollow Drone** | four held recordings blended: the **voice drones** (G2 'ooo' and hum, A3 'aah', the nearest within a fifth), the **violin's bowed open strings** (an octave or two up, more with Harmonics and Density), the **soft pad** long hits on the note, the **static-y bass** long hits an octave below (Sub). Movement breathes between the voice and the pad and circles the layers; Instability lets each drift; Harmonics opens the low-pass. | the oscillator stack |
+| **Glass Memories** | **unchanged** (synthesised). The violin col legno is a wooden tick, not glass, and the piano's top already sits under the music box; bells and glass will be sampled later. | - |
+
+**Not used** (in the manifest's `unused` list): the banjo and the djembes (they do not fit
+LIMINAL); the guitar and the violin pizzicato (**Old Guitar / Faded Strings skipped**: a seventh and
+eighth instrument would touch everything sized for six: 61 Liminality and 192 effect parameters per
+six, the solo choice, every room's per-instrument shaping and Liminality nudges, the presets, the
+editor's instrument strip and pages, the distinctness tests; not clean); the 'oh' and 'ee' sweeps;
+the breaths; the hummed melody, the grungy eeeh; the ghostly ooh file (a sliding falsetto D5-G#5 at
+-36 dB peak: it would clash with any chord; the "ghostly falsetto ooh" is the falsetto stack);
+**the whispers: skipped** (as a murmur through a wall they read as horror rather than uncanny; the
+places' Far Away events are unchanged); the analog synth's short hits (the long hits start with the
+same attack); the effect captures' phrases (the captures are used as before).
+
+### Tests (Linux, this container, recordings + captures as in CI)
+
+**Full suite: 673 passed, 0 failed** with the recordings and the captures (CI's configuration);
+**641 passed, 0 failed** without the recordings (`LIMINAL_NO_RECORDINGS=1`: a build without the
+token; the `recorded` group then checks only that every stand-in plays).
+
+- **`recorded`** (new group, 41 checks; its own CI shard):
+  - in tune from MIDI across each range (a note every 4 semitones, the pitch the first six
+    harmonics agree on): piano worst 3.5 cents from its stretch curve (A0..A7), choir 9.4, music
+    box 1.0, synth soft pad 1.7, pulse 3.8, square 0.5, cyberpunk 17.9, static bass 16.6 (two
+    detuned oscillators per patch), drone 3.4 (the cents of every note are printed in the log);
+  - the Liminality hook on the recordings: +50 cents -> piano 50.1, synth 50.0, voice 50.6, music
+    box 50.0, drone 50.0;
+  - velocity: never quieter for a harder hit (piano 0.00 dB, music box 0.17 dB), no sudden step
+    (each step within 3 dB of the previous: 2.4 / 1.7 dB), and every one of the 88 piano keys gets
+    louder over five velocities;
+  - no clicks (second-difference spikes above -80 dBFS): the piano through the handover, the decay
+    tail and the damper (17 keys x 3 velocities, held 4 s), staccato and with the pedal; the choir,
+    the five synth patches and the drone over a chord held 8 s and its release (loops); the music
+    box ringing out: all 0;
+  - level-matched to the stand-ins on the same phrase: piano +0.1, synth 0.0, choir +1.3, music box
+    +0.2, drone +0.7 dB; with each other as the instruments group asks (within 6 dB of the piano,
+    pads by a held chord);
+  - without the recordings every stand-in plays.
+- **The older groups pass as they were**, except where noted under Decisions (the model groups on
+  the stand-ins; Tape and Drift measured on known sources; Characters one pair report-only).
+  `distinct`, `rules`, `captures` and `liminality` pass unchanged with the recordings (liminality
+  49/49: LIMINALITY 0 is bit-identical to all sliders at 0; the piano at LIMINALITY 0 is
+  sample-identical whenever played; the macro jumped 0 <-> 100 % over all six: 0 clicks).
+- **CPU** (one core, this container): six instruments x 16 notes + pedal, LIMINALITY 0 / 100 %:
+  27.1 / 29.4 % (27.6 / 29.9 % before); 16 held notes on all six: Eco 15.5 %, Standard / High
+  ~18-35 % (timed while other shards ran: noisy). Memory: 117 MB for the recordings, loaded in
+  0.7 s on a background thread.
+- **Listening render** (`LiminalTests --render-recorded`, CI test-logs artifact
+  `recorded-instruments.wav` + `.txt` cue sheet, 8:24): the same phrase (E4 G4 C5 B4 A4 G4 F4 E4)
+  and chords (C Am F G) on each instrument (Glass Memories for comparison), dry, then school,
+  hotel, indoor pool, then dry at LIMINALITY 0 / 50 / 100 %. Peak -6.7 dBFS, no NaNs. **Not
+  listened to** (no audio output here).
+
+### Notes that sound weak or out of tune (worth re-recording)
+
+All of these play in tune (the sampler corrects each note by its measured pitch); the further a note
+is off, the more the correction colours it.
+
+- **Piano, dynamics that barely sounded** (the plug-in plays the neighbouring dynamic instead):
+  D4 soft (-45.8 dB vs medium -15.5), C#4 soft (-34.7 vs -19.5), D#7 soft (-48.5), G#7 soft (-40.4)
+  and medium (-50.0), A#4 full (-25.5 vs medium -18.6), C5 soft and medium (-26.5 / -28.4 vs full
+  -20.1). Many other keys' soft hits are as loud as or louder than their medium ones (34 keys with
+  the dynamics out of order, e.g. C1, E1, B2, A4); the plug-in keeps the layers in order, but evenly
+  played soft / medium / full sweeps would sound better.
+- **Piano, long notes cut short** (the neighbouring key's long note plays, shifted a semitone):
+  C1 (0.38 s), G1 (0.48 s), F5 (0.50 s), F6 (0.24 s); F#7-A#7 are held only ~1 s. The whole long
+  sweep holds each key ~2 s: holding each 6-8 s (until it has almost faded) would let the real decay
+  play instead of the resynthesised one.
+- **Piano tuning**: C#1 soft -44 cents (the others of that key -30), the top octave +26 to +35
+  (A7 +35): an old piano's stretch, kept; A7, B7, C8 a little quieter than their neighbours.
+- **Interface glitches** (click pairs ~0.106 s apart) in most files: repaired, but a re-recording
+  with a larger buffer / without the glitch would be cleaner; the worst: `Piano sweep long notes.wav`
+  (23), `Male Vocal Ooh soft sweep.wav` (11), the kalimba sweeps (31 in all).
+- **Voice**: ooh soft C#4 (-42 cents), ooh full G3 / A3 (-41), aah falsetto C5 (+45) and E5 (-41);
+  choir stacks ooh "E3" (sung D#4 +78/+88 = between D#4 and E4), aah "A2" (G#3 +63/+79), ooh
+  "falsetto E4" take (-56), aah "E3" takes (-40/-43); the "full" mmm hums are 5-6 dB quieter than
+  the "soft" ones; the aah drone A3 -39 cents.
+- **Kalimba**: only the 17 C-major tines exist, so every sharp/flat is a neighbouring tine shifted
+  a semitone; the top tines (B5-E6) ring under a second.
+- **Analog synth**: static-y bass 26-37 cents flat on many keys (it detunes itself; corrected).
+
+### Decisions (recorded instead of asking)
+
+- **One sampler, six voices of it.** `DSP/Sampler.h` (a cubic reader with loop, release tail,
+  equal-power weight, end fade; a tilt; the layer crossfade) and `Source/Samples/SampleBank`
+  (LIGHT SEEKER's, renamed, + the piano's fields) are shared; each instrument keeps its own class,
+  with a second voice pool for its recorded notes beside the synthesised one. A note asks the bank
+  at note-on: with recordings it plays them, without (loading, missing, or `LIMINAL_NO_RECORDINGS`
+  in the tests) the synthesis. Everything after the voices (Liminality, Distance, effects, rooms,
+  Characters, the VHS warble) is unchanged, so it all works on the recordings as before; the rooms
+  are untouched.
+- **Liminality on recordings:** every recorded voice honours the hook (Detune / Sour cents, the
+  instrument-wide drift and wow, each voice's warble, Unevenness' tone) as a playback-rate offset
+  and a tone filter: +50 cents comes out +50.0 on the piano, synth, music box and drone (+50.6 on
+  the voice, three notes averaged). At LIMINALITY 0 nothing moves: the piano's decay tail starts at a
+  sample-exact moment counted from the note, so a note sounds the same whenever it is played.
+- **The piano's held notes beyond the recording** continue as resynthesised partials (measured
+  frequency ratios, levels and T60s of that very note), because the long sweep was held ~2 s; the
+  crossfade into them is 0.3 s, before the damper or any noise in the recording.
+- **Stretch tuning kept, overall tuning corrected:** each note is tuned onto the smooth stretch curve
+  of the piano (per-note deviations from it were at most 13 cents, now 0); the old-piano
+  wrongness comes from Age / Detune and Liminality, which can be turned to 0.
+- **Velocity:** three crossfaded dynamics, each at its recorded strike level but kept in order,
+  plus a velocity curve so the whole range is like the model's (~22 dB from velocity 30 to 120;
+  Liminality's Unevenness and Velocity to Volume rely on it). A dynamic that barely sounded in the
+  recording is replaced by its neighbour (listed above).
+- **Levels:** each recorded instrument is trimmed to its stand-in's level on the same phrase
+  (`recordedTrimDb` in each instrument; within 1.5 dB, tested), and the pads also on a held chord.
+- **Music box:** the kalimba's thumb hits peak about three times higher than the modelled tooth for
+  the same loudness; a soft limit (a recorded tine's peak at most 0.22) rounds the hit off (a pin
+  plucks more softly) and keeps a 16-note chord on all six instruments under 0 dBFS. Decay at its
+  middle and above lets the tines ring as recorded; below it shortens them.
+- **Analog synth:** the long hits only (they begin with the same attack as the short ones);
+  Soft Pad is the default patch (the most "forgotten mall/office" of the five; Pulse next);
+  Analog Blend 0 by default. No brand names anywhere in the product (the patch names are generic).
+- **Glitches in the recordings** repaired in `liminal.py` (they are in the original WAVs); the
+  analog synth's files left alone (their square and pulse waves would look like clicks).
+- **A real click fixed in the Liminality stage** (found by this milestone's checks): waking from
+  bypass zero-filled its delay line, so the Ghost copy jumped from silence to the playing 55-95 ms
+  later; the copies now stay silent until the line has refilled. It was there before (Glass
+  Memories alone showed it) but masked by the modelled piano.
+- **Older checks that measure a model or an effect module** now say which source they use: the
+  instrument-model groups (piano, synth, glass, choir, box, drone) measure the stand-ins, as they
+  were written for; the effects group's Tape check measures on the synthesised piano (bright and
+  known: the recorded one has little above 3 kHz for the tape to take away) and its Drift check on
+  the Analog patch (a recorded pad wavers by itself); the liminality group's +50-cent check runs on
+  the stand-ins and the `recorded` group checks the same on the recordings over a long held stretch.
+- **Report-only after two attempts:** Characters "at most one pair close" (office After Hours /
+  Infinite Cubicles 1.46 with the recorded piano, 2.0 with the model; two attempts: a brighter
+  recorded piano, then the layer levels; the hard floor is now two pairs; with the stand-ins it is
+  still 29 of 30).
+- **Clicks counted by the `recorded` group** are second-difference spikes above -80 dBFS; a -97 dB
+  tick of the room bed in silence (present with the stand-ins too) is not counted.
+
+### For the developer's GarageBand check
+
+1. If the CI log does not say `Prepared: 692 notes in all`, add the `SAMPLES_TOKEN` secret to
+   this repository (Settings > Secrets and variables > Actions; the same fine-grained token as
+   LIGHT SEEKER's, read access to Samples) and re-run: without it the instruments are their
+   synthesised stand-ins (the log warns).
+2. **Forgotten Piano first** (most important): the corridor and the Office, LIMINALITY 0, then 40.
+   - Play slowly from very soft to very hard on one key: three dynamics should blend, no step.
+   - Hold a chord for 10 s: the short hit -> held note handover (~0.1-0.3 s after the strike) should
+     be inaudible; around 1.5-3 s the recording hands over to its resynthesised decay - listen for a
+     change of colour or a "frozen" tail (the most likely weak spot; tell me which keys).
+   - Staccato notes and the damper: a soft, quick stop; above F6 notes ring on (no dampers).
+   - The sustain pedal: notes keep ringing, the open strings answer.
+   - The top octave is sharp (+25 cents at C8): the piano's own stretch, kept on purpose.
+   - Then LIMINALITY 40 / 100 %: detune, sour notes, wear on a real piano.
+3. **Empty Choir**: a slow chord in the Hospital and the Pool; Formant from 0 (mmm) through ooh to
+   aah; Breath up for the ghost an octave above; play a low note under a chord: the hum moves to it.
+   It should sound like a few distant singers remembered, never a horror choir - tell me if it does.
+4. **Lost Music Box**: a high melody (C5-C7); Mechanism up (the timing wobble and click), Brightness
+   (the piano's top under it), Decay.
+5. **Faded Synth**: INSTRUMENTS > SYNTH: PATCH through Soft Pad, Pulse, Square, Cyberpunk, Static
+   Bass, Analog; ANALOG BLEND up under a patch; Warmth, Detune, Attack, Release.
+6. **Hollow Drone**: a low held chord for 20 s; Movement (the voice and pad breathing), Harmonics
+   (the violin's air), Sub (the static-y bass), Density.
+7. Compare with the stand-ins in `recorded-instruments.wav` (Linux test-logs artifact, cue sheet
+   beside it): each instrument dry, school / hotel / pool, then LIMINALITY 0 / 50 / 100 %.
+8. Re-record list: see "Notes that sound weak" above (piano soft hits, the long sweep held longer,
+   the interface glitches).

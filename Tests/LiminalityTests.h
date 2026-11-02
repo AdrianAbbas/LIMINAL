@@ -363,8 +363,11 @@ void testLiminality(Suite& s) {
             if (e == 1.0f) s.check(stdOf(sameKey) < 0.6 * stdOf(c), "Detune: mostly each key's own (a neglected piano), a little per strike",
                                    "same key " + num(stdOf(sameKey), 1) + " vs all " + num(stdOf(c), 1));
         }
-        // the instruments honour the hook: a +50 cent shape comes out 50 cents sharp
+        // the instruments honour the hook: a +50 cent shape comes out 50 cents sharp (their synthesised
+        // voices; the recorded ones are checked the same way in the recorded group, over a long held
+        // stretch, since a sung note wanders on its own within this short window)
         std::string wrong;
+        BypassRecordings standIns;
         dsp::ForgottenPiano piano;
         dsp::FadedSynth synth;
         dsp::GlassMemories glass;

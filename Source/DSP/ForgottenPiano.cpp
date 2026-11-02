@@ -330,6 +330,11 @@ bool ForgottenPiano::startRecorded(int note, float velocity, const samples::Inst
     for (int i = 0; i < 3; ++i) layer[i] = hits.onKey(key, i);
     if (layer[1] == nullptr) return false;
     for (int i = 0; i < 3; ++i) if (layer[i] == nullptr) layer[i] = layer[1];
+    // A dynamic that barely sounded in the recording (the key caught softly, see the DEVLOG's list)
+    // is replaced by its neighbour, played at this velocity's level.
+    if (layer[1]->loudnessDb < std::max(layer[0]->loudnessDb, layer[2]->loudnessDb) - 15.0f) layer[1] = layer[2];
+    if (layer[0]->loudnessDb < layer[1]->loudnessDb - 14.0f) layer[0] = layer[1];
+    if (layer[2]->loudnessDb < layer[1]->loudnessDb - 6.0f) layer[2] = layer[1];
 
     auto& v = rpool.allocate(note, voices(polyphony), sr, 0.03, [this](const RVoice& x) { return level(x); });
     rpool.begin(v, note);
@@ -345,17 +350,26 @@ bool ForgottenPiano::startRecorded(int note, float velocity, const samples::Inst
     // Velocity: the two layers either side, crossfaded; softer felt plays a little softer layer.
     const float vpos = std::clamp(velocity * (1.0f - 0.3f * soft), 0.0f, 1.0f);
     const auto mix = layerMix(vpos, layerCentres, 3);
-    // Each layer at its own recorded loudness, kept in order (soft under medium under full, a
-    // few dB apart even where the recording was uneven), so loudness rises with velocity.
-    const float lMed = layer[1]->loudnessDb;
-    const float target[3] { std::min(layer[0]->loudnessDb, lMed - 5.0f), lMed, std::max(layer[2]->loudnessDb, lMed + 3.0f) };
-    float extraDb = vpos < layerCentres[0] ? 24.0f * std::log10(std::max(vpos, 0.03f) / layerCentres[0]) : 0.0f;
+    // Each layer at its own recorded level (its first 300 ms: the strike, as heard), kept in order
+    // (soft under medium under full, a few dB apart even where the recording was uneven), so
+    // loudness rises with velocity.
+    const auto heard = [](const samples::Zone* z) { return z->rms300Db > -59.0f ? z->rms300Db : z->loudnessDb; };
+    const float lMed = heard(layer[1]);
+    const float target[3] { std::min(heard(layer[0]), lMed - 5.0f), lMed, std::max(heard(layer[2]), lMed + 3.0f) };
+    // The recorded dynamics (about 9 dB from soft to full) and a velocity curve on top, so the whole
+    // range is close to the model's (level ~ velocity^1.6, which Liminality's Unevenness relies on).
+    float extraDb = 22.0f * std::log10(std::max(vpos, 0.03f) / layerCentres[1]);
+    if (vpos < layerCentres[0]) extraDb += 10.0f * std::log10(std::max(vpos, 0.03f) / layerCentres[0]);
     extraDb += (2.0f * h2 - 1.0f) * 2.0f * age + recordedTrimDb;   // uneven voicing
     const float g0 = dbGain(extraDb);
-    const float gainA = g0 * mix.wa * dbGain(target[mix.a] - layer[mix.a]->loudnessDb);
-    const float gainB = g0 * mix.wb * dbGain(target[mix.b] - layer[mix.b]->loudnessDb);
+    float gainA = g0 * mix.wa * dbGain(target[mix.a] - heard(layer[mix.a]));
+    float gainB = g0 * mix.wb * dbGain(target[mix.b] - heard(layer[mix.b]));
     const auto* za = layer[mix.a];
     const auto* zb = layer[mix.b];
+    if (za == zb && mix.a != mix.b) {   // one recording stands for both dynamics: one read, both shares
+        gainA = std::sqrt(gainA * gainA + gainB * gainB);
+        gainB = 0.0f;
+    }
     // The two strikes are partly in phase: keep the crossfade's level where an uncorrelated mix
     // would be (their measured correlation, liminal.py).
     float norm = 1.0f;
@@ -383,6 +397,7 @@ bool ForgottenPiano::startRecorded(int note, float velocity, const samples::Inst
     v.handCountdown = -1;
     v.tailOn = false;
     v.tailAt = -1;
+    v.tailCountdown = -1;
     if (longSet != nullptr && dom->hand > 0) {
         float shift = 0;
         const auto* lz = dom->longKey >= 0 ? longSet->onKey(dom->longKey, 0) : heldZone(*longSet, key, shift);
@@ -400,6 +415,7 @@ bool ForgottenPiano::startRecorded(int note, float velocity, const samples::Inst
                 if (za->hand > 0) first = std::min(first, double(za->hand - startA));
                 v.handCountdown = std::max(0, int(first / double(v.shortA.inc)) - v.handLength / 2);
                 v.tailAt = lz->tailCount > 0 ? lz->tailAt : -1;
+                v.tailCountdown = v.tailAt >= 0 ? std::max(0, int((double(v.tailAt) - v.longNote.pos) / double(v.longNote.inc))) : -1;
             }
         }
     }
@@ -409,7 +425,7 @@ bool ForgottenPiano::startRecorded(int note, float velocity, const samples::Inst
     v.heldTone.set(std::clamp(3.0f * f0, 300.0f, 4500.0f), (wa2 * layerTone[mix.a] + wb2 * layerTone[mix.b]) / std::max(1.0e-6f, wa2 + wb2), sr);
     // Age (a duller soundboard), soft felt, and Liminality's Unevenness.
     v.tone.clear();
-    v.tone.set(std::clamp(4.0f * f0, 500.0f, 5000.0f), std::clamp((1.0f - 0.35f * age) * (1.0f - 0.3f * soft) * std::exp2(0.8f * v.shape.tone), 0.25f, 1.8f), sr);
+    v.tone.set(std::clamp(4.0f * f0, 500.0f, 5000.0f), std::clamp((1.0f - 0.15f * age) * (1.0f - 0.3f * soft) * std::exp2(0.8f * v.shape.tone), 0.25f, 1.8f), sr);
 
     // Decay: the recordings' own decay; shorter below the middle of Decay, the tail's longer above.
     const float scale = std::exp2((st.decay - 0.5f) * 3.0f) * (1.0f - 0.35f * age) * (1.0f + (2.0f * h4 - 1.0f) * (0.1f + 0.3f * age));
@@ -457,13 +473,23 @@ void ForgottenPiano::controlRecorded(RVoice& v, float tick) {
         v.dampMul = 1.0f;
     }
     if (v.tailOn) v.tail.retune(ratio, v.damped);
-    // The natural decay takes over where the long recording's damper fell.
-    if (!v.tailOn && v.tailAt >= 0 && v.longNote.on && v.longNote.pos >= double(v.tailAt) && v.longNote.zone != nullptr) {
+    float lvl = std::max(v.shortA.on ? v.shortA.gain : 0.0f, v.shortB.on ? v.shortB.gain : 0.0f);
+    if (v.longNote.on) lvl = std::max(lvl, v.longNote.gain * v.longNote.w);
+    if (v.tailOn) lvl = std::max(lvl, v.tail.peak());
+    v.level = lvl * v.env;
+}
+
+// The natural decay takes over where the long recording's damper fell (sample-accurately: the
+// moment is counted from the note's start, so a note sounds the same whenever it is played).
+void ForgottenPiano::startTail(RVoice& v) {
+    if (v.tailOn || !v.longNote.on || v.longNote.zone == nullptr) return;
+
         const auto& z = *v.longNote.zone;
         v.tail.clear();
         const float f0 = noteHz(z.root + v.longNote.semis);
         const float g = v.longNote.gain;
-        for (int k = 0; k < z.tailCount; ++k) {
+        const int partials = quality == 0 ? std::min(z.tailCount, 12) : z.tailCount;   // Eco: the strongest dozen
+        for (int k = 0; k < partials; ++k) {
             const auto& md = z.tail[std::size_t(k)];
             const float radians = twoPi * f0 * md.ratio / float(sr);
             if (radians >= 0.95f * pi) continue;
@@ -472,22 +498,18 @@ void ForgottenPiano::controlRecorded(RVoice& v, float tick) {
             const float side = (k % 2 == 0 ? 1.0f : -1.0f) * 0.12f;
             v.tail.set(k, md.amp * g, twoPi * keyHash(v.note * 64 + k, 17), radians, t60(t, sr), t60(d, sr), 1.0f + side, 1.0f - side);
         }
-        v.tail.retune(ratio, v.damped);
+        v.tail.retune(v.ratioNow, v.damped);
         v.tailOn = true;
         v.tailX = 0;
         v.tailStep = 1.0f / float(std::max(64, int(double(z.tailFade) * sr / 44100.0)));
         v.longNote.fadeTo(0.0f, 1.0f / v.tailStep);
     }
-    float lvl = std::max(v.shortA.on ? v.shortA.gain : 0.0f, v.shortB.on ? v.shortB.gain : 0.0f);
-    if (v.longNote.on) lvl = std::max(lvl, v.longNote.gain * v.longNote.w);
-    if (v.tailOn) lvl = std::max(lvl, v.tail.peak());
-    v.level = lvl * v.env;
-}
 
 void ForgottenPiano::renderRecorded(float* l, float* r, float* mono, int m, bool endOfPeriod) {
     for (auto& v : rpool.voices) {
         if (!v.active()) continue;
         for (int i = 0; i < m; ++i) {
+            if (v.tailCountdown >= 0 && v.tailCountdown-- == 0) startTail(v);
             if (v.handCountdown >= 0 && v.handCountdown-- == 0) {
                 v.shortA.fadeTo(0.0f, float(v.handLength));
                 v.shortB.fadeTo(0.0f, float(v.handLength));

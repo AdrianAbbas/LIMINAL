@@ -79,7 +79,7 @@ private:
         ModeBank<32> tail;             // the natural decay after the recording
         bool tailOn = false;
         float tailX = 0, tailStep = 0, tailW = 0, tailGain = 0;
-        int tailAt = -1;
+        int tailAt = -1, tailCountdown = -1;
         int handCountdown = -1, handLength = 1;
         Tilt heldTone, tone;
         float gain = 1, panL = 0.7f, panR = 0.7f;
@@ -93,6 +93,7 @@ private:
     };
     bool startRecorded(int note, float velocity, const samples::Instrument& hits);
     void controlRecorded(RVoice&, float tick);
+    void startTail(RVoice&);
     void renderRecorded(float* l, float* r, float* mono, int m, bool endOfPeriod);
     float level(const RVoice& v) const { return v.level * v.fade; }
     VoicePool<RVoice, slots> rpool;

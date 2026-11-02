@@ -109,6 +109,10 @@ struct Reader {
             if (x <= 0.0f) on = false;
         }
         if (pos >= double(z.length - 3)) on = false;
+        // The last 1024 samples of a recording fade out (a note trimmed where it fell 50 dB never
+        // ends in a step).
+        const double rem = double(z.length - 3) - pos;
+        if (rem < 1024.0 && (released || !z.loops())) y *= float(std::max(0.0, rem) * (1.0 / 1024.0));
         return y * gain * w;
     }
     // Moves on `n` samples without reading (cheap; a layer at zero weight keeps its place).

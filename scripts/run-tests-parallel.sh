@@ -18,6 +18,8 @@ mkdir -p "$logs"
 "$tests" --only rules > "$logs/11-rules.txt" 2>&1 &
 "$tests" --only distinct > "$logs/12-distinct.txt" 2>&1 &
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
+# Milestone 8: the instruments on the developer's recordings (stand-ins only without them).
+"$tests" --only recorded > "$logs/18-recorded.txt" 2>&1 &
 wait
 # The VHS look (its editor checks run in real time), then the editor's CPU in normal playing per
 # VHS amount, each alone so their timing is not disturbed.

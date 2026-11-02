@@ -205,7 +205,7 @@ bool HollowDrone::startRecorded(int note, float velocity) {
         if (best != nullptr && v.r[0].start(best, from->rate, sr, float(note), 1.0)) v.base[0] = level(best) * (0.5f + 0.9f * st.density);
     }
     // 1: the violin's open strings, an octave or two up (into G3..E5).
-    if (const auto* violin = recordings("violin-sustain")) {
+    if (const auto* violin = quality == 0 ? nullptr : recordings("violin-sustain")) {   // Eco: no violin
         const float pitch = into(note + 12, 52, 79);
         if (const auto* z = violin->find(int(pitch), 0.5f, keyHash(note, 81)); z != nullptr && v.r[1].start(z, violin->rate, sr, pitch, 1.0))
             v.base[1] = level(z) * (0.15f + 0.55f * st.harmonics) * (0.6f + 0.8f * st.density);

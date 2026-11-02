@@ -142,6 +142,7 @@ void Liminality::reset() {
     write = 0;
     ghostPos = 0;
     ghostGain = ghostTarget = 0;
+    lineWarm = 0;
     ghostToneL.z = ghostToneR.z = 0;
     warbleAmp = warbleAmpTarget = warbleChorus = warbleChorusTarget = 0;
     warbleGain = 1;
@@ -316,6 +317,9 @@ void Liminality::control(Instrument& in, std::uint64_t clock) {
         std::fill(lineL.begin(), lineL.end(), 0.0f);
         std::fill(lineR.begin(), lineR.end(), 0.0f);
         lineLive = true;
+        // The copies read the line up to ~145 ms back: they stay silent until it holds real history
+        // (else the ghost would jump from the zeroed line to the playing: a click, Milestone 8).
+        lineWarm = int(ghostDelay + ghostWindow) + 4;
     }
 }
 
@@ -431,7 +435,8 @@ void Liminality::process(float* left, float* right, int n) {
         }
         // Ghost: two read heads sweeping through a 50 ms window at the detune's rate, cross-faded
         // (sin^2 + cos^2 = 1), darker, and placed a little to the other side.
-        ghostGain += smooth * (ghostTarget - ghostGain);
+        if (lineWarm > 0) --lineWarm;
+        ghostGain += smooth * ((lineWarm > 0 ? 0.0f : ghostTarget) - ghostGain);
         if (lineLive && ghostGain > 1.0e-6f) {
             ghostPos -= ghostStep;
             if (ghostPos < 0.0f) ghostPos += window0;
@@ -448,7 +453,7 @@ void Liminality::process(float* left, float* right, int n) {
             r += ghostGain * (0.6f * gl + 0.4f * gr);
         }
         // Warble: the chorus copy, then the swell.
-        warbleChorus += smooth * (warbleChorusTarget - warbleChorus);
+        warbleChorus += smooth * ((lineWarm > 0 ? 0.0f : warbleChorusTarget) - warbleChorus);
         chorusDelay += chorusDelayStep;
         if (lineLive && warbleChorus > 1.0e-6f) {
             const float cl = read(lineL, chorusDelay), cr = read(lineR, chorusDelay * 1.13f);

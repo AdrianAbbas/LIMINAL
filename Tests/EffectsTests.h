@@ -73,6 +73,7 @@ void testEffects(Suite& s) {
             rig->set(params::environmentAmount, 1.0f);
             setFx(*rig, 1, params::fx::influence, 0.0f);
             rig->set(params::synthDrift, 0.0f);
+            rig->set(params::synthPatch, 0.0f);   // the synthesised voice: a steady source (a recorded pad wavers by itself)
             setFx(*rig, 1, params::fx::drift, drift);
             setFx(*rig, 1, params::fx::driftRate, 0.7f);
             rig->render(0.2);
@@ -89,11 +90,15 @@ void testEffects(Suite& s) {
         s.check(moving > 6.0 && still < 3.0, "Drift: the pitch wanders around the note", num(still, 1) + " -> " + num(moving, 1) + " cents range");
     }
     {
+        // Measured on the synthesised piano (a bright, known source): the recorded piano has little
+        // above 3 kHz for the tape to take away, and the hiss fills what is left.
+        BypassRecordings standIn;
+        const Signal brightRef = with({});
         const auto x = with({ { params::fx::tape, 1.0f }, { params::fx::tapeTone, 0.0f }, { params::fx::tapeHiss, 1.0f } });
-        const Spectrum a(monoOf(reference, rate, 0.0, 4.0), rate), b(monoOf(x, rate, 0.0, 4.0), rate);
+        const Spectrum a(monoOf(brightRef, rate, 0.0, 4.0), rate), b(monoOf(x, rate, 0.0, 4.0), rate);
         const double loss = (a.bandDb(3000, 12000) - a.bandDb(100, 1000)) - (b.bandDb(3000, 12000) - b.bandDb(100, 1000));
         s.check(loss > 6.0, "Tape: the top end goes (bandwidth reduction)", num(loss) + " dB less 3-12 kHz relative to the body");
-        s.metric("tape 100 %: character distance", characterDistance(characterOf(x, rate), refChar));
+        s.metric("tape 100 %: character distance", characterDistance(characterOf(x, rate), characterOf(brightRef, rate)));
         auto quiet = fxRig(0);
         setFx(*quiet, 0, params::fx::tape, 1.0f);
         quiet->render(2.0);
