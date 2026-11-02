@@ -42,39 +42,32 @@ LiminalProcessor::LiminalProcessor()
     ambienceLevel = mirrorOf(params::ambience);
     space = mirrorOf(params::space);
     const auto raw = [this](const char* id) { return mirrorOf(id); };
-    slots[0].instrument = &piano;
-    slots[0].on = raw(params::pianoOn);
-    slots[0].level = raw(params::pianoLevel);
+    const char* onIds[] { params::pianoOn, params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn };
+    const char* levelIds[] { params::pianoLevel, params::synthLevel, params::glassLevel, params::choirLevel, params::boxLevel, params::droneLevel };
+    for (int i = 0; i < instrumentCount; ++i) {
+        auto& slot = slots[std::size_t(i)];
+        slot.on = raw(onIds[i]);
+        slot.level = raw(levelIds[i]);
+        slot.type = mirrorOf(params::slotTypeId(i));
+        for (int k = 0; k < params::lib::count; ++k) slot.libParams[std::size_t(k)] = mirrorOf(params::libId(i, params::lib::keys[k]));
+        slot.playing = i;   // its own instrument (the type's default)
+        slot.instrument = slot.kit->original(i);
+    }
     slots[0].distance = raw(params::pianoDistance);
+    slots[2].distance = raw(params::glassDistance);
+    slots[4].distance = raw(params::boxDistance);
     const char* pianoIds[] { params::pianoAge, params::pianoDetune, params::pianoSoftness, params::pianoNoise, params::pianoDecay };
     for (int i = 0; i < 5; ++i) pianoSettings[i] = raw(pianoIds[i]);
-    slots[1].instrument = &synth;
-    slots[1].on = raw(params::synthOn);
-    slots[1].level = raw(params::synthLevel);
     const char* synthIds[] { params::synthDetune, params::synthWarmth, params::synthDrift, params::synthAttack,
                              params::synthRelease, params::synthWidth, params::synthGlide, params::synthGlideTime,
                              params::synthPatch, params::synthBlend };
     for (int i = 0; i < 10; ++i) synthSettings[i] = raw(synthIds[i]);
-    slots[2].instrument = &glass;
-    slots[2].on = raw(params::glassOn);
-    slots[2].level = raw(params::glassLevel);
-    slots[2].distance = raw(params::glassDistance);
     const char* glassIds[] { params::glassFragility, params::glassBrightness, params::glassResonance, params::glassDetune, params::glassDecay };
     for (int i = 0; i < 5; ++i) glassSettings[i] = raw(glassIds[i]);
-    slots[3].instrument = &choir;
-    slots[3].on = raw(params::choirOn);
-    slots[3].level = raw(params::choirLevel);
     const char* choirIds[] { params::choirBreath, params::choirFormant, params::choirDetune, params::choirWidth, params::choirDarkness, params::choirRelease };
     for (int i = 0; i < 6; ++i) choirSettings[i] = raw(choirIds[i]);
-    slots[4].instrument = &box;
-    slots[4].on = raw(params::boxOn);
-    slots[4].level = raw(params::boxLevel);
-    slots[4].distance = raw(params::boxDistance);
     const char* boxIds[] { params::boxWear, params::boxDrift, params::boxMechanism, params::boxBrightness, params::boxDecay };
     for (int i = 0; i < 5; ++i) boxSettings[i] = raw(boxIds[i]);
-    slots[5].instrument = &drone;
-    slots[5].on = raw(params::droneOn);
-    slots[5].level = raw(params::droneLevel);
     const char* droneIds[] { params::droneDensity, params::droneInstability, params::droneHarmonics, params::droneSub,
                              params::droneMovement, params::droneRelease, params::droneAttack };
     for (int i = 0; i < 7; ++i) droneSettings[i] = raw(droneIds[i]);
@@ -183,6 +176,68 @@ void LiminalProcessor::updateSolo() {
     for (int i = 0; i < instrumentCount; ++i) slots[std::size_t(i)].muted = valid && i != solo - 1;
 }
 
+// The instrument library (2026-11-02): the slot plays another of the twenty. The one it played lets go of
+// every note at once (a short fade, never a cut) and keeps rendering until it is silent; held-back
+// Liminality notes are dropped. Everything after the voices (Liminality, Distance, effects, room) is the
+// slot's and carries on. Audio thread (also prepareToPlay); no allocation.
+void LiminalProcessor::selectInstrument(Slot& slot, int which) {
+    which = std::clamp(which, 0, params::libraryCount - 1);
+    if (which == slot.playing && slot.instrument != nullptr) return;
+    auto& kit = *slot.kit;
+    const auto forget = [&](const dsp::Instrument* in) {   // no longer fading (it plays again, or is cut)
+        for (auto& f : slot.fading)
+            if (f.instrument == in) f = {};
+    };
+    dsp::Instrument* next = nullptr;
+    if (dsp::library::isOriginal(which)) {
+        next = kit.original(which);
+    } else {
+        const int kind = which - dsp::library::originals;
+        dsp::Library* pick = nullptr;
+        for (auto& l : kit.library)   // the same instrument still fading out: it simply plays on
+            if (&l != slot.instrument && slot.isFading(&l) && l.kind() == kind) pick = &l;
+        if (pick == nullptr)
+            for (auto& l : kit.library)
+                if (&l != slot.instrument && !slot.isFading(&l)) { pick = &l; break; }
+        if (pick == nullptr) {   // every instance busy (three changes within a second): the oldest fade is cut short
+            auto& oldest = slot.fading[0].instrument != nullptr ? slot.fading[0] : slot.fading[1];
+            pick = static_cast<dsp::Library*>(oldest.instrument);
+            pick->reset();
+            oldest = {};
+        }
+        pick->setKind(kind);
+        next = pick;
+    }
+    const bool wasFading = slot.isFading(next);
+    forget(next);
+    if (slot.instrument != nullptr && slot.instrument != next) {
+        slot.lim.flush(*slot.instrument);
+        slot.instrument->allSoundOff();
+        Slot::Fading* free = nullptr;
+        for (auto& f : slot.fading)
+            if (f.instrument == nullptr) { free = &f; break; }
+        if (free == nullptr) {   // both busy: cut the older one short
+            slot.fading[0].instrument->reset();
+            slot.fading[0] = slot.fading[1];
+            free = &slot.fading[1];
+        }
+        *free = { slot.instrument, -1, 1 };
+    }
+    if (next != slot.instrument) {
+        if (!wasFading) next->reset();   // an idle instrument starts clean (one still fading plays on)
+        next->setQuality(std::clamp(qualityNow, 0, 2));
+        next->setLiminalPitch(slot.instrument != nullptr ? slot.instrument->liminalPitch() : dsp::LiminalPitch {});
+    }
+    slot.instrument = next;
+    slot.playing = which;
+}
+
+bool LiminalProcessor::slotRecorded(int slot) const {
+    const auto& s = slots[std::size_t(std::clamp(slot, 0, instrumentCount - 1))];
+    if (auto* lib = dynamic_cast<const dsp::Library*>(s.instrument)) return lib->recordedNow();
+    return samples::Bank::get().ready() && s.playing != 2;   // the originals: all but Glass Memories play recordings when there are any
+}
+
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
     if (layouts.getMainInputChannelSet() != juce::AudioChannelSet::disabled()) return false;
     const auto out = layouts.getMainOutputChannelSet();
@@ -190,6 +245,7 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 }
 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
+    preparedRate = sampleRate;
     // The recordings load in about a second; waiting here means the first notes are recorded ones.
     samples::Bank::get().waitUntilLoaded(5000);
     updateMirror();
@@ -199,7 +255,9 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     updateSolo();
     for (int i = 0; i < instrumentCount; ++i) {
         auto& slot = slots[std::size_t(i)];
-        slot.instrument->prepare(sampleRate);
+        slot.kit->forEach([&](dsp::Instrument& in) { in.prepare(sampleRate); });
+        slot.fading = {};
+        selectInstrument(slot, std::clamp(int(std::lround(slot.type->load())), 0, params::libraryCount - 1));
         slot.stage.setAmount(slot.distance != nullptr ? slot.distance->load() : 0.0f);
         slot.stage.prepare(sampleRate);
         slot.rack.prepare(sampleRate, i);
@@ -284,7 +342,7 @@ void LiminalProcessor::applyQuality() {
     if (q == qualityNow) return;
     qualityNow = q;
     for (auto& slot : slots) {
-        slot.instrument->setQuality(q);
+        slot.kit->forEach([&](dsp::Instrument& in) { in.setQuality(q); });
         slot.rack.setQuality(q);
     }
     environments.setQuality(q);
@@ -297,7 +355,7 @@ void LiminalProcessor::updateSettings() {
     p.softness = pianoSettings[2]->load();
     p.noise = pianoSettings[3]->load();
     p.decay = pianoSettings[4]->load();
-    piano.setSettings(p);
+    for (auto& slot : slots) slot.kit->piano.setSettings(p);
     dsp::FadedSynth::Settings f;
     f.detune = synthSettings[0]->load();
     f.warmth = synthSettings[1]->load();
@@ -309,14 +367,14 @@ void LiminalProcessor::updateSettings() {
     f.glideTime = synthSettings[7]->load();
     f.patch = juce::roundToInt(synthSettings[8]->load());
     f.blend = synthSettings[9]->load();
-    synth.setSettings(f);
+    for (auto& slot : slots) slot.kit->synth.setSettings(f);
     dsp::GlassMemories::Settings g;
     g.fragility = glassSettings[0]->load();
     g.brightness = glassSettings[1]->load();
     g.resonance = glassSettings[2]->load();
     g.detune = glassSettings[3]->load();
     g.decay = glassSettings[4]->load();
-    glass.setSettings(g);
+    for (auto& slot : slots) slot.kit->glass.setSettings(g);
     dsp::EmptyChoir::Settings c;
     c.breath = choirSettings[0]->load();
     c.formant = choirSettings[1]->load();
@@ -324,14 +382,14 @@ void LiminalProcessor::updateSettings() {
     c.width = choirSettings[3]->load();
     c.darkness = choirSettings[4]->load();
     c.release = choirSettings[5]->load();
-    choir.setSettings(c);
+    for (auto& slot : slots) slot.kit->choir.setSettings(c);
     dsp::LostMusicBox::Settings b;
     b.wear = boxSettings[0]->load();
     b.drift = boxSettings[1]->load();
     b.mechanism = boxSettings[2]->load();
     b.brightness = boxSettings[3]->load();
     b.decay = boxSettings[4]->load();
-    box.setSettings(b);
+    for (auto& slot : slots) slot.kit->box.setSettings(b);
     dsp::HollowDrone::Settings d;
     d.density = droneSettings[0]->load();
     d.instability = droneSettings[1]->load();
@@ -340,7 +398,7 @@ void LiminalProcessor::updateSettings() {
     d.movement = droneSettings[4]->load();
     d.release = droneSettings[5]->load();
     d.attack = droneSettings[6]->load();
-    drone.setSettings(d);
+    for (auto& slot : slots) slot.kit->drone.setSettings(d);
 }
 
 // On the fixed 64-sample control grid (counted from prepareToPlay, independent of the host's
@@ -394,6 +452,23 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         std::fill(slotSendL, slotSendL + n, 0.0f);
         std::fill(slotSendR, slotSendR + n, 0.0f);
         slot.instrument->render(slotL, slotR, n);
+        for (auto& f : slot.fading) {   // what it played before a change: its notes fading, then its own tail
+            if (f.instrument == nullptr) continue;
+            if (f.tail < 0) {
+                f.instrument->render(slotL, slotR, n);
+                if (f.instrument->activeVoices() == 0) f.tail = f.tailLength = int(0.5 * preparedRate);
+            } else {
+                float tl[chunk] {}, tr[chunk] {};
+                f.instrument->render(tl, tr, n);
+                for (int i = 0; i < n; ++i) {
+                    const float g = float(std::max(0, f.tail - i)) / float(f.tailLength);
+                    slotL[i] += tl[i] * g * g;
+                    slotR[i] += tr[i] * g * g;
+                }
+                f.tail -= n;
+                if (f.tail <= 0) f = {};
+            }
+        }
         slot.lim.process(slotL, slotR, n);   // Liminality: after the voices, before Distance and the room
         slot.stage.process(slotL, slotR, slotSendL, slotSendR, n);
         // The instrument's own effects (and the place's processing of it); the rack makes
@@ -419,6 +494,10 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         // Switched off and faded out: stop it (and forget its notes) until enabled again.
         if (!slot.enabled() && slot.gain.current < 1.0e-5f) {
             slot.instrument->reset();
+            for (auto& f : slot.fading) {
+                if (f.instrument != nullptr) f.instrument->reset();
+                f = {};
+            }
             slot.rack.reset();
             slot.lim.reset();
             slot.running = false;
@@ -481,6 +560,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     ambienceGain.target = params::levelGain(ambienceLevel->load());
     spaceMix.target = space->load();
     updateSettings();
+    for (auto& slot : slots) selectInstrument(slot, std::clamp(int(std::lround(slot.type->load())), 0, params::libraryCount - 1));
     updateSolo();
     applyQuality();
     environments.setAmount(environmentAmount->load());
@@ -580,7 +660,7 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     }
     int voices = 0;
     for (const auto& slot : slots)
-        if (slot.running) voices += slot.instrument->activeVoices();
+        if (slot.running) voices += slot.instrument->activeVoices() + slot.fadingVoices();
     meters.voices.store(voices, std::memory_order_relaxed);
     meters.place.store(int(environments.place()), std::memory_order_relaxed);
     meters.character.store(environments.current().characterIndex(), std::memory_order_relaxed);

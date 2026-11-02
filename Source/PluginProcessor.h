@@ -8,6 +8,7 @@
 #include "DSP/EmptyChoir.h"
 #include "DSP/LostMusicBox.h"
 #include "DSP/HollowDrone.h"
+#include "DSP/Library.h"
 #include "DSP/TapeWarble.h"
 #include "DSP/Liminality.h"
 #include "Parameters.h"
@@ -82,6 +83,9 @@ public:
     juce::Array<juce::File> userPresets() const;
     const dsp::EnvironmentChain& placeNow() const { return environments.current(); }   // audio-thread state (tests)
     const dsp::Liminality& liminalityOf(int instrument) const { return slots[std::size_t(instrument)].lim; }   // (tests)
+    // The instrument library (2026-11-02): which of the twenty a slot is playing now (audio thread's view; tests).
+    int playingIn(int slot) const { return slots[std::size_t(slot)].playing; }
+    bool slotRecorded(int slot) const;   // whether the slot's instrument plays recordings now (tests)
 
     static constexpr int stateVersion = 2;   // 2: scenes A/B saved alongside the parameters
 
@@ -96,8 +100,44 @@ private:
         }
     };
     // One playable instrument with its on/off, level and distance (before the room).
+    // What a slot can play (2026-11-02): an instance of each original instrument and three of the library
+    // (the one playing and up to two fading out after changes), preallocated (~1 MB a slot).
+    struct Kit {
+        dsp::ForgottenPiano piano;
+        dsp::FadedSynth synth;
+        dsp::GlassMemories glass;
+        dsp::EmptyChoir choir;
+        dsp::LostMusicBox box;
+        dsp::HollowDrone drone;
+        std::array<dsp::Library, 3> library;
+        dsp::Instrument* original(int k) {
+            switch (k) {
+            case 0: return &piano;
+            case 1: return &synth;
+            case 2: return &glass;
+            case 3: return &choir;
+            case 4: return &box;
+            default: return &drone;
+            }
+        }
+        template <class F> void forEach(F f) {
+            for (int k = 0; k < 6; ++k) f(*original(k));
+            for (auto& l : library) f(l);
+        }
+    };
+    // One playable instrument with its on/off, level and distance (before the room).
     struct Slot {
-        dsp::Instrument* instrument = nullptr;
+        dsp::Instrument* instrument = nullptr;   // what the slot plays now
+        // What it played before a change: rendered until its notes have faded, then its own tail (an
+        // echo, a chorus) for a moment more, faded out (never cut).
+        struct Fading { dsp::Instrument* instrument = nullptr; int tail = -1, tailLength = 1; };
+        std::array<Fading, 2> fading {};
+        bool isFading(const dsp::Instrument* in) const { return std::any_of(fading.begin(), fading.end(), [&](const Fading& f) { return f.instrument == in; }); }
+        int fadingVoices() const { int n = 0; for (const auto& f : fading) if (f.instrument != nullptr) n += f.instrument->activeVoices(); return n; }
+        int playing = -1;                        // which of the twenty (params::libraryNames)
+        std::atomic<float>* type = nullptr;
+        std::array<std::atomic<float>*, params::lib::count> libParams {};
+        std::unique_ptr<Kit> kit = std::make_unique<Kit>();
         std::atomic<float>* on = nullptr;
         std::atomic<float>* level = nullptr;
         std::atomic<float>* distance = nullptr;   // optional
@@ -138,19 +178,16 @@ private:
     std::atomic<float>* ambienceLevel = nullptr;
     std::atomic<float>* space = nullptr;
 
-    dsp::ForgottenPiano piano;
     std::array<Slot, instrumentCount> slots;
+    // The original six instruments' own controls (shared by every slot that holds that instrument).
     std::atomic<float>* pianoSettings[5] {};
-    dsp::FadedSynth synth;
     std::atomic<float>* synthSettings[10] {};
-    dsp::GlassMemories glass;
     std::atomic<float>* glassSettings[5] {};
-    dsp::EmptyChoir choir;
     std::atomic<float>* choirSettings[6] {};
-    dsp::LostMusicBox box;
     std::atomic<float>* boxSettings[5] {};
-    dsp::HollowDrone drone;
     std::atomic<float>* droneSettings[7] {};
+    void selectInstrument(Slot&, int which);   // the slot's type changed: swap (the old one fades out)
+    double preparedRate = 48000.0;
     std::atomic<float>* soloParam = nullptr;
     dsp::CaptureBank captures;   // the developer's effect captures (built in prepareToPlay)
     dsp::Environments environments;

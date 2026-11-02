@@ -22,6 +22,9 @@ mkdir -p "$logs"
 "$tests" --only scroll > "$logs/19-scroll.txt" 2>&1 &
 # Milestone 8: the instruments on the developer's recordings (stand-ins only without them).
 "$tests" --only recorded > "$logs/18-recorded.txt" 2>&1 &
+# 2026-11-02: the instrument library (twenty instruments in six slots) and old sessions unchanged.
+"$tests" --only library > "$logs/20-library.txt" 2>&1 &
+"$tests" --only sessions > "$logs/21-sessions.txt" 2>&1 &
 wait
 # The VHS look (its editor checks run in real time), then the editor's CPU in normal playing per
 # VHS amount, each alone so their timing is not disturbed.
@@ -37,7 +40,7 @@ wait
 
 passed=0
 failed=0
-for log in "$logs"/[1-9]-*.txt "$logs"/1[0-9]-*.txt; do
+for log in "$logs"/[1-9]-*.txt "$logs"/[12][0-9]-*.txt; do
     line=$(grep -E '^[0-9]+ passed, [0-9]+ failed' "$log" | tail -1)
     if [[ -z "$line" ]]; then
         echo "$log: did not finish"

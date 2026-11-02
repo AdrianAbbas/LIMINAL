@@ -601,6 +601,137 @@
    "maxSeconds": 6.0,
    "endStretch": 7,
    "loop": true
+  },
+  {
+   "id": "guitar",
+   "name": "Classical guitar, fingers (no pick): soft, medium, hard sweeps (Old Guitar)",
+   "kind": "pluck",
+   "layers": [
+    {
+     "file": "Soft 1 (no pick).mp3",
+     "name": "soft",
+     "velocity": [
+      0.0,
+      0.42
+     ]
+    },
+    {
+     "file": "Medium 1 (no pick).mp3",
+     "name": "medium",
+     "velocity": [
+      0.42,
+      0.75
+     ]
+    },
+    {
+     "file": "Hard 1 (no pick).mp3",
+     "name": "hard",
+     "velocity": [
+      0.75,
+      1.0
+     ]
+    }
+   ],
+   "notes": [
+    "E2",
+    "G2",
+    "A#2",
+    "C#3",
+    "E3",
+    "G3",
+    "A#3",
+    "C#4",
+    "E4",
+    "G4",
+    "A#4",
+    "C#5",
+    "E5",
+    "G5",
+    "A#5"
+   ],
+   "takes": 1,
+   "maxSeconds": 6.0,
+   "partials": 3
+  },
+  {
+   "id": "violin-pizz",
+   "name": "Violin pizzicato: open strings and every 3 semitones from G3, 3 takes each (Hallway Pizzicato)",
+   "kind": "pluck",
+   "layers": [
+    {
+     "file": "pizzicato 2 (g3 to a#5, 3 per note).mp3",
+     "name": "pizz",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "G3",
+      "A#3",
+      "C#4",
+      "E4",
+      "G4",
+      "A#4",
+      "C#5",
+      "E5",
+      "G5",
+      "A#5"
+     ]
+    },
+    {
+     "file": "pizzicato 1.mp3",
+     "name": "pizz",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "G3",
+      "D4",
+      "A4",
+      "E5"
+     ]
+    }
+   ],
+   "notes": [
+    "G3",
+    "A#3",
+    "C#4",
+    "E4",
+    "G4",
+    "A#4",
+    "C#5",
+    "E5",
+    "G5",
+    "A#5"
+   ],
+   "takes": 3,
+   "maxSeconds": 2.5,
+   "partials": 3
+  },
+  {
+   "id": "violin-collegno",
+   "name": "Violin col legno (the bow's wood on each open string; the number of hits varies) (Hallway Pizzicato)",
+   "kind": "pluck",
+   "layers": [
+    {
+     "file": "hitting bow wood (varied number of hits per string).mp3",
+     "name": "wood",
+     "velocity": [
+      0.0,
+      1.0
+     ]
+    }
+   ],
+   "notes": [
+    "G3",
+    "D4",
+    "A4",
+    "E5"
+   ],
+   "takes": 0,
+   "maxSeconds": 1.2,
+   "partials": 2
   }
  ],
  "unused": [
@@ -743,30 +874,6 @@
   {
    "file": "Male Vocal mmm vocal choire A2_1.wav",
    "why": "Two long hums whose pitch slides while held: not steady enough to loop; the five-take 'mmm' stack on A2 is used."
-  },
-  {
-   "file": "Soft 1 (no pick).mp3",
-   "why": "Classical guitar: 'Old Guitar' would be a seventh instrument; LIMINAL's six-instrument layout (parameters, per-instrument effects, rooms' per-instrument shaping, Liminality, presets, editor) has no clean slot for it yet (docs/DEVLOG.md, Milestone 8)."
-  },
-  {
-   "file": "Medium 1 (no pick).mp3",
-   "why": "Classical guitar: 'Old Guitar' would be a seventh instrument; LIMINAL's six-instrument layout (parameters, per-instrument effects, rooms' per-instrument shaping, Liminality, presets, editor) has no clean slot for it yet (docs/DEVLOG.md, Milestone 8)."
-  },
-  {
-   "file": "Hard 1 (no pick).mp3",
-   "why": "Classical guitar: 'Old Guitar' would be a seventh instrument; LIMINAL's six-instrument layout (parameters, per-instrument effects, rooms' per-instrument shaping, Liminality, presets, editor) has no clean slot for it yet (docs/DEVLOG.md, Milestone 8)."
-  },
-  {
-   "file": "pizzicato 1.mp3",
-   "why": "Violin pizzicato: 'Faded Strings' skipped for the same reason as the guitar; the bowed sustain is used in the Hollow Drone."
-  },
-  {
-   "file": "pizzicato 2 (g3 to a#5, 3 per note).mp3",
-   "why": "Violin pizzicato: 'Faded Strings' skipped for the same reason as the guitar; the bowed sustain is used in the Hollow Drone."
-  },
-  {
-   "file": "hitting bow wood (varied number of hits per string).mp3",
-   "why": "Col legno: tried for Glass Memories' attack on paper, but a wooden tick is not glass; Glass Memories stays synthesised until the bells/glass are sampled."
   },
   {
    "file": "Banjo Soft Sweep.wav",

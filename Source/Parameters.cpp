@@ -224,6 +224,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { synthPatch, 1 }, "Synth Patch",
                                                             juce::StringArray(synthPatchNames, 6), 1));
     layout.add(amount(synthBlend, "Synth Analog Blend", 0.0f));
+    // The instrument library (2026-11-02, appended): what each slot holds (its own instrument by
+    // default), and the six controls the fourteen new instruments read (0.5 = as designed).
+    for (int i = 0; i < instrumentCount; ++i)
+        layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { slotTypeId(i), 1 }, juce::String(instrumentLabels[i]) + " Slot Instrument",
+                                                                juce::StringArray(libraryNames, libraryCount), i));
+    for (int i = 0; i < instrumentCount; ++i)
+        for (int k = 0; k < lib::count; ++k)
+            layout.add(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { libId(i, lib::keys[k]), 1 }, juce::String(instrumentLabels[i]) + " Slot " + lib::names[k],
+                juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.5f,
+                juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
     return layout;
 }
 

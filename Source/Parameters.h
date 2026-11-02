@@ -168,8 +168,23 @@ inline constexpr const char* synthBlend = "synth_blend";
 inline const char* synthPatchNames[] { "Analog", "Soft Pad", "Pulse", "Square", "Cyberpunk", "Static Bass" };
 inline juce::String limId(int instrument, const char* control) { return juce::String(instrumentKeys[instrument]) + "_lim_" + control; }
 inline juce::String midiId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_" + name; }
-// The instrument library (2026-11-02): which of the twenty instruments a slot holds ("<slot>_type").
+// The instrument library (2026-11-02): six slots, twenty instruments. "<slot>_type" chooses which one a
+// slot holds (0..5 the original six, a slot's default being its own: old songs open unchanged; 6..19 the
+// new fourteen, DSP/Library). The new instruments read six controls per slot, "<slot>_lib_<control>",
+// whose meaning each instrument gives (the sixth, "colour", is its own: Other Room, Tremolo, ...).
+// Everything else a slot has (level, Liminality, effects, MIDI range, the rooms' shaping) stays the slot's.
+inline constexpr int libraryCount = 20;
+inline const char* libraryNames[] { "Forgotten Piano", "Faded Synth", "Glass Memories", "Empty Choir", "Lost Music Box", "Hollow Drone",
+                                    "Old Guitar", "Faded Strings", "Hallway Pizzicato", "Toy Piano", "Lounge E-Piano", "Elevator Vibraphone",
+                                    "Mall Chimes", "Solo Voice", "Hummed Memory", "Cassette Strings", "Arcade Lead", "Basement Bass",
+                                    "Warped Organ", "Bowed Glass" };
+namespace lib {
+inline constexpr const char* keys[] { "tone", "age", "soft", "decay", "width", "colour" };
+inline constexpr const char* names[] { "Tone", "Age", "Softness", "Decay", "Width", "Colour" };
+inline constexpr int count = 6;
+} // namespace lib
 inline juce::String slotTypeId(int slot) { return juce::String(instrumentKeys[slot]) + "_type"; }
+inline juce::String libId(int slot, const char* control) { return juce::String(instrumentKeys[slot]) + "_lib_" + control; }
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
 
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence

@@ -203,6 +203,7 @@ struct BypassRecordings {   // the stand-ins (synthesis), as a build without the
 #include "WorkflowTests.h"
 #include "LiminalityTests.h"
 #include "RecordedTests.h"
+#include "LibraryTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -1216,6 +1217,8 @@ int main(int argc, char** argv) {
         else if (arg == "--render-captures" && i + 1 < argc) return renderCaptures(argv[++i]);
         else if (arg == "--render-recorded" && i + 1 < argc) return renderRecorded(argv[++i]);
         else if (arg == "--probe-chord") return probeChord();
+        else if (arg == "--probe-library") return probeLibrary();
+        else if (arg == "--probe-library-clicks" && i + 2 < argc) return probeLibraryClicks(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]) != 0);
         else if (arg == "--probe-jump") return probeJump();
         else if (arg == "--probe-clicks" && i + 4 < argc) return probeClicks(argv[i + 1], std::atoi(argv[i + 2]), std::atoi(argv[i + 3]), std::atof(argv[i + 4]));
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
@@ -1264,6 +1267,7 @@ int main(int argc, char** argv) {
         if (run("drone")) testDrone(s);
     }
     if (run("recorded")) testRecorded(s);
+    if (run("library")) testLibrary(s);
     if (run("instruments")) testInstruments(s);
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);
