@@ -1,0 +1,828 @@
+{
+ "comment": "What the developer's recordings (the private AdrianAbbas/Samples repository: MP3s and WAVs, in its root or in folders; a file is found by its path or, if it moved, by its name anywhere under the repository) contain, from its notes.txt, checked against the audio by prepare.py. Note names: C4 = MIDI 60. 'takes' is how many times each note was played (round-robins); 0 means it varies (counted from the audio). 'pitchFrom': 'audio' (the voice): the names say what was meant, the detected pitch decides where a note is mapped (the voice files are named an octave below what was sung). Layers with the same name are one velocity layer (extra takes); 'into' copies a file's notes into several layers (the falsetto plays at every velocity); 'pick' takes a range of a file's notes ('fileTakes' in all: the banjo's 5th string file holds the soft, medium and hard hits in order). 'gainGroup': sets recorded at one gain share one gain. 'fx': the set also ships in the effect's bundle (its Atmosphere layer). Synth sweeps ('kind': 'synth'): one patch per WAV, every key of the Minilogue's 37 from lowest to highest; 'articulation' short or long (held: looped), 'patch' groups the two (one gain: same input gain per patch); pitches and octaves come from the audio (sweeps.py). 'ship': false prepares and reports a set (its notes checked) but leaves it out of index.json and the output (no instrument plays it: not loaded, not bundled).",
+ "rate": 44100,
+ "roomTone": "Room tone.mp3",
+ "sets": [
+  {
+   "id": "kalimba",
+   "name": "Kalimba (17 tines, C major)",
+   "kind": "pluck",
+   "layers": [
+    {
+     "file": "Soft Hits .mp3",
+     "name": "soft",
+     "velocity": [
+      0.0,
+      0.42
+     ]
+    },
+    {
+     "file": "Medium Hits.mp3",
+     "name": "medium",
+     "velocity": [
+      0.42,
+      0.75
+     ]
+    },
+    {
+     "file": "Hard Hits.mp3",
+     "name": "hard",
+     "velocity": [
+      0.75,
+      1.0
+     ]
+    }
+   ],
+   "notes": [
+    "C4",
+    "D4",
+    "E4",
+    "F4",
+    "G4",
+    "A4",
+    "B4",
+    "C5",
+    "D5",
+    "E5",
+    "F5",
+    "G5",
+    "A5",
+    "B5",
+    "C6",
+    "D6",
+    "E6"
+   ],
+   "takes": 1,
+   "layerStepsDb": [
+    -9.0,
+    -4.0,
+    0.0
+   ],
+   "maxSeconds": 5.0,
+   "partials": 1
+  },
+  {
+   "id": "violin-sustain",
+   "name": "Violin, bowed open strings",
+   "kind": "bowed",
+   "layers": [
+    {
+     "file": "Open sustain 1.mp3",
+     "name": "sustain",
+     "velocity": [
+      0.0,
+      1.0
+     ]
+    }
+   ],
+   "notes": [
+    "G3",
+    "D4",
+    "A4",
+    "E5"
+   ],
+   "takes": 3,
+   "maxSeconds": 9.0,
+   "partials": 3,
+   "loop": true
+  },
+  {
+   "kind": "pluck",
+   "pitchFrom": "track",
+   "lowest": "A0",
+   "takes": 0,
+   "levelByFloor": false,
+   "partials": 4,
+   "rangeDb": 45,
+   "id": "piano",
+   "name": "Piano (the developer's own, 88 keys, played as tuned), short notes (chromatic sweeps from A0: soft, medium, full)",
+   "layers": [
+    {
+     "file": "Piano Soft sweep short notes.wav",
+     "name": "soft",
+     "velocity": [
+      0.0,
+      0.42
+     ]
+    },
+    {
+     "file": "Piano medium sweep short notes.wav",
+     "name": "medium",
+     "velocity": [
+      0.42,
+      0.75
+     ]
+    },
+    {
+     "file": "Piano full sweep short notes.wav",
+     "name": "full",
+     "velocity": [
+      0.75,
+      1.0
+     ]
+    }
+   ],
+   "maxSeconds": 2.0,
+   "oneTake": true,
+   "denoise": false,
+   "gainGroup": "piano"
+  },
+  {
+   "kind": "pluck",
+   "pitchFrom": "track",
+   "lowest": "A0",
+   "takes": 0,
+   "levelByFloor": false,
+   "partials": 4,
+   "rangeDb": 45,
+   "id": "piano-long",
+   "name": "Piano (the developer's own, 88 keys, played as tuned), long notes (a chromatic sweep from A0, each note held and let ring)",
+   "layers": [
+    {
+     "file": "Piano sweep long notes.wav",
+     "name": "long",
+     "velocity": [
+      0.0,
+      1.0
+     ]
+    }
+   ],
+   "maxSeconds": 4.5,
+   "oneTake": true,
+   "denoise": false,
+   "gainGroup": "piano"
+  },
+  {
+   "id": "voice-ooh",
+   "name": "Male voice, 'ooh' sweep (chest; falsetto above)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal Ooh soft sweep.wav",
+     "name": "soft",
+     "velocity": [
+      0.0,
+      0.5
+     ],
+     "notes": [
+      "E2",
+      "G2",
+      "A#2",
+      "C#3",
+      "E3",
+      "G3",
+      "A#3"
+     ]
+    },
+    {
+     "file": "Male Vocal ooh full sweep.wav",
+     "name": "full",
+     "velocity": [
+      0.5,
+      1.0
+     ],
+     "notes": [
+      "E2",
+      "G2",
+      "A#2",
+      "C#3",
+      "E3",
+      "G3",
+      "A#3"
+     ]
+    },
+    {
+     "file": "Male Vocal ooh falsetto sweep.wav",
+     "name": "falsetto",
+     "into": [
+      "soft",
+      "full"
+     ],
+     "notes": [
+      "C#4",
+      "E4"
+     ]
+    }
+   ],
+   "takes": 1,
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 5.5,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "voice-aah",
+   "name": "Male voice, 'aah' sweep (chest; falsetto above)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal aah soft sweep.wav",
+     "name": "soft",
+     "velocity": [
+      0.0,
+      0.5
+     ],
+     "notes": [
+      "E2",
+      "G2",
+      "A#2",
+      "C#3",
+      "E3",
+      "G3",
+      "A#3"
+     ]
+    },
+    {
+     "file": "Male Vocal aah full sweep.wav",
+     "name": "full",
+     "velocity": [
+      0.5,
+      1.0
+     ],
+     "notes": [
+      "E2",
+      "G2",
+      "A#2",
+      "C#3",
+      "E3",
+      "G3",
+      "A#3"
+     ]
+    },
+    {
+     "file": "Male Vocal aah falsetto sweep.wav",
+     "name": "falsetto",
+     "into": [
+      "soft",
+      "full"
+     ],
+     "notes": [
+      "C#4",
+      "E4"
+     ]
+    }
+   ],
+   "takes": 1,
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 5.5,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "voice-mm",
+   "name": "Male voice, 'mmm' sweep (chest)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal mm soft sweep.wav",
+     "name": "soft",
+     "velocity": [
+      0.0,
+      0.5
+     ],
+     "notes": [
+      "E2",
+      "G2",
+      "A#2",
+      "C#3",
+      "E3",
+      "G3",
+      "A#3"
+     ]
+    },
+    {
+     "file": "Male Vocal mm full sweep.wav",
+     "name": "full",
+     "velocity": [
+      0.5,
+      1.0
+     ],
+     "notes": [
+      "E2",
+      "G2",
+      "A#2",
+      "C#3",
+      "E3",
+      "G3",
+      "A#3"
+     ]
+    }
+   ],
+   "takes": 1,
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 5.5,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "choir-ooh",
+   "name": "Male voice, 'ooh' choir stacks (5 takes per pitch: the Ensemble's voices)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal ooh vocal choir E2.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "E2"
+     ],
+     "takes": 5
+    },
+    {
+     "file": "Male Vocal ooh vocal choir A2.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "A2"
+     ],
+     "takes": 5
+    },
+    {
+     "file": "Male Vocal ooh vocal choir E3.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "E3"
+     ],
+     "takes": 5
+    },
+    {
+     "file": "Male Vocal ooh vocal choir falsetto E4.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "E4"
+     ],
+     "takes": 5
+    }
+   ],
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 5.0,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "choir-aah",
+   "name": "Male voice, 'aah' choir stacks (5 takes per pitch: the Ensemble's voices)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal aah vocal choir E2.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "E2"
+     ],
+     "takes": 5
+    },
+    {
+     "file": "Male Vocal aah vocal choir A2.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "A2"
+     ],
+     "takes": 5
+    },
+    {
+     "file": "Male Vocal aah vocal choir E3.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "E3"
+     ],
+     "takes": 5
+    }
+   ],
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 5.0,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "choir-mm",
+   "name": "Male voice, 'mmm' choir stacks (5 takes per pitch: the Ensemble's voices)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal mmm vocal choire A2.wav",
+     "name": "stack",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "A2"
+     ],
+     "takes": 5
+    }
+   ],
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 5.0,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "voice-drone",
+   "name": "Male voice, low drones ('ooo' and 'aah')",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal ooo low drone G1.wav",
+     "name": "drone",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "G1"
+     ],
+     "takes": 2
+    },
+    {
+     "file": "Male Vocal aaah low drone A2.wav",
+     "name": "drone",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "A2"
+     ],
+     "takes": 2
+    }
+   ],
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 14.0,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "voice-hum",
+   "name": "Male voice, low hummed drone ('mmm', sounds G2)",
+   "kind": "voice",
+   "pitchFrom": "audio",
+   "layers": [
+    {
+     "file": "Male Vocal mmm low drone G1.wav",
+     "name": "drone",
+     "velocity": [
+      0.0,
+      1.0
+     ],
+     "notes": [
+      "G1"
+     ],
+     "takes": 2
+    }
+   ],
+   "denoise": false,
+   "levelByFloor": false,
+   "gainGroup": "voice",
+   "maxSeconds": 14.0,
+   "partials": 4,
+   "loop": true,
+   "maxWander": 45,
+   "minNoteSeconds": 1.2
+  },
+  {
+   "id": "mlg-staticbass-long",
+   "name": "Korg Minilogue, static-y bassy synth, long hits",
+   "kind": "synth",
+   "patch": "mlg-staticbass",
+   "articulation": "long",
+   "file": "static-y bassy synth short hit sweep (-1 octave range compared to rest).wav",
+   "keys": 37,
+   "maxSeconds": 6.0,
+   "endStretch": 7,
+   "loop": true,
+   "fileSays": "the recordings' names are swapped (see the short hits); this one is held"
+  },
+  {
+   "id": "mlg-cyberpunk-long",
+   "name": "Korg Minilogue, cyberpunk synth, long hits",
+   "kind": "synth",
+   "patch": "mlg-cyberpunk",
+   "articulation": "long",
+   "file": "Cyberpunk Synth 1 long hits sweep (-1 octave range compared to rest).wav",
+   "keys": 37,
+   "maxSeconds": 6.0,
+   "endStretch": 7,
+   "loop": true
+  },
+  {
+   "id": "mlg-pulse-long",
+   "name": "Korg Minilogue, pulsating synth, long hits",
+   "kind": "synth",
+   "patch": "mlg-pulse",
+   "articulation": "long",
+   "file": "Pulsating Synth 1 long hits sweep.wav",
+   "keys": 37,
+   "maxSeconds": 6.0,
+   "endStretch": 7,
+   "loop": true
+  },
+  {
+   "id": "mlg-softpad-long",
+   "name": "Korg Minilogue, soft pad, long hits",
+   "kind": "synth",
+   "patch": "mlg-softpad",
+   "articulation": "long",
+   "file": "Soft pad 1 long hits sweep.wav",
+   "keys": 37,
+   "maxSeconds": 6.0,
+   "endStretch": 7,
+   "loop": true
+  },
+  {
+   "id": "mlg-square-long",
+   "name": "Korg Minilogue, harsh square (low and high oscillators), long hits",
+   "kind": "synth",
+   "patch": "mlg-square",
+   "articulation": "long",
+   "file": "harsh square low high synth long hits sweep.wav",
+   "keys": 37,
+   "maxSeconds": 6.0,
+   "endStretch": 7,
+   "loop": true
+  }
+ ],
+ "unused": [
+  {
+   "file": "Varying Sweep across all notes (or half depending).mp3",
+   "why": "A kalimba take of seven strums across all tines with a burst of tapping in the middle; the same recording as the next file. Not needed for the note map."
+  },
+  {
+   "file": "Wood tapping with transients from metal.mp3",
+   "why": "The same audio as 'Varying Sweep...' (re-encoded, one second longer)."
+  },
+  {
+   "file": "Banjo Open Chord Strumming.wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Banjo Palm Muted Sweep.wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Banjo drum head knocks.wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Notes.wav",
+   "why": "The dry phrases for the effect captures (the reamp comparison in tools/captures), not an instrument."
+  },
+  {
+   "file": "01-pedal-capture-sequence-48k.wav",
+   "why": "The capture kit (tools/captures: the IRs are made from it in CI)."
+  },
+  {
+   "file": "Patch 1- Astral Shimmer 48k.wav",
+   "why": "An effect capture (tools/captures)."
+  },
+  {
+   "file": "Patch 1- Astral Shimmer  48k 0 rate.wav",
+   "why": "An effect capture, static (tools/captures)."
+  },
+  {
+   "file": "Patch 1- Astral Shimmer phrases.wav",
+   "why": "Reamped phrases (tools/captures)."
+  },
+  {
+   "file": "Patch 1- Astral Shimmer phrases 0 rate.wav",
+   "why": "Reamped phrases (tools/captures)."
+  },
+  {
+   "file": "Patch 2- Abyssal Reverb and Delay 48k.wav",
+   "why": "An effect capture (tools/captures)."
+  },
+  {
+   "file": "Patch 2- Abyssal Reverb and Delay phrases.wav",
+   "why": "Reamped phrases (tools/captures)."
+  },
+  {
+   "file": "Wobbly chorusmodulator +reverb 48k.wav",
+   "why": "An effect capture (tools/captures)."
+  },
+  {
+   "file": "Wobbly chorusmodulator +reverb phrases.wav",
+   "why": "Reamped phrases (tools/captures)."
+  },
+  {
+   "file": "Ergosphere tape delay 48k.wav",
+   "why": "An effect capture (not used: no usable IR)."
+  },
+  {
+   "file": "Ergosphere tape delay phrases.wav",
+   "why": "Reamped phrases (tools/captures)."
+  },
+  {
+   "file": "Male Gentle Humming melody.wav",
+   "why": "A hummed melody (sliding): a phrase, not notes to map."
+  },
+  {
+   "file": "Male Ghostly Ooh (no particular notes.wav",
+   "why": "Sliding falsetto (D5-G#5, no steady notes), recorded about 36 dB under the other voice files: it would clash with any chord and its noise floor would come up with it. The 'ghostly falsetto ooh' in the Empty Choir is the falsetto ooh stack (sounds E5) instead."
+  },
+  {
+   "file": "Male Grungy eeeh (approximately A2, 5 takes, each strays little from note).wav",
+   "why": "Grungy (rough) tone: harsher than a remembered choir."
+  },
+  {
+   "file": "Male shh, hhh, fff, sss, whispers.wav",
+   "why": "Whispered consonants: not used (see the whispers)."
+  },
+  {
+   "file": "Male unintelligble whispers 1.wav",
+   "why": "Whispers: skipped; as a murmur through a wall they read as horror rather than uncanny (docs/DEVLOG.md, Milestone 8)."
+  },
+  {
+   "file": "Male unintelligble whispers 2.wav",
+   "why": "Whispers: skipped (see whispers 1)."
+  },
+  {
+   "file": "Male unintelligble whispers 3.wav",
+   "why": "Whispers: skipped (see whispers 1)."
+  },
+  {
+   "file": "Big Djembe Bass hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Big Djembe Muted bass hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Big Djembe Muted slap hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Big Djembe Slap hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Big Djembe Tone hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Small Djembe Bass hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Small Djembe Muted bass hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Small Djembe Muted slap hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Small Djembe slap hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Small Djembe Tone hit.wav",
+   "why": "Djembe: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Male Vocal mmm vocal choire A2_1.wav",
+   "why": "Two long hums whose pitch slides while held: not steady enough to loop; the five-take 'mmm' stack on A2 is used."
+  },
+  {
+   "file": "Soft 1 (no pick).mp3",
+   "why": "Classical guitar: 'Old Guitar' would be a seventh instrument; LIMINAL's six-instrument layout (parameters, per-instrument effects, rooms' per-instrument shaping, Liminality, presets, editor) has no clean slot for it yet (docs/DEVLOG.md, Milestone 8)."
+  },
+  {
+   "file": "Medium 1 (no pick).mp3",
+   "why": "Classical guitar: 'Old Guitar' would be a seventh instrument; LIMINAL's six-instrument layout (parameters, per-instrument effects, rooms' per-instrument shaping, Liminality, presets, editor) has no clean slot for it yet (docs/DEVLOG.md, Milestone 8)."
+  },
+  {
+   "file": "Hard 1 (no pick).mp3",
+   "why": "Classical guitar: 'Old Guitar' would be a seventh instrument; LIMINAL's six-instrument layout (parameters, per-instrument effects, rooms' per-instrument shaping, Liminality, presets, editor) has no clean slot for it yet (docs/DEVLOG.md, Milestone 8)."
+  },
+  {
+   "file": "pizzicato 1.mp3",
+   "why": "Violin pizzicato: 'Faded Strings' skipped for the same reason as the guitar; the bowed sustain is used in the Hollow Drone."
+  },
+  {
+   "file": "pizzicato 2 (g3 to a#5, 3 per note).mp3",
+   "why": "Violin pizzicato: 'Faded Strings' skipped for the same reason as the guitar; the bowed sustain is used in the Hollow Drone."
+  },
+  {
+   "file": "hitting bow wood (varied number of hits per string).mp3",
+   "why": "Col legno: tried for Glass Memories' attack on paper, but a wooden tick is not glass; Glass Memories stays synthesised until the bells/glass are sampled."
+  },
+  {
+   "file": "Banjo Soft Sweep.wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Banjo Medium Sweep.wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Banjo Hard Sweep.wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Banjo 5th string open (3x soft, 3x medium, 3x hard).wav",
+   "why": "Banjo: does not fit LIMINAL (developer's instruction)."
+  },
+  {
+   "file": "Male Vocal oh soft sweep.wav",
+   "why": "'oh' sweep: the Empty Choir's vowel runs mmm - ooh - aah (the three vowels that also have choir stacks)."
+  },
+  {
+   "file": "Male Vocal ee soft sweep.wav",
+   "why": "'ee' sweep: too bright and present for a choir remembered in an empty building."
+  },
+  {
+   "file": "Male Vocal ee full sweep.wav",
+   "why": "'ee' sweep: too bright and present for a choir remembered in an empty building."
+  },
+  {
+   "file": "Male Vocal ee full sweep_1.wav",
+   "why": "'ee' sweep: too bright and present for a choir remembered in an empty building."
+  },
+  {
+   "file": "Male Vocal slow breaths.wav",
+   "why": "Slow breaths: LIMINAL's places keep their own beds; no breath layer."
+  },
+  {
+   "file": "static-y bassy synth long hit sweep (-1 octave range compared to rest).wav",
+   "why": "Minilogue short hits: LIMINAL's Faded Synth plays the long (held) hits, which begin with the same attack; prepared sets stay smaller."
+  },
+  {
+   "file": "Cyberpunk Synth 1 short sweep (-1 octave range compared to rest).wav",
+   "why": "Minilogue short hits: LIMINAL's Faded Synth plays the long (held) hits, which begin with the same attack; prepared sets stay smaller."
+  },
+  {
+   "file": "Pulsating Synth 1 short hits sweep.wav",
+   "why": "Minilogue short hits: LIMINAL's Faded Synth plays the long (held) hits, which begin with the same attack; prepared sets stay smaller."
+  },
+  {
+   "file": "Soft pad 1 short hits sweep.wav",
+   "why": "Minilogue short hits: LIMINAL's Faded Synth plays the long (held) hits, which begin with the same attack; prepared sets stay smaller."
+  },
+  {
+   "file": "harsh square low high synth short hits sweep.wav",
+   "why": "Minilogue short hits: LIMINAL's Faded Synth plays the long (held) hits, which begin with the same attack; prepared sets stay smaller."
+  }
+ ]
+}

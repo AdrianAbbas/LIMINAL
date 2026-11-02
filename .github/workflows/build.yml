@@ -47,13 +47,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # The developer's effect captures live in the private AdrianAbbas/Samples repository, read
-      # with the SAMPLES_TOKEN secret, and are prepared into build/captures (embedded by CMake).
-      # Without the secret the build keeps the rooms' previous sound (a warning says so).
-      - name: Fetch and prepare the effect captures (private repository)
+      # The developer's recordings and effect captures live in the private AdrianAbbas/Samples
+      # repository, read with the SAMPLES_TOKEN secret: the recordings are prepared into
+      # build/samples (shipped in every bundle), the captures into build/captures (embedded).
+      # Without the secret the instruments play their synthesised stand-ins (a warning says so).
+      - name: Fetch and prepare the recordings and the effect captures (private repository)
         env:
           SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
-        run: bash scripts/ci-fetch-captures.sh "${{ runner.temp }}/samples-src" build/captures
+        run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" build/samples build/captures
       - name: Configure (universal arm64 + x86_64, macOS 10.15+)
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -67,7 +68,7 @@ jobs:
       # The full processor suite runs in the Linux job. Here a short smoke group checks
       # each slice of the universal binary.
       - name: Smoke test (arm64)
-        run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
+        run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters,recorded
       - name: Smoke test (x86_64 under Rosetta)
         run: /usr/bin/arch -x86_64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
       - name: Universal binary and Info.plist gate
@@ -140,13 +141,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # The developer's effect captures live in the private AdrianAbbas/Samples repository, read
-      # with the SAMPLES_TOKEN secret, and are prepared into build/captures (embedded by CMake).
-      # Without the secret the build keeps the rooms' previous sound (a warning says so).
-      - name: Fetch and prepare the effect captures (private repository)
+      # The developer's recordings and effect captures live in the private AdrianAbbas/Samples
+      # repository, read with the SAMPLES_TOKEN secret: the recordings are prepared into
+      # build/samples (shipped in every bundle), the captures into build/captures (embedded).
+      # Without the secret the instruments play their synthesised stand-ins (a warning says so).
+      - name: Fetch and prepare the recordings and the effect captures (private repository)
         env:
           SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
-        run: bash scripts/ci-fetch-captures.sh "${{ runner.temp }}/samples-src" build/captures
+        run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" build/samples build/captures
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_PATH="${{ runner.temp }}/juce"
@@ -166,6 +168,8 @@ jobs:
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-captures build/test-logs/captures-rooms.wav
       - name: Listening render (Liminality, one piano phrase at 0, 40 and 100 percent, dry and in three rooms, with cue sheet)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-liminality build/test-logs/liminality-piano.wav
+      - name: Listening render (the recorded instruments, one piano phrase and chords on each, dry, in three rooms, at Liminality 0, 50 and 100 percent, with cue sheet)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render-recorded build/test-logs/recorded-instruments.wav
       - name: Upload test logs, editor snapshot and listening render
         if: always()
         uses: actions/upload-artifact@v4

@@ -11,7 +11,15 @@
 // Mechanical noise: key-bed thump, hammer knock, damper and pedal sounds.
 // Age makes it a forgotten piano: wider unisons, keys out of tune with each other, uneven
 // voicing and decay, worn dampers, a duller soundboard, and a slight pitch wobble.
+//
+// Milestone 8: with the developer's recordings (his own piano, 88 keys) the voices are recorded:
+// the short hits soft / medium / full as three crossfaded velocity layers, handing over (aligned
+// on the waveform, level- and tone-matched to the dynamic) to the medium long sweep while the key
+// is held, and that hands over to the measured natural decay (resynthesised partials) where the
+// recording's damper fell. Each note is tuned to the piano's own stretch curve (overall tuning
+// corrected). The modelled voices above remain the stand-in when there are no recordings.
 #include "DSP/Instrument.h"
+#include "DSP/Sampler.h"
 #include <vector>
 
 namespace liminal::dsp {
@@ -41,7 +49,8 @@ public:
     void allSoundOff() override;
     void render(float* left, float* right, int n) override;
     void reseed(std::uint32_t s) override { rng.state = s | 1u; }
-    int activeVoices() const override { return pool.active(); }
+    int activeVoices() const override { return pool.active() + rpool.active(); }
+    static constexpr float recordedTrimDb = -2.4f;   // level-matched to the stand-in (tests: recorded)
 
 private:
     static constexpr int controlPeriod = 128;
@@ -63,6 +72,30 @@ private:
     void control(Voice&);
     void addEvent(float hz, float q, float seconds, float knock, float rustle, float brightness, float pan);
     float level(const Voice& v) const { return v.level * v.fade; }
+
+    // A recorded note (Milestone 8).
+    struct RVoice : VoiceBase {
+        Reader shortA, shortB, longNote;   // two velocity layers, the long note
+        ModeBank<32> tail;             // the natural decay after the recording
+        bool tailOn = false;
+        float tailX = 0, tailStep = 0, tailW = 0, tailGain = 0;
+        int tailAt = -1;
+        int handCountdown = -1, handLength = 1;
+        Tilt heldTone, tone;
+        float gain = 1, panL = 0.7f, panR = 0.7f;
+        float env = 1, dampMul = 1, decayMul = 1;
+        float pitch = 60, keyCents = 0, wobbleCents = 0, ratioNow = 1;
+        float tailDecayScale = 1, damperT60 = 0.3f;
+        float level = 0;
+        bool damped = false, hasDamper = true;
+        Wander wobble;
+        VoiceShape shape;
+    };
+    bool startRecorded(int note, float velocity, const samples::Instrument& hits);
+    void controlRecorded(RVoice&, float tick);
+    void renderRecorded(float* l, float* r, float* mono, int m, bool endOfPeriod);
+    float level(const RVoice& v) const { return v.level * v.fade; }
+    VoicePool<RVoice, slots> rpool;
 
     double sr = 48000.0;
     Settings settings;

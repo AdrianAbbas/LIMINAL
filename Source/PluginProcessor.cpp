@@ -8,6 +8,7 @@ namespace liminal {
 LiminalProcessor::LiminalProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "LIMINAL", params::makeLayout()) {
+    samples::Bank::get().load();   // the developer's recordings (Milestone 8), on a background thread
     // The mirror (Milestone 5): every parameter the DSP reads, live or morphed between scenes.
     {
         const auto& all = getParameters();
@@ -188,6 +189,8 @@ bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 }
 
 void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
+    // The recordings load in about a second; waiting here means the first notes are recorded ones.
+    samples::Bank::get().waitUntilLoaded(5000);
     updateMirror();
     updateSettings();
     warble.prepare(sampleRate);

@@ -220,6 +220,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
                 juce::ParameterID { id, 1 }, name, juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), dsp::lim::defaults[k],
                 juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
         }
+    // Milestone 8 (appended): the Faded Synth's recorded patch, and the synthesised voice under it.
+    layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { synthPatch, 1 }, "Synth Patch",
+                                                            juce::StringArray(synthPatchNames, 6), 1));
+    layout.add(amount(synthBlend, "Synth Analog Blend", 0.0f));
     return layout;
 }
 

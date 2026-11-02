@@ -9,6 +9,7 @@
 #include "PluginProcessor.h"
 #include "Export.h"
 #include "DSP/Signature.h"
+#include "Samples/SampleBank.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <algorithm>
@@ -195,6 +196,7 @@ double frequency(const std::vector<float>& x, double rate) {
 #include "DistinctTests.h"
 #include "WorkflowTests.h"
 #include "LiminalityTests.h"
+#include "RecordedTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -1204,6 +1206,7 @@ int main(int argc, char** argv) {
         else if (arg == "--capture-levels") return captureLevels();
         else if (arg == "--capture-match") return captureMatch();
         else if (arg == "--render-captures" && i + 1 < argc) return renderCaptures(argv[++i]);
+        else if (arg == "--probe-clicks" && i + 3 < argc) return probeClicks(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]), std::atof(argv[i + 3]));
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
@@ -1237,12 +1240,16 @@ int main(int argc, char** argv) {
     if (run("power")) testPower(s);
     if (run("rates")) testRates(s);
     if (run("determinism")) testDeterminism(s);
-    if (run("piano")) testPiano(s);
-    if (run("synth")) testSynth(s);
-    if (run("glass")) testGlass(s);
-    if (run("choir")) testChoir(s);
-    if (run("box")) testBox(s);
-    if (run("drone")) testDrone(s);
+    {   // The instrument models' own groups measure the synthesis (the stand-ins since Milestone 8).
+        BypassRecordings models;
+        if (run("piano")) testPiano(s);
+        if (run("synth")) testSynth(s);
+        if (run("glass")) testGlass(s);
+        if (run("choir")) testChoir(s);
+        if (run("box")) testBox(s);
+        if (run("drone")) testDrone(s);
+    }
+    if (run("recorded")) testRecorded(s);
     if (run("instruments")) testInstruments(s);
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);

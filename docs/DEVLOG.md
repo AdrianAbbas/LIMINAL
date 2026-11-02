@@ -70,7 +70,11 @@ the checklist below.
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
-- [ ] 8 — Samples from `AdrianAbbas/Samples` (not in tonight's plan)
+- [ ] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end). Resume here:
+  - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
+  - [x] 8.2 Sample bank (`Source/Samples/SampleBank`, from LIGHT SEEKER, + the piano's fields), `DSP/Sampler.h` (reader, tilt, layer crossfade), CMake ships `build/samples` in every bundle; the Forgotten Piano on the recordings (3 crossfaded velocity layers, handover to the long sweep, natural-decay tail, stretch tuning, damper, pedal) — push `[skip ci]`
+  - [ ] 8.3 Empty Choir (voice sweeps + falsetto, stacks as a distant ensemble, the falsetto ooh ghost, G2 hum under the lowest note), Lost Music Box (kalimba + piano top, mechanism), Faded Synth (patch choice + analog blend), Hollow Drone (voice drones, violin, pad, static bass); Glass Memories kept synthesised; stand-ins level-matched; editor controls — push `[skip ci]`
+  - [ ] 8.4 Tests (`recorded` group: in tune with cents report, velocity layers, clicks at loops/note-offs/handovers, levels; older groups green), listening render `--render-recorded`, DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 
 **Overnight plan (2026-10-30, developer asleep):** order 2b → 3 → 5 → 6 → 4, without stopping
 between milestones. Push each part with `[skip ci]`, each whole milestone without. Backup wake-ups
