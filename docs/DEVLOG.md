@@ -1968,3 +1968,8 @@ twice, and the second pass had found glitches the first left (a repaired click c
 one beside it). `liminal.py` now repeats the repair until none is left (kalimba 56 instead of 31),
 and the music box's piano-top layer finishes fading where that note's measured tail would begin
 (before the damper and any noise). Re-prepared from scratch, as CI does: `recorded` 41/41.
+
+**CI, `e589ad2`: green.** `Prepared: 692 notes in all` (every set listed in the log), the captures
+embedded; Linux full suite + all listening renders (`recorded-instruments.wav` in the test-logs
+artifact); macOS: build, smoke + `recorded` on arm64, smoke on x86_64, package, auval and the AU
+harness, all passed.
