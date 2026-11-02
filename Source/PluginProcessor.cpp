@@ -52,8 +52,9 @@ LiminalProcessor::LiminalProcessor()
     slots[1].on = raw(params::synthOn);
     slots[1].level = raw(params::synthLevel);
     const char* synthIds[] { params::synthDetune, params::synthWarmth, params::synthDrift, params::synthAttack,
-                             params::synthRelease, params::synthWidth, params::synthGlide, params::synthGlideTime };
-    for (int i = 0; i < 8; ++i) synthSettings[i] = raw(synthIds[i]);
+                             params::synthRelease, params::synthWidth, params::synthGlide, params::synthGlideTime,
+                             params::synthPatch, params::synthBlend };
+    for (int i = 0; i < 10; ++i) synthSettings[i] = raw(synthIds[i]);
     slots[2].instrument = &glass;
     slots[2].on = raw(params::glassOn);
     slots[2].level = raw(params::glassLevel);
@@ -306,6 +307,8 @@ void LiminalProcessor::updateSettings() {
     f.width = synthSettings[5]->load();
     f.glide = synthSettings[6]->load() > 0.5f;
     f.glideTime = synthSettings[7]->load();
+    f.patch = juce::roundToInt(synthSettings[8]->load());
+    f.blend = synthSettings[9]->load();
     synth.setSettings(f);
     dsp::GlassMemories::Settings g;
     g.fragility = glassSettings[0]->load();

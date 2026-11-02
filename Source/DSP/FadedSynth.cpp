@@ -47,6 +47,18 @@ void FadedSynth::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
     velocity = std::clamp(velocity, 0.0f, 1.0f);
+    float synthGain = 1.0f;
+    {
+        const NoteShape keep = nextShape;
+        const float from = lastHz;
+        if (startRecorded(note, velocity, from)) {
+            lastHz = noteHz(float(note));
+            synthGain = settings.blend;   // the synthesised voice under it, or not at all
+            if (synthGain <= 0.001f) { nextShape = {}; return; }
+            nextShape = keep;
+            lastHz = from;
+        }
+    }
     auto& v = pool.allocate(note, voices(polyphony), sr, 0.012, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
     const std::uint64_t id = pool.counter;
@@ -63,7 +75,7 @@ void FadedSynth::noteOn(int note, float velocity) {
     v.amp = v.filterEnv = 0;
     v.attacking = v.filterAttacking = true;
     v.velocity = velocity;
-    v.velocityGain = 0.35f * (0.12f + 0.88f * std::pow(velocity, 1.5f));
+    v.velocityGain = 0.35f * (0.12f + 0.88f * std::pow(velocity, 1.5f)) * synthGain;
     const float side = (id % 2 == 0 ? 1.0f : -1.0f) * (0.1f + 0.5f * settings.width) * (0.5f + 0.5f * rng.uniform());
     const auto g = panGains(side);
     v.panL = g.l;
@@ -77,6 +89,7 @@ void FadedSynth::noteOn(int note, float velocity) {
 
 void FadedSynth::allSoundOff() {
     pool.allSoundOff(sr);
+    rpool.allSoundOff(sr);
 }
 
 void FadedSynth::control(Voice& v) {
@@ -132,6 +145,8 @@ void FadedSynth::render(float* left, float* right, int n) {
             wowCents = wow.tick(rng, 0.6f, float(controlPeriod / sr)) * st.drift * st.drift * 6.0f;
             for (auto& v : pool.voices)
                 if (v.active()) control(v);
+            for (auto& v : rpool.voices)
+                if (v.active()) controlRecorded(v, float(controlPeriod / sr));
             chorusMix = 0.12f + 0.38f * st.width;
             chorusSpread = st.width;
             clock = controlPeriod;
@@ -183,6 +198,35 @@ void FadedSynth::render(float* left, float* right, int n) {
             // Voices end only at the end of a control period, so the block size never matters.
             if (m == clock && ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f))) v.note = -1;
         }
+        for (auto& v : rpool.voices) {
+            if (!v.active()) continue;
+            const bool releasing = v.releasing();
+            if (releasing && !v.a.released) { v.a.release(); v.b.release(); }
+            for (int i = 0; i < m; ++i) {
+                if (releasing) {
+                    v.amp -= releaseCoef * v.amp;
+                } else if (v.attacking) {
+                    v.amp += attackCoef * (1.3f - v.amp);
+                    if (v.amp >= 1.0f) { v.amp = 1.0f; v.attacking = false; }
+                }
+                const float xa = v.a.tick(), xb = v.b.on ? v.b.tick() : 0.0f;
+                float yl = xa * v.aL + xb * v.bL, yr = xa * v.aR + xb * v.bR;
+                // Warmth: a little saturation, then the low-pass.
+                yl = softClip(v.drive * yl) / v.drive;
+                yr = softClip(v.drive * yr) / v.drive;
+                float g = v.amp * v.gain;
+                if (v.stolen) {
+                    v.fade = std::max(0.0f, v.fade - v.fadeStep);
+                    g *= v.fade;
+                }
+                dryL[i] += v.lp1.lp(yl) * g;
+                dryR[i] += v.lp2.lp(yr) * g;
+            }
+            if (m == clock) {
+                if (!v.stolen && ((releasing && v.amp < 1.0e-4f) || (!v.a.on && !v.b.on))) v.steal(0.03, sr);
+                if (v.stolen && v.fade <= 0.0f) v.note = -1;
+            }
+        }
         // Chorus: delays sweep 3.5 +/- 1.8 ms at 0.55 Hz; the right side's sweep is
         // offset by up to half a cycle with Width.
         for (int i = 0; i < m; ++i) {
@@ -208,6 +252,69 @@ void FadedSynth::render(float* left, float* right, int n) {
         clock -= m;
         done += m;
     }
+}
+
+//==============================================================================
+// The recorded patches (Milestone 8).
+bool FadedSynth::startRecorded(int note, float velocity, float glideFromHz) {
+    const auto& st = settings;
+    if (st.patch <= 0 || st.patch >= int(std::size(patchSets))) return false;
+    const auto* set = recordings(patchSets[st.patch]);
+    if (set == nullptr) return false;
+    const auto* z = set->find(note, 0.5f, 0.0f);
+    if (z == nullptr) return false;
+    auto& v = rpool.allocate(note, voices(polyphony), sr, 0.012, [this](const RVoice& x) { return level(x); });
+    rpool.begin(v, note);
+    v.shape = takeShape();
+    v.targetHz = noteHz(float(note));
+    v.hz = st.glide && glideFromHz > 0.0f ? glideFromHz : v.targetHz;
+    v.velocity = velocity;
+    // Every note of every patch at one loudness (each patch evened by its notes' median), then the
+    // velocity curve of the synthesised voice.
+    v.gain = 0.35f * (0.12f + 0.88f * std::pow(velocity, 1.5f)) * dbGain(-21.0f - z->loudnessDb + recordedTrimDb);
+    v.a.start(z, set->rate, sr, float(note), 1.0);
+    // Detune: a second copy of the note, apart by up to ~24 cents (as the oscillators), on the other side.
+    const float spread = 24.0f * std::pow(st.detune, 1.5f);
+    v.b.on = false;
+    const auto side = [](float p) { return panGains(p); };
+    const float w = 0.1f + 0.5f * st.width;
+    if (spread > 0.5f && v.b.start(z, set->rate, sr, float(note), z->loops() ? double(z->loopStart) * 0.5 + 1.0 : 1.0)) {
+        const float k = std::sqrt(0.5f);
+        v.a.gain = v.b.gain = k;
+        const auto ga = side(-w), gb = side(w);
+        v.aL = ga.l; v.aR = ga.r; v.bL = gb.l; v.bR = gb.r;
+    } else {
+        const auto g = side((pool.counter + rpool.counter) % 2 == 0 ? 0.3f * w : -0.3f * w);
+        v.aL = v.bL = g.l; v.aR = v.bR = g.r;
+    }
+    v.drift.start(rng);
+    v.amp = 0;
+    v.attacking = true;
+    v.drive = 1.0f + 2.0f * st.warmth;
+    v.lp1.z = v.lp2.z = 0;
+    controlRecorded(v, 0.0f);
+    return true;
+}
+
+void FadedSynth::controlRecorded(RVoice& v, float tick) {
+    const auto& st = settings;
+    if (st.glide && v.hz != v.targetHz && tick > 0.0f) {
+        const float k = 1.0f - std::exp(-tick * 3.0f / std::max(0.005f, st.glideTime));
+        v.hz *= std::pow(v.targetHz / v.hz, k);
+        if (std::abs(v.hz / v.targetHz - 1.0f) < 1.0e-5f) v.hz = v.targetHz;
+    } else if (!st.glide) {
+        v.hz = v.targetHz;
+    }
+    const float spread = 24.0f * std::pow(st.detune, 1.5f);
+    const float c = shapeCents(v.shape, tick) + (v.drift.tick(rng, 0.25f, std::max(tick, 1.0e-4f)) * st.drift * 7.0f + wowCents) * wander();
+    const float glide = v.hz / v.targetHz;
+    v.a.retune(bend * glide * cents(c - 0.5f * spread * (v.b.on ? 1.0f : 0.0f)));
+    v.b.retune(bend * glide * cents(c + 0.5f * spread));
+    // Warmth darkens, velocity brightens (as the synthesised filter does, without its sweep).
+    const float hz = std::clamp(16000.0f * std::pow(900.0f / 16000.0f, st.warmth) * std::exp2(0.8f * v.shape.tone) * (0.6f + 0.6f * v.velocity)
+                                * std::pow(v.targetHz / 261.6f, 0.3f), 200.0f, 0.45f * float(sr));
+    v.lp1.setHz(hz, sr);
+    v.lp2.setHz(hz, sr);
 }
 
 } // namespace liminal::dsp

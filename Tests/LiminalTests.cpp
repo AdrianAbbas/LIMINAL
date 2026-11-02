@@ -1206,7 +1206,7 @@ int main(int argc, char** argv) {
         else if (arg == "--capture-levels") return captureLevels();
         else if (arg == "--capture-match") return captureMatch();
         else if (arg == "--render-captures" && i + 1 < argc) return renderCaptures(argv[++i]);
-        else if (arg == "--probe-clicks" && i + 3 < argc) return probeClicks(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]), std::atof(argv[i + 3]));
+        else if (arg == "--probe-clicks" && i + 4 < argc) return probeClicks(argv[i + 1], std::atoi(argv[i + 2]), std::atoi(argv[i + 3]), std::atof(argv[i + 4]));
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);

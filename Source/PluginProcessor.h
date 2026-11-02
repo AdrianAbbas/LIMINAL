@@ -142,7 +142,7 @@ private:
     std::array<Slot, instrumentCount> slots;
     std::atomic<float>* pianoSettings[5] {};
     dsp::FadedSynth synth;
-    std::atomic<float>* synthSettings[8] {};
+    std::atomic<float>* synthSettings[10] {};
     dsp::GlassMemories glass;
     std::atomic<float>* glassSettings[5] {};
     dsp::EmptyChoir choir;

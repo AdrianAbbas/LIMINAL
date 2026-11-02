@@ -650,6 +650,11 @@ InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& state) {
     addChildComponent(*synth.glide);
     synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthGlideTime, "GLIDE TIME"));
     addChildComponent(*synth.controls.back());
+    // Milestone 8: the recorded patch, and the synthesised voice under it.
+    synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthPatch, "PATCH"));
+    addChildComponent(*synth.controls.back());
+    synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthBlend, "ANALOG BLEND"));
+    addChildComponent(*synth.controls.back());
     auto& drone = pages[5];
     drone.controls.push_back(std::make_unique<LevelControl>(state, params::droneAttack, "ATTACK"));
     addChildComponent(*drone.controls.back());

@@ -153,6 +153,29 @@ def tail_modes(x, root, end, onset):
     return {"at": int(at), "fade": fade, "modes": modes}
 
 
+def declick(x, clicks, root):
+    """Repairs clicks in place: a few milliseconds around each one replaced by the waveform one
+    pitch period earlier (a sung or held note repeats itself), crossfaded in and out over 1 ms."""
+    period = int(round(RATE / (440.0 * 2 ** ((root - 69) / 12))))
+    period = max(period, 32)
+    while period < int(0.002 * RATE):   # at least 2 ms back for high notes (whole periods)
+        period *= 2
+    half, edge = int(0.0025 * RATE), int(0.001 * RATE)
+    ramp = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, edge))
+    done = 0
+    for c in clicks:
+        a, b = c - half, c + half
+        if a - period < 0 or b >= len(x):
+            continue
+        patch = x[a - period:b - period].copy()
+        w = np.ones(b - a)
+        w[:edge] = ramp
+        w[-edge:] = ramp[::-1]
+        x[a:b] = x[a:b] * (1 - w) + patch * w
+        done += 1
+    return done
+
+
 def main():
     out = sys.argv[1]
     report_path = os.path.join(out, "report.json")
@@ -166,6 +189,38 @@ def main():
     short = json.load(open(sp))
     long_ = json.load(open(lp))
     audio = {}
+
+    # The recordings carry glitches (pairs of clicks about 0.106 s apart, in the original WAVs:
+    # the interface, not the instruments). Inside a sustained note they would click at every
+    # pass of its loop: repaired here, pitch-synchronously, after each note's attack; the
+    # piano's only inside its held part (its damper and key noises are the piano's own).
+    repaired = []
+    for sid in json.load(open(os.path.join(out, "index.json")))["instruments"]:
+        mp = json.load(open(os.path.join(out, sid + ".json")))
+        if mp.get("kind") in ("texture", "synth"):   # the analog synth: a line input, and its square / pulse waves are not clicks
+            continue
+        count = 0
+        for z in mp["zones"]:
+            path = os.path.join(out, z["file"])
+            x, sr_ = sf.read(path, dtype="float64")
+            if x.ndim > 1:
+                x = x.mean(axis=1)
+            on = find_onset(x.astype(np.float32))
+            limit = len(x)
+            if sid.startswith("piano"):
+                limit = find_damper(x.astype(np.float32), on, 1.2 if sid == "piano-long" else 0.12)
+            cl = [c for c in click_times(x.astype(np.float32), on + int(0.03 * RATE)) if c < limit]
+            if cl:
+                n = declick(x, cl, z["root"])
+                if n:
+                    sf.write(path, np.clip(x, -1, 1).astype(np.float32), RATE, subtype="PCM_16", format="FLAC")
+                    count += n
+                    repaired.append(f"{z['file']} ({n})")
+        if count:
+            lines.append(f"{sid}: {count} click(s) repaired")
+    if repaired:
+        lines.append("repaired notes (recording glitches; worth re-recording the worst): " + ", ".join(repaired[:60])
+                     + (f" and {len(repaired) - 60} more" if len(repaired) > 60 else ""))
 
     def load(z):
         if z["file"] not in audio:
@@ -306,6 +361,28 @@ def main():
         m["stretchCents"] = stretch
     json.dump(short, open(sp, "w"), indent=1, allow_nan=False)
     json.dump(long_, open(lp, "w"), indent=1, allow_nan=False)
+    # The kalimba's three dynamics are crossfaded too (the Lost Music Box starts them at their
+    # first sample): the same correlation measure.
+    kp = os.path.join(out, "kalimba.json")
+    if os.path.exists(kp):
+        kal = json.load(open(kp))
+        by = {(z["layer"], z["label"]): z for z in kal["zones"]}
+        rk = []
+        for z in kal["zones"]:
+            up = by.get((z["layer"] + 1, z["label"]))
+            if up is None:
+                continue
+            n = int(0.3 * RATE)
+            sa, sb = load(z)[:n], load(up)[:n]
+            n = min(len(sa), len(sb))
+            rho = float(np.dot(sa[:n], sb[:n]) / (np.linalg.norm(sa[:n]) * np.linalg.norm(sb[:n]) + 1e-12))
+            z["corrUp"] = round(rho, 3)
+            z["rms300"] = round(float(20 * np.log10(np.sqrt(np.mean(sa[:n] ** 2)) + 1e-12)), 2)
+            up["rms300"] = round(float(20 * np.log10(np.sqrt(np.mean(sb[:n] ** 2)) + 1e-12)), 2)
+            rk.append(rho)
+        if rk:
+            lines.append(f"kalimba velocity layers: correlation with the next layer up {min(rk):+.2f} to {max(rk):+.2f} (median {np.median(rk):+.2f})")
+        json.dump(kal, open(kp, "w"), indent=1, allow_nan=False)
     report["liminal"] = lines
     json.dump(report, open(report_path, "w"), indent=1)
     for line in lines:

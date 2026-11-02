@@ -166,7 +166,6 @@ inline constexpr const char* liminality = "liminality";
 inline constexpr const char* synthPatch = "synth_patch";
 inline constexpr const char* synthBlend = "synth_blend";
 inline const char* synthPatchNames[] { "Analog", "Soft Pad", "Pulse", "Square", "Cyberpunk", "Static Bass" };
-inline constexpr const char* synthPatchSets[] { nullptr, "mlg-softpad-long", "mlg-pulse-long", "mlg-square-long", "mlg-cyberpunk-long", "mlg-staticbass-long" };
 inline juce::String limId(int instrument, const char* control) { return juce::String(instrumentKeys[instrument]) + "_lim_" + control; }
 inline juce::String midiId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_" + name; }
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
