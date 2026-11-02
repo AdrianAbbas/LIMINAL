@@ -2244,3 +2244,11 @@ are checked on Linux (x86_64) only; macOS runs its usual smoke groups.
 8. Worth recording next: more violin notes (bowed, every 3 semitones like the pizzicato) for Faded
    Strings; a struck and a rubbed glass for Bowed Glass / Glass Memories; a few held organ or
    electric-piano notes if there is one to hand.
+
+### CI fix after the final push (2026-11-02)
+
+The first CI run of the library (`5e73aae`) prepared `790 notes in all` and passed everything on macOS
+(build, smoke + `recorded` on arm64 57/57, smoke on x86_64, package, auval and the AU harness); on Linux
+805 of 806 passed: the `sessions` group could not find its fixture. The test located it from `__FILE__`,
+which ccache's `CCACHE_BASEDIR` turns into a relative path in CI. The test binary now gets the source
+folder from CMake (`LIMINAL_SOURCE_DIR`).

@@ -103,7 +103,7 @@ std::vector<std::pair<juce::String, juce::MemoryBlock>> states() {
     return list;
 }
 
-juce::File fixtureFile() { return juce::File(__FILE__).getParentDirectory().getChildFile("fixtures").getChildFile("sessions-v2.xml"); }
+juce::File fixtureFile() { return juce::File(LIMINAL_SOURCE_DIR).getChildFile("Tests").getChildFile("fixtures").getChildFile("sessions-v2.xml"); }
 
 } // namespace sessiontest
 

@@ -115,6 +115,7 @@ if(LIMINAL_BUILD_TESTS)
     set_target_properties(LiminalTests PROPERTIES COMPILE_DEFINITIONS "${lm_test_definitions}")
     target_sources(LiminalTests PRIVATE Tests/LiminalTests.cpp)
     target_link_libraries(LiminalTests PRIVATE LIMINAL juce::juce_audio_utils)
-    target_compile_definitions(LiminalTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_compile_definitions(LiminalTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+        LIMINAL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")   # (fixtures: __FILE__ is relative under ccache's base dir)
     add_test(NAME liminal_tests COMMAND LiminalTests)
 endif()
