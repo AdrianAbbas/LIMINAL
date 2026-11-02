@@ -209,13 +209,18 @@ def main():
             limit = len(x)
             if sid.startswith("piano"):
                 limit = find_damper(x.astype(np.float32), on, 1.2 if sid == "piano-long" else 0.12)
-            cl = [c for c in click_times(x.astype(np.float32), on + int(0.03 * RATE)) if c < limit]
-            if cl:
-                n = declick(x, cl, z["root"])
-                if n:
-                    sf.write(path, np.clip(x, -1, 1).astype(np.float32), RATE, subtype="PCM_16", format="FLAC")
-                    count += n
-                    repaired.append(f"{z['file']} ({n})")
+            # Repeated until none is left (a repaired click can uncover a smaller one next to it).
+            total = 0
+            for _ in range(4):
+                cl = [c for c in click_times(x.astype(np.float32), on + int(0.03 * RATE)) if c < limit]
+                n = declick(x, cl, z["root"]) if cl else 0
+                if n == 0:
+                    break
+                total += n
+            if total:
+                sf.write(path, np.clip(x, -1, 1).astype(np.float32), RATE, subtype="PCM_16", format="FLAC")
+                count += total
+                repaired.append(f"{z['file']} ({total})")
         if count:
             lines.append(f"{sid}: {count} click(s) repaired")
     if repaired:

@@ -258,7 +258,11 @@ bool LostMusicBox::startRecorded(int note, float velocity) {
         {
             v.top.gain = gain * topShare * dbGain(tineDb - 6.0f - z->loudnessDb);
             // The piano's long note ends in its damper: fade it out before that (0.3 s).
-            v.topCountdown = z->damper > 0 ? std::max(0, int(double(z->damper - z->onset) / double(v.top.inc)) - int(0.35 * sr)) : -1;
+            // It ends where its natural-decay tail would take over (before the damper and any noise in
+            // the recording, liminal.py), else 0.15 s before the damper; faded over 0.3 s.
+            const int start = std::max(1, z->onset - 32);
+            const int end = z->tailAt > 0 ? z->tailAt + z->tailFade / 2 : z->damper > 0 ? z->damper - int(0.15 * piano->rate) : -1;
+            v.topCountdown = end > start ? std::max(0, int(double(end - start) / double(v.top.inc)) - int(0.3 * sr)) : -1;
         }
     }
     if (!v.a.on && !v.b.on && !v.top.on) { v.note = -1; return false; }

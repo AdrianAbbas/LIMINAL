@@ -1757,8 +1757,9 @@ captures, never committed; each instrument's synthesis kept as the level-matched
 - **The recordings contain interface glitches**: pairs of clicks about 0.106 s apart, in the
   original WAVs (e.g. 23 in `Piano sweep long notes.wav`, 11 in `Male Vocal Ooh soft sweep.wav`).
   Inside a looped sustain they would click on every pass of the loop. `liminal.py` repairs them
-  (pitch-synchronously, after each note's attack; on the piano only inside the held part):
-  kalimba 31, violin 16, piano 15, voice sweeps 48, choir stacks 48, drones 7 notes' clicks.
+  (pitch-synchronously, after each note's attack, repeated until none is left; on the piano only
+  inside the held part): kalimba 56, violin 17, piano 15, voice sweeps 64, choir stacks 59,
+  drones 7 clicks.
   The analog-synth files (line input) have none and are left alone.
 
 ### Sample prep (`tools/sample-prep`)
@@ -1957,3 +1958,13 @@ is off, the more the correction colours it.
    beside it): each instrument dry, school / hotel / pool, then LIMINALITY 0 / 50 / 100 %.
 8. Re-record list: see "Notes that sound weak" above (piano soft hits, the long sweep held longer,
    the interface glitches).
+
+### CI fix after the final push (2026-11-02)
+
+The first CI run with the token (`592bedd`) prepared the recordings (`Prepared: 692 notes in all`)
+and passed everything on Linux but one check on both platforms: "music box: no clicks as the tines
+ring out" (2 at D#5). CI prepares the recordings once; the local copy had been through the de-click
+twice, and the second pass had found glitches the first left (a repaired click can uncover a smaller
+one beside it). `liminal.py` now repeats the repair until none is left (kalimba 56 instead of 31),
+and the music box's piano-top layer finishes fading where that note's measured tail would begin
+(before the damper and any noise). Re-prepared from scratch, as CI does: `recorded` 41/41.
