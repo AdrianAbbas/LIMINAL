@@ -90,6 +90,7 @@ juce::Font ViewfinderLook::getPopupMenuFont() { return font(12.0f); }
 //==============================================================================
 LevelControl::LevelControl(juce::AudioProcessorValueTreeState& state, const char* id, juce::String text)
     : label(std::move(text)), parameter(state.getParameter(id)) {
+    setTitle(label);
     slider.setSliderStyle(juce::Slider::LinearHorizontal);
     slider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     slider.onValueChange = [this] { repaint(); };
@@ -144,6 +145,14 @@ const std::array<InstrumentInfo, InstrumentDrawer::count> instrumentInfo { {
           { params::droneSub, "SUB" }, { params::droneMovement, "MOVEMENT" }, { params::droneRelease, "RELEASE" } } } },
 } };
 const char* tabNames[] { "PIANO", "SYNTH", "GLASS", "CHOIR", "BOX", "DRONE" };
+// The instrument library (2026-11-02): what each slot holds, its names.
+const char* libraryTabs[] { "PIANO", "SYNTH", "GLASS", "CHOIR", "BOX", "DRONE", "GUITAR", "STRINGS", "PIZZ", "TOY", "E-PIANO",
+                            "VIBES", "CHIMES", "VOICE", "HUM", "TAPE", "ARCADE", "BASS", "ORGAN", "BOWED" };
+int slotType(juce::AudioProcessorValueTreeState& st, int slot) {
+    return std::clamp(int(std::lround(st.getRawParameterValue(params::slotTypeId(slot))->load())), 0, params::libraryCount - 1);
+}
+juce::String instrumentName(int type) { return juce::String(params::libraryNames[std::clamp(type, 0, params::libraryCount - 1)]).toUpperCase(); }
+juce::String instrumentShort(int type) { return dsp::library::info(type).shortName; }
 } // namespace
 
 //==============================================================================
@@ -290,65 +299,6 @@ void CharacterStrip::mouseUp(const juce::MouseEvent& e) {
 }
 
 namespace {
-// The instruments as small line drawings, in a box of `r`.
-void drawInstrument(juce::Graphics& g, int which, juce::Rectangle<float> r) {
-    const float t = 1.3f;
-    switch (which) {
-    case 0: {   // an upright piano: body and keys
-        g.drawRect(r.reduced(r.getWidth() * 0.1f, r.getHeight() * 0.08f), t);
-        const auto keys = r.reduced(r.getWidth() * 0.16f, 0).withTrimmedTop(r.getHeight() * 0.55f).withHeight(r.getHeight() * 0.18f);
-        g.drawRect(keys, 1.0f);
-        for (int k = 1; k < 7; ++k) g.fillRect(keys.getX() + keys.getWidth() * float(k) / 7.0f, keys.getY(), 1.0f, keys.getHeight() * (k % 3 == 0 ? 1.0f : 0.6f));
-        break;
-    }
-    case 1: {   // a cassette
-        const auto body = r.reduced(r.getWidth() * 0.06f, r.getHeight() * 0.2f);
-        g.drawRoundedRectangle(body, 2.0f, t);
-        for (float fx : { 0.33f, 0.67f }) g.drawEllipse(juce::Rectangle<float>(body.getHeight() * 0.32f, body.getHeight() * 0.32f).withCentre({ body.getX() + body.getWidth() * fx, body.getCentreY() - 1 }), 1.0f);
-        g.drawRect(body.reduced(body.getWidth() * 0.22f, 0).withTrimmedTop(body.getHeight() * 0.72f), 1.0f);
-        break;
-    }
-    case 2: {   // a wine glass
-        juce::Path p;
-        const float cx = r.getCentreX(), top = r.getY() + r.getHeight() * 0.06f, bowl = r.getY() + r.getHeight() * 0.55f;
-        p.startNewSubPath(cx - r.getWidth() * 0.22f, top);
-        p.quadraticTo(cx - r.getWidth() * 0.24f, bowl, cx, bowl);
-        p.quadraticTo(cx + r.getWidth() * 0.24f, bowl, cx + r.getWidth() * 0.22f, top);
-        p.startNewSubPath(cx, bowl);
-        p.lineTo(cx, r.getBottom() - r.getHeight() * 0.1f);
-        p.startNewSubPath(cx - r.getWidth() * 0.15f, r.getBottom() - r.getHeight() * 0.1f);
-        p.lineTo(cx + r.getWidth() * 0.15f, r.getBottom() - r.getHeight() * 0.1f);
-        g.strokePath(p, juce::PathStrokeType(t));
-        break;
-    }
-    case 3: {   // three voices: open mouths in a row
-        for (int k = 0; k < 3; ++k) {
-            const auto head = juce::Rectangle<float>(r.getWidth() * 0.26f, r.getHeight() * 0.42f).withCentre({ r.getX() + r.getWidth() * (0.22f + 0.28f * float(k)), r.getCentreY() - (k == 1 ? 4.0f : 0.0f) });
-            g.drawEllipse(head, t);
-            g.fillEllipse(juce::Rectangle<float>(head.getWidth() * 0.3f, head.getHeight() * 0.32f).withCentre({ head.getCentreX(), head.getCentreY() + head.getHeight() * 0.15f }));
-        }
-        break;
-    }
-    case 4: {   // a music box with its crank
-        const auto box = r.reduced(r.getWidth() * 0.14f, r.getHeight() * 0.28f).translated(-r.getWidth() * 0.05f, r.getHeight() * 0.08f);
-        g.drawRect(box, t);
-        g.drawLine(box.getX(), box.getY() + box.getHeight() * 0.3f, box.getRight(), box.getY() + box.getHeight() * 0.3f, 1.0f);
-        g.drawLine(box.getRight(), box.getCentreY(), box.getRight() + r.getWidth() * 0.12f, box.getCentreY(), 1.0f);
-        g.drawLine(box.getRight() + r.getWidth() * 0.12f, box.getCentreY(), box.getRight() + r.getWidth() * 0.12f, box.getY(), 1.0f);
-        break;
-    }
-    default: {   // the drone: stacked slow waves
-        for (int k = 0; k < 3; ++k) {
-            juce::Path p;
-            const float y = r.getY() + r.getHeight() * (0.3f + 0.2f * float(k));
-            p.startNewSubPath(r.getX() + 2, y);
-            for (float x = 0; x <= 1.0f; x += 0.05f) p.lineTo(r.getX() + 2 + x * (r.getWidth() - 4), y + std::sin(x * 6.283f * (1.0f + 0.5f * float(k))) * r.getHeight() * 0.07f);
-            g.strokePath(p, juce::PathStrokeType(1.0f + 0.3f * float(2 - k)));
-        }
-    }
-    }
-}
-const char* shelfNames[] { "PIANO", "SYNTH", "GLASS", "CHOIR", "MUSIC BOX", "DRONE" };
 const char* shelfIds[] { params::pianoOn, params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn };
 } // namespace
 
@@ -361,9 +311,14 @@ juce::Rectangle<float> InstrumentShelf::slot(int i) const {
 
 bool InstrumentShelf::refresh() {
     std::array<bool, 6> now {};
-    for (int i = 0; i < 6; ++i) now[std::size_t(i)] = state.getRawParameterValue(shelfIds[i])->load() > 0.5f;
-    if (now == on) return false;
+    std::array<int, 6> held {};
+    for (int i = 0; i < 6; ++i) {
+        now[std::size_t(i)] = state.getRawParameterValue(shelfIds[i])->load() > 0.5f;
+        held[std::size_t(i)] = slotType(state, i);
+    }
+    if (now == on && held == types) return false;
     on = now;
+    types = held;
     repaint();
     return true;
 }
@@ -385,9 +340,9 @@ void InstrumentShelf::paint(juce::Graphics& g) {
             g.fillEllipse(r.withSizeKeepingCentre(r.getWidth(), r.getHeight() * 0.9f).translated(0, -6));
         }
         g.setColour(ink.withAlpha(lit ? 0.95f : hover == i ? 0.6f : 0.32f));
-        drawInstrument(g, i, r.withTrimmedBottom(18).reduced(r.getWidth() * 0.18f, 4));
+        ui::drawInstrumentIcon(g, types[std::size_t(i)], r.withTrimmedBottom(18).reduced(r.getWidth() * 0.12f, 2));
         g.setFont(font(8.5f, lit));
-        g.drawFittedText(shelfNames[i], r.withTop(r.getBottom() - 16).toNearestInt(), juce::Justification::centred, 1, 0.7f);
+        g.drawFittedText(instrumentShort(types[std::size_t(i)]), r.withTop(r.getBottom() - 16).toNearestInt(), juce::Justification::centred, 1, 0.5f);
     }
 }
 void InstrumentShelf::mouseMove(const juce::MouseEvent& e) {
@@ -505,10 +460,15 @@ ActiveInstruments::ActiveInstruments(juce::AudioProcessorValueTreeState& s) : st
 
 bool ActiveInstruments::refresh() {
     std::array<bool, params::instrumentCount> now {};
-    for (int i = 0; i < params::instrumentCount; ++i) now[std::size_t(i)] = state.getRawParameterValue(instrumentInfo[std::size_t(i)].on)->load() > 0.5f;
+    std::array<int, params::instrumentCount> held {};
+    for (int i = 0; i < params::instrumentCount; ++i) {
+        now[std::size_t(i)] = state.getRawParameterValue(instrumentInfo[std::size_t(i)].on)->load() > 0.5f;
+        held[std::size_t(i)] = slotType(state, i);
+    }
     const int s = int(std::lround(state.getRawParameterValue(params::solo)->load()));
-    if (now == on && s == solo) return false;
+    if (now == on && s == solo && held == types) return false;
     on = now;
+    types = held;
     solo = s;
     layout();
     repaint();
@@ -518,7 +478,7 @@ bool ActiveInstruments::refresh() {
 juce::String ActiveInstruments::text() const {
     juce::StringArray list;
     for (int i = 0; i < params::instrumentCount; ++i)
-        if (on[std::size_t(i)]) list.add(instrumentInfo[std::size_t(i)].shortName);
+        if (on[std::size_t(i)]) list.add(instrumentShort(types[std::size_t(i)]));
     return list.isEmpty() ? juce::String("NO INSTRUMENT ON") : list.joinIntoString(" + ");
 }
 
@@ -530,7 +490,7 @@ void ActiveInstruments::layout() {
     float x = 64.0f;   // after "PLAYING"
     for (int i = 0; i < params::instrumentCount; ++i) {
         if (!on[std::size_t(i)]) continue;
-        const float w = juce::GlyphArrangement::getStringWidth(f, instrumentInfo[std::size_t(i)].shortName) + 4.0f;
+        const float w = juce::GlyphArrangement::getStringWidth(f, instrumentShort(types[std::size_t(i)])) + 4.0f;
         names.push_back({ i, { x, 0.0f, w, float(getHeight()) } });
         x += w + 22.0f;   // room for " + "
     }
@@ -568,7 +528,7 @@ void ActiveInstruments::paint(juce::Graphics& g) {
         }
         g.setFont(font(11.5f, true));
         g.setColour(soloed ? juce::Colour(0xff15120a) : ink.withAlpha(muted ? 0.3f : hover == n.index ? 1.0f : 0.85f));
-        g.drawText(instrumentInfo[std::size_t(n.index)].shortName, n.area, juce::Justification::centred);
+        g.drawText(instrumentShort(types[std::size_t(n.index)]), n.area, juce::Justification::centred);
         if (hover == n.index && !soloed) {
             g.setColour(ink.withAlpha(0.7f));
             g.fillRect(n.area.getX() + 2.0f, h - 3.0f, n.area.getWidth() - 4.0f, 1.0f);
@@ -614,7 +574,96 @@ void ActiveInstruments::clickName(int instrument) {
 }
 
 //==============================================================================
-InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& state) {
+InstrumentPicker::InstrumentPicker(juce::AudioProcessorValueTreeState& s) : state(s) {
+    setWantsKeyboardFocus(true);
+}
+
+void InstrumentPicker::open(int which) {
+    slot = std::clamp(which, 0, params::instrumentCount - 1);
+    hover = -1;
+    scroller.setGeometry(getLocalBounds().reduced(4, 22).withTrimmedBottom(-18), rowHeight, params::libraryCount);
+    scroller.restart(params::libraryCount);
+    scroller.ensureVisible(slotType(state, slot));
+    setVisible(true);
+    repaint();
+}
+
+void InstrumentPicker::resized() { scroller.setGeometry(getLocalBounds().reduced(4, 22).withTrimmedBottom(-18), rowHeight, params::libraryCount); }
+
+void InstrumentPicker::choose(int instrument) {
+    if (instrument < 0 || instrument >= params::libraryCount) return;
+    auto* p = state.getParameter(params::slotTypeId(slot));
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(p->convertTo0to1(float(instrument)));
+    p->endChangeGesture();
+    if (onChoose) onChoose();
+}
+
+void InstrumentPicker::paint(juce::Graphics& g) {
+    const auto area = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0xf00b1412));   // opaque enough to read over the page's controls
+    g.fillRoundedRectangle(area, 4.0f);
+    g.setColour(ink.withAlpha(0.3f));
+    g.drawRoundedRectangle(area.reduced(0.5f), 4.0f, 1.0f);
+    g.setColour(ink.withAlpha(0.5f));
+    g.setFont(font(9.0f));
+    g.drawText("CHOOSE WHAT THIS SLOT PLAYS  -  ITS EFFECTS AND ROOM STAY", area.reduced(10, 4).removeFromTop(14), juce::Justification::centredLeft);
+    const int held = slotType(state, slot);
+    {
+        juce::Graphics::ScopedSaveState clip(g);
+        g.reduceClipRegion(scroller.viewArea());
+        for (int row = scroller.firstVisible(); row <= scroller.lastVisible() && row < params::libraryCount; ++row) {
+            const auto r = scroller.rowBounds(row).toFloat();
+            const bool current = row == held;
+            if (current || hover == row) {
+                g.setColour(ink.withAlpha(current ? 0.16f : 0.07f));
+                g.fillRoundedRectangle(r, 3.0f);
+            }
+            g.setColour(ink.withAlpha(current ? 1.0f : hover == row ? 0.92f : 0.72f));
+            ui::drawInstrumentIcon(g, row, r.withWidth(r.getHeight()).reduced(3.0f));
+            g.setFont(font(10.5f, current));
+            g.drawText(instrumentName(row), r.withTrimmedLeft(r.getHeight() + 6.0f).withWidth(170.0f), juce::Justification::centredLeft);
+            g.setFont(font(8.5f));
+            g.setColour(ink.withAlpha(0.45f));
+            g.drawFittedText(juce::String(dsp::library::info(row).description).toUpperCase(),
+                             r.withTrimmedLeft(r.getHeight() + 180.0f).toNearestInt(), juce::Justification::centredLeft, 2, 0.8f);
+        }
+    }
+    scroller.paintBar(g, ink);
+}
+
+void InstrumentPicker::mouseMove(const juce::MouseEvent& e) {
+    const int h = scroller.rowAt(e.getPosition());
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    if (h != hover) { hover = h; repaint(); }
+}
+void InstrumentPicker::mouseExit(const juce::MouseEvent&) { hover = -1; repaint(); }
+void InstrumentPicker::mouseDown(const juce::MouseEvent& e) {
+    grabKeyboardFocus();
+    if (scroller.mouseDown(e.getPosition())) repaint();
+}
+void InstrumentPicker::mouseDrag(const juce::MouseEvent& e) {
+    if (scroller.mouseDrag(e.getPosition())) { hover = -1; repaint(); }
+}
+void InstrumentPicker::mouseUp(const juce::MouseEvent& e) {
+    const bool dragged = scroller.draggingThumb();
+    scroller.mouseUp();
+    if (dragged) { repaint(); return; }
+    if (!e.mouseWasClicked()) return;
+    const int row = scroller.rowAt(e.getPosition());
+    if (row >= 0) choose(row);
+}
+void InstrumentPicker::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& w) {
+    if (scroller.wheel(w)) { hover = scroller.rowAt(e.getPosition()); repaint(); }
+}
+bool InstrumentPicker::keyPressed(const juce::KeyPress& k) {
+    if (k == juce::KeyPress::escapeKey) { setVisible(false); return true; }
+    if (!scroller.key(k)) return false;
+    repaint();
+    return true;
+}
+
+InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& s) : state(s), picker(s) {
     for (int i = 0; i < count; ++i) {
         auto& page = pages[std::size_t(i)];
         const auto& info = instrumentInfo[std::size_t(i)];
@@ -627,10 +676,6 @@ InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& state) {
         page.tab.setClickingTogglesState(false);
         page.tab.onClick = [this, i] { focus(i); };
         addAndMakeVisible(page.tab);
-        for (const auto& [id, label] : info.controls) {
-            page.controls.push_back(std::make_unique<LevelControl>(state, id, label));
-            addChildComponent(*page.controls.back());
-        }
         for (int k = 0; k < dsp::lim::count; ++k) {
             page.liminal.push_back(std::make_unique<LevelControl>(state, params::limId(i, dsp::lim::keys[k]).toRawUTF8(), juce::String(dsp::lim::names[k]).toUpperCase()));
             addChildComponent(*page.liminal.back());
@@ -644,42 +689,119 @@ InstrumentDrawer::InstrumentDrawer(juce::AudioProcessorValueTreeState& state) {
     liminalTab.onClick = [this] { showLiminality(true); };
     addAndMakeVisible(soundTab);
     addAndMakeVisible(liminalTab);
-    auto& synth = pages[1];
-    synth.glide = std::make_unique<juce::ToggleButton>("GLIDE  (OFF: NOTES START ON PITCH)");
-    synth.glideAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(state, params::synthGlide, *synth.glide);
-    addChildComponent(*synth.glide);
-    synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthGlideTime, "GLIDE TIME"));
-    addChildComponent(*synth.controls.back());
-    // Milestone 8: the recorded patch, and the synthesised voice under it.
-    synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthPatch, "PATCH"));
-    addChildComponent(*synth.controls.back());
-    synth.controls.push_back(std::make_unique<LevelControl>(state, params::synthBlend, "ANALOG BLEND"));
-    addChildComponent(*synth.controls.back());
-    auto& drone = pages[5];
-    drone.controls.push_back(std::make_unique<LevelControl>(state, params::droneAttack, "ATTACK"));
-    addChildComponent(*drone.controls.back());
+    choose.setTooltip("Load any of the twenty instruments into this slot");
+    choose.onClick = [this] { showPicker(!picker.isVisible()); };
+    addAndMakeVisible(choose);
+    addChildComponent(picker);
+    picker.onChoose = [this] {
+        showPicker(false);
+        refresh();
+    };
+    refresh();
     focus(0);
 }
 
+// The SOUND controls for what the slot holds. One of the original six: its own controls (shared by
+// every slot that plays it), with the slot's own Distance; one of the new fourteen: the slot's six
+// library controls, named as that instrument reads them.
+void InstrumentDrawer::build(int slot) {
+    auto& page = pages[std::size_t(slot)];
+    page.glideAttachment.reset();
+    page.glide.reset();
+    page.controls.clear();
+    const int type = page.type;
+    const char* slotDistance[] { params::pianoDistance, nullptr, params::glassDistance, nullptr, params::boxDistance, nullptr };
+    const auto add = [&](const char* id, const juce::String& label) {
+        page.controls.push_back(std::make_unique<LevelControl>(state, id, label));
+        addChildComponent(*page.controls.back());
+    };
+    if (dsp::library::isOriginal(type)) {
+        for (const auto& [id, label] : instrumentInfo[std::size_t(type)].controls) {
+            const bool distance = juce::String(label) == "DISTANCE";
+            if (!distance) add(id, label);
+            else if (slotDistance[slot] != nullptr) add(slotDistance[slot], "DISTANCE");
+        }
+        if (type == 1) {
+            page.glide = std::make_unique<juce::ToggleButton>("GLIDE  (OFF: NOTES START ON PITCH)");
+            page.glideAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(state, params::synthGlide, *page.glide);
+            addChildComponent(*page.glide);
+            add(params::synthGlideTime, "GLIDE TIME");
+            add(params::synthPatch, "PATCH");          // Milestone 8: the recorded patch
+            add(params::synthBlend, "ANALOG BLEND");   // and the synthesised voice under it
+        }
+        if (type == 5) add(params::droneAttack, "ATTACK");
+    } else {
+        const juce::String labels[] { "TONE", "AGE", "SOFTNESS", "DECAY", "WIDTH", dsp::library::info(type).colour };
+        for (int k = 0; k < params::lib::count; ++k) add(params::libId(slot, params::lib::keys[k]).toRawUTF8(), labels[k]);
+        if (slotDistance[slot] != nullptr) add(slotDistance[slot], "DISTANCE");
+    }
+}
+
+bool InstrumentDrawer::refresh() {
+    bool changed = false;
+    for (int i = 0; i < count; ++i) {
+        auto& page = pages[std::size_t(i)];
+        const int type = slotType(state, i);
+        if (type == page.type) continue;
+        page.type = type;
+        page.on.setButtonText(instrumentName(type));
+        page.tab.setButtonText(libraryTabs[type]);
+        build(i);
+        changed = true;
+    }
+    if (changed) {
+        focus(current);
+        resized();
+    }
+    return changed;
+}
+
+juce::StringArray InstrumentDrawer::controlLabels() const {
+    juce::StringArray labels;
+    for (const auto& c : pages[std::size_t(current)].controls) labels.add(c->getTitle());
+    return labels;
+}
+
+void InstrumentDrawer::showPicker(bool show) {
+    if (show) {
+        picker.open(current);
+        picker.toFront(false);
+    } else {
+        picker.setVisible(false);
+    }
+    choose.setToggleState(show, juce::dontSendNotification);
+    choose.setButtonText(show ? "CLOSE" : "CHOOSE");
+    focus(current);   // the page's controls hide under an open picker
+}
+
 void InstrumentDrawer::focus(int index) {
+    if (picker.isVisible() && std::clamp(index, 0, count - 1) != current) picker.open(std::clamp(index, 0, count - 1));
     current = std::clamp(index, 0, count - 1);
     for (int i = 0; i < count; ++i) {
         auto& page = pages[std::size_t(i)];
-        const bool shown = i == current;
+        const bool shown = i == current && !picker.isVisible();
         page.tab.setToggleState(shown, juce::dontSendNotification);
         for (auto& c : page.controls) c->setVisible(shown && !liminalPage);
         if (page.glide != nullptr) page.glide->setVisible(shown && !liminalPage);
         for (auto& c : page.liminal) c->setVisible(shown && liminalPage);
+        page.tab.setToggleState(i == current, juce::dontSendNotification);
     }
     soundTab.setToggleState(!liminalPage, juce::dontSendNotification);
     liminalTab.setToggleState(liminalPage, juce::dontSendNotification);
+    choose.setVisible(!liminalPage);
     repaint();
 }
 
 void InstrumentDrawer::showLiminality(bool show) {
     liminalPage = show;
+    if (show) showPicker(false);
     focus(current);
 }
+
+juce::Rectangle<int> InstrumentDrawer::chooserArea() const {
+    return { liminalTab.getRight() + 12, liminalTab.getY(), getWidth() - 16 - liminalTab.getRight() - 12, liminalTab.getHeight() };
+}
+juce::Rectangle<int> InstrumentDrawer::controlsArea() const { return { 16, liminalTab.getBottom() + 6, getWidth() - 32, getHeight() - liminalTab.getBottom() - 6 - 8 }; }
 
 void InstrumentDrawer::paint(juce::Graphics& g) {
     // The frosted glass itself is painted by the editor (from its cached scene).
@@ -693,12 +815,18 @@ void InstrumentDrawer::paint(juce::Graphics& g) {
     g.drawText("INSTRUMENTS  -  MIDI PLAYS EVERY ONE THAT IS ON", area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
     g.setColour(ink.withAlpha(0.12f));
     g.fillRect(16.0f, float(pages[0].tab.getY() - 5), area.getWidth() - 32.0f, 1.0f);
-    // What the sliders on the Liminality half mean.
     g.setColour(ink.withAlpha(0.4f));
     g.setFont(font(9.0f));
-    const auto hint = liminalPage ? juce::String("0 = CLEAN  -  x LIMINALITY KNOB") : juce::String();
-    g.drawText(hint, juce::Rectangle<int>(liminalTab.getRight() + 10, liminalTab.getY(), getWidth() - liminalTab.getRight() - 26, liminalTab.getHeight()),
-               juce::Justification::centredRight);
+    if (liminalPage) {   // what the sliders on the Liminality half mean
+        g.drawText("0 = CLEAN  -  x LIMINALITY KNOB", chooserArea(), juce::Justification::centredRight);
+    } else {             // the instrument this slot holds: its icon and name, CHOOSE beside it
+        const auto r = chooserArea().withTrimmedRight(choose.getWidth() + 8).toFloat();
+        const int type = pages[std::size_t(current)].type;
+        g.setColour(ink.withAlpha(0.9f));
+        ui::drawInstrumentIcon(g, type, r.withWidth(r.getHeight()).reduced(1.0f));
+        g.setFont(font(9.0f, true));
+        g.drawFittedText(instrumentName(type), r.withTrimmedLeft(r.getHeight() + 6.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.5f);
+    }
 }
 
 void InstrumentDrawer::resized() {
@@ -706,7 +834,7 @@ void InstrumentDrawer::resized() {
     area.removeFromTop(18);
     for (auto& page : pages) {
         auto row = area.removeFromTop(30);
-        page.on.setBounds(row.removeFromLeft(168).withSizeKeepingCentre(168, 24));
+        page.on.setBounds(row.removeFromLeft(178).withSizeKeepingCentre(178, 24));
         page.level->setBounds(row.withSizeKeepingCentre(row.getWidth(), 30));
     }
     area.removeFromTop(10);
@@ -714,13 +842,15 @@ void InstrumentDrawer::resized() {
     const int tabWidth = tabs.getWidth() / count;
     for (auto& page : pages) page.tab.setBounds(tabs.removeFromLeft(tabWidth));
     area.removeFromTop(6);
-    {   // the page's two halves: SOUND and LIMINALITY
+    {   // the page's two halves: SOUND and LIMINALITY; the slot's instrument and CHOOSE on the right
         auto halves = area.removeFromTop(22);
         soundTab.setBounds(halves.removeFromLeft(70));
         halves.removeFromLeft(6);
         liminalTab.setBounds(halves.removeFromLeft(100));
+        choose.setBounds(halves.removeFromRight(70));
     }
     area.removeFromTop(6);
+    picker.setBounds(juce::Rectangle<int>(10, liminalTab.getBottom() + 4, getWidth() - 20, getHeight() - liminalTab.getBottom() - 10));
     // Liminality: ten controls in three columns, four rows.
     {
         const int lw = (area.getWidth() - 2 * 16) / 3;
@@ -728,7 +858,7 @@ void InstrumentDrawer::resized() {
             for (std::size_t k = 0; k < page.liminal.size(); ++k)
                 page.liminal[k]->setBounds(area.getX() + int(k % 3) * (lw + 16), area.getY() + int(k / 3) * 38, lw, 36);
     }
-    // Three columns: the six controls in two rows, then any extra row (Glide, Attack).
+    // Three columns: the six controls in two rows, then any extra row (Glide, Attack, Distance).
     const int w = (area.getWidth() - 2 * 16) / 3;
     for (auto& page : pages) {
         int extraRow = 2;
@@ -957,7 +1087,20 @@ EffectsDrawer::EffectsDrawer(juce::AudioProcessorValueTreeState& s) : state(s) {
         tab.onClick = [this, i] { focus(i); };
         addAndMakeVisible(tab);
     }
+    refreshNames();
     focus(0);
+}
+
+bool EffectsDrawer::refreshNames() {
+    bool changed = false;
+    for (int i = 0; i < params::instrumentCount; ++i) {
+        const int type = slotType(state, i);
+        if (type == tabTypes[std::size_t(i)]) continue;
+        tabTypes[std::size_t(i)] = type;
+        tabs[std::size_t(i)].setButtonText(libraryTabs[type]);
+        changed = true;
+    }
+    return changed;
 }
 
 // Controls exist only for the instrument shown (cheaper than 192 hidden ones).
@@ -2278,6 +2421,8 @@ void MainView::timerCallback() {
     characterStrip.refresh();
     shelf.refresh();
     places.refresh();
+    drawer.refresh();          // a slot's instrument changed (the picker, a preset, automation)
+    effects.refreshNames();
     lastDirty = dirty;
     if (dirty.isEmpty()) {
         frames.painted(0.0, now);   // nothing to draw: the frame is done

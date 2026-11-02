@@ -15,6 +15,7 @@
 #include "UI/PhotoScene.h"
 #include "UI/SceneArt.h"
 #include "UI/ScrollList.h"
+#include "UI/InstrumentIcons.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <array>
@@ -95,8 +96,8 @@ private:
     int place = -1, selected = -1, hover = -1;
 };
 
-// The six instruments as objects (a piano, a cassette, a glass, voices, a music box, a
-// waveform): lit when on, click to switch.
+// The six slots as objects: each the icon of the instrument it holds (2026-11-02: any of twenty),
+// lit when on, click to switch.
 class InstrumentShelf final : public juce::Component {
 public:
     explicit InstrumentShelf(juce::AudioProcessorValueTreeState&);
@@ -111,6 +112,7 @@ private:
     juce::Rectangle<float> slot(int instrument) const;
     juce::AudioProcessorValueTreeState& state;
     std::array<bool, 6> on {};
+    std::array<int, 6> types { -1, -1, -1, -1, -1, -1 };
     int hover = -1;
 };
 
@@ -162,6 +164,7 @@ private:
     int nameAt(juce::Point<float>) const;
     juce::AudioProcessorValueTreeState& state;
     std::array<bool, params::instrumentCount> on {};
+    std::array<int, params::instrumentCount> types {};
     int solo = 0, hover = -1;
     std::vector<Name> names;
 };
@@ -169,6 +172,33 @@ private:
 // The instrument drawer: slides over the right of the scene. Six rows (on/off and level
 // per instrument), tabs to pick which one is edited, and its controls. The full
 // INSTRUMENTS page with artwork comes with Milestone 4.
+// The instrument picker (2026-11-02): the twenty instruments as a scrolling list (icon, name, what it
+// is), over the page of the slot being edited; a click loads one into the slot.
+class InstrumentPicker final : public juce::Component {
+public:
+    explicit InstrumentPicker(juce::AudioProcessorValueTreeState&);
+    void open(int slot);   // shows it for that slot, scrolled to its instrument
+    int slotShown() const { return slot; }
+    void paint(juce::Graphics&) override;
+    void resized() override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+    void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    bool keyPressed(const juce::KeyPress&) override;
+    void choose(int instrument);   // as a click on that row
+    std::function<void()> onChoose;
+    const ui::ScrollList& list() const { return scroller; }
+    static constexpr int rowHeight = 28;
+
+private:
+    juce::AudioProcessorValueTreeState& state;
+    ui::ScrollList scroller;
+    int slot = 0, hover = -1;
+};
+
 class InstrumentDrawer final : public juce::Component {
 public:
     explicit InstrumentDrawer(juce::AudioProcessorValueTreeState&);
@@ -176,6 +206,13 @@ public:
     void resized() override;
     void focus(int index);
     int focused() const { return current; }
+    // The instrument library (2026-11-02): each slot's page follows the instrument it holds (names,
+    // icon, its controls); CHOOSE opens the picker.
+    bool refresh();   // true if a slot's instrument changed (its page was rebuilt)
+    void showPicker(bool show);
+    bool pickerShown() const { return picker.isVisible(); }
+    InstrumentPicker& instrumentPicker() { return picker; }
+    juce::StringArray controlLabels() const;   // the shown page's SOUND controls (tests)
     // Each instrument's page has two halves: its SOUND (its own controls) and its LIMINALITY
     // (the ten Liminality controls, 0 = clean, scaled by the LIMINALITY knob on the main screen).
     void showLiminality(bool show);
@@ -184,6 +221,7 @@ public:
 
 private:
     struct Page {
+        int type = -1;   // the instrument the controls below were built for
         juce::ToggleButton on;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttachment;
         std::unique_ptr<LevelControl> level;
@@ -193,10 +231,15 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> glideAttachment;
         std::vector<std::unique_ptr<LevelControl>> liminal;   // Liminality (2026-11-01)
     };
+    void build(int slot);   // the page's SOUND controls for the instrument the slot holds
+    juce::Rectangle<int> chooserArea() const;
+    juce::Rectangle<int> controlsArea() const;
+    juce::AudioProcessorValueTreeState& state;
     std::array<Page, count> pages;
     int current = 0;
     bool liminalPage = false;
-    juce::TextButton soundTab, liminalTab;
+    juce::TextButton soundTab, liminalTab, choose { "CHOOSE" };
+    InstrumentPicker picker;
 };
 
 // The environment drawer: the places as a list (click to go there), what each one does,
@@ -259,8 +302,10 @@ public:
     void resized() override;
     void focus(int instrument);
     int focused() const { return current; }
+    bool refreshNames();   // the tabs name what each slot holds (2026-11-02)
 
 private:
+    std::array<int, params::instrumentCount> tabTypes { -1, -1, -1, -1, -1, -1 };
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     struct Row {

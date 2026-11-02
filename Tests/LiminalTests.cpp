@@ -1058,6 +1058,7 @@ int renderPlaces(const juce::String& path) {
 #include "ConvolverTests.h"
 #include "ScrollTests.h"
 #include "SessionTests.h"
+#include "IconTests.h"
 
 } // namespace
 
@@ -1229,6 +1230,7 @@ int main(int argc, char** argv) {
             return runCaptureModel(model, cwd.getChildFile(argv[i + 2]), cwd.getChildFile(argv[i + 3]));
         }
         else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
+        else if (arg == "--library-snapshots" && i + 1 < argc) return writeLibrarySnapshots(argv[++i]);
         else if (arg == "--vhs-snapshots" && i + 1 < argc) return writeVhsSnapshots(argv[++i]);
         else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
             const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(argv[++i]);
@@ -1291,6 +1293,7 @@ int main(int argc, char** argv) {
     if (run("liminality")) testLiminality(s);
     if (run("scroll")) testScroll(s);
     if (run("sessions")) testSessions(s);
+    if (run("icons")) testIcons(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

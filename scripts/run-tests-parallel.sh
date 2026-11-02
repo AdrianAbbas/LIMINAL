@@ -25,6 +25,7 @@ mkdir -p "$logs"
 # 2026-11-02: the instrument library (twenty instruments in six slots) and old sessions unchanged.
 "$tests" --only library > "$logs/20-library.txt" 2>&1 &
 "$tests" --only sessions > "$logs/21-sessions.txt" 2>&1 &
+"$tests" --only icons > "$logs/22-icons.txt" 2>&1 &
 wait
 # The VHS look (its editor checks run in real time), then the editor's CPU in normal playing per
 # VHS amount, each alone so their timing is not disturbed.
