@@ -170,6 +170,8 @@ jobs:
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-liminality build/test-logs/liminality-piano.wav
       - name: Listening render (the recorded instruments, one piano phrase and chords on each, dry, in three rooms, at Liminality 0, 50 and 100 percent, with cue sheet)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-recorded build/test-logs/recorded-instruments.wav
+      - name: Listening render (the instrument library, the same phrase on all twenty instruments, dry and in three rooms, with cue sheet)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render-library build/test-logs/library-instruments.flac
       - name: Upload test logs, editor snapshot and listening render
         if: always()
         uses: actions/upload-artifact@v4

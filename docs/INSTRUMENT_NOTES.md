@@ -180,3 +180,35 @@ Attack 5 ms–12 s (default 1.2 s), release 50 ms–20 s (default 4 s). Level no
 room. Air absorbs high frequencies more with distance *(ref)*; in an empty building the
 far source is also heard around corners and through doors, which is why it darkens far
 more than open air would *(estimate)*. Transparent at 0.
+
+## The instrument library (2026-11-02): the fourteen new instruments
+
+Code: `Source/DSP/Library.h/.cpp` (one class, fourteen recipes), icons in `Source/UI/InstrumentIcons`,
+tests in `Tests/LibraryTests.h` (groups `library`, `library-rooms`). The design (six slots, twenty
+instruments) and the table of what each one plays are in `docs/DEVLOG.md`, "The instrument library".
+Every number below is *(estimate)* unless it says otherwise: chosen by ear-less reasoning and then
+measured by the tests (in tune, level, distinct); the developer's listening decides.
+
+- **Plucked string** (Old Guitar, Hallway Pizzicato stand-ins): Karplus-Strong with a symmetric
+  three-tap loop filter `[b, 1-2b, b]` (exactly one sample of delay at every frequency, so the pitch is
+  `delay + 1` samples: in tune within 2 cents across E2-E5, measured), a linear-interpolated read, the
+  pluck as one period of soft noise with a comb at 1/7 (the plucking point), T60 3.4 s at 110 Hz for the
+  guitar (0.55 s for the pizzicato), shorter up the neck as `(110/f)^0.35`; release damps to 0.12 s.
+- **Modal bars and bells** (the `ModeBank` of Milestone 1): vibraphone bars tuned 1 : 3.98 : 9.92
+  *(ref: a vibraphone bar's undercut tunes the first overtones to about 4 and 10)*; chimes as a bell's
+  partials 1, 2, 2.99, 4.16, 5.43 *(estimate)*; toy-piano rods 1, 3.93, 9.6 *(estimate: a clamped rod is
+  far more inharmonic, but these read as a toy's)*; bowed glass 1, a twin 2-4 cents above (the beating
+  of a rubbed glass), 2.004, 2.76, 5.4 *(estimate)*. Softer mallets lose the upper partials
+  (`ratio^-k`).
+- **Tine** (Lounge E-Piano): two operators, carrier and modulator at 1 : 1.0007, the modulation index
+  falling from 0.06-0.36 (velocity) towards 0.03 with a T60 of 0.9 s, a bell partial at x14 dying in
+  0.12 s *(estimate: the familiar electric piano's bark is mostly this decaying index)*.
+- **Drawbars** (Warped Organ): sines at 16', 8', 4', 2 2/3', 2', 1 1/3' (0.5, 1, 2, 3, 4, 6), a key
+  click, the motor's wow (2-22 cents at ~0.45 Hz), dying notes (a sag of up to 45 cents over seconds,
+  only while LIMINALITY lets the instrument wander, and a slow fade).
+- **Formant voices** (Solo Voice, Hummed Memory stand-ins): a saw through three band-passes, ooh
+  (300 / 870 / 2240 Hz) to aah (720 / 1150 / 2490 Hz) *(ref: Peterson & Barney's male averages, as in
+  Milestone 1b)*; the hum: 250 Hz with a weak 2.6 kHz and a 520 Hz low-pass (a closed mouth).
+- **Recorded voices** (all sampled ones): the sample bank's `Reader` (Milestone 8), every note evened to
+  one loudness (`-21 - loudnessDb`), velocity as a curve, the instrument's own envelope on top
+  (Softness, Decay), looped sets released into their recorded tails.

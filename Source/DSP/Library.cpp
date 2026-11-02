@@ -158,8 +158,9 @@ void Library::startVoice(Voice& v, int note, float velocity) {
     // Envelope: Softness stretches the onset (x0.25 .. x4), Decay the release and any held decay.
     const float attack = d.attack * expRange(st.softness, 4.0f);
     v.attackCoef = float(1.0 - std::pow(0.3 / 1.3, 1.0 / (std::max(0.0005, double(attack)) * sr)));
-    v.releaseCoef = t60(d.release * expRange(st.decay, 3.0f), sr);
-    v.heldCoef = d.held > 0.0f ? t60(d.held * expRange(st.decay, 3.0f) * std::pow(261.6f / v.hz, 0.25f), sr) : 1.0f;
+    const float span = kindNow == bowedGlass ? 2.0f : 3.0f;   // (octaves of Decay; the glass's long release narrower: the room stays bigger)
+    v.releaseCoef = t60(d.release * expRange(st.decay, span), sr);
+    v.heldCoef = d.held > 0.0f ? t60(d.held * expRange(st.decay, span) * std::pow(261.6f / v.hz, 0.25f), sr) : 1.0f;
     // Velocity: the instrument's own response.
     const float curve = 0.12f + 0.88f * std::pow(velocity, 1.5f);
     v.gain = (1.0f - d.velocity) * 0.55f + d.velocity * curve;

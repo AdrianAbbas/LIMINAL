@@ -76,26 +76,26 @@ the checklist below.
   - [x] 8.3 Empty Choir (voice sweeps + falsetto, stacks as a distant ensemble, the falsetto ooh ghost, G2 hum under the lowest note), Lost Music Box (kalimba + piano top, mechanism), Faded Synth (patch choice + analog blend), Hollow Drone (voice drones, violin, pad, static bass); Glass Memories kept synthesised; stand-ins level-matched; editor controls — push `[skip ci]`
   - [x] 8.4 Tests (`recorded` group: in tune with cents report, velocity layers, clicks at loops/note-offs/handovers, levels; older groups green), listening render `--render-recorded`, DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 
-- [ ] **Instrument library: 20 instruments in six slots, preset scrolling, icons** (2026-11-02, evening; section at the end). Resume from the first unticked line:
+- [x] **Instrument library: 20 instruments in six slots, preset scrolling, icons** (2026-11-02, evening; section at the end) — *waiting for the developer's GarageBand look and listen*. Resume from the first unticked line:
   - [x] Part 1 — preset browser scrolling fixed (`UI/ScrollList.h`: pixel offset, wheel deltas (a zero delta never moves it), draggable bar, keys); every other scrolling list checked (only the presets scrolled; the new instrument picker uses the same list); test group `scroll`; fixture of old sessions written by the pre-library build (`Tests/fixtures/sessions-v2.xml`) — push `[skip ci]`
   - [x] Part 2 — the library: `<slot>_type` (20 choices, default = the slot's own instrument) + six generic sound controls per slot; `DSP/Library` (the fourteen new instruments, recordings + synthesised stand-ins); sample-prep sets for the guitar and the pizzicato; processor routing (each slot plays any instrument, swaps without clicks); group `sessions` (old sessions unchanged) — push `[skip ci]`
   - [x] Part 3 — the editor: an instrument picker per slot, controls follow the loaded instrument; twenty line icons (shelf, picker, tabs); icon snapshots in `docs/snapshots/` — push `[skip ci]`
-  - [ ] Part 4 — at least 20 factory presets on the new instruments; group `library` (in tune, no clicks, level-matched, distinct); listening render `--render-library`; DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] Part 4 — at least 20 factory presets on the new instruments; group `library` (in tune, no clicks, level-matched, distinct); listening render `--render-library`; DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
   - Instruments (one line each; ticked when it plays from MIDI in tune, click-free, level-matched and distinct, recordings and stand-in):
-    - [ ] Old Guitar
-    - [ ] Faded Strings
-    - [ ] Hallway Pizzicato
-    - [ ] Toy Piano
-    - [ ] Lounge E-Piano
-    - [ ] Elevator Vibraphone
-    - [ ] Mall Chimes
-    - [ ] Solo Voice
-    - [ ] Hummed Memory
-    - [ ] Cassette Strings
-    - [ ] Arcade Lead
-    - [ ] Basement Bass
-    - [ ] Warped Organ
-    - [ ] Bowed Glass
+    - [x] Old Guitar
+    - [x] Faded Strings
+    - [x] Hallway Pizzicato
+    - [x] Toy Piano
+    - [x] Lounge E-Piano
+    - [x] Elevator Vibraphone
+    - [x] Mall Chimes
+    - [x] Solo Voice
+    - [x] Hummed Memory
+    - [x] Cassette Strings
+    - [x] Arcade Lead
+    - [x] Basement Bass
+    - [x] Warped Organ
+    - [x] Bowed Glass
 
 **Overnight plan (2026-10-30, developer asleep):** order 2b → 3 → 5 → 6 → 4, without stopping
 between milestones. Push each part with `[skip ci]`, each whole milestone without. Backup wake-ups
@@ -1994,3 +1994,253 @@ and the music box's piano-top layer finishes fading where that note's measured t
 embedded; Linux full suite + all listening renders (`recorded-instruments.wav` in the test-logs
 artifact); macOS: build, smoke + `recorded` on arm64, smoke on x86_64, package, auval and the AU
 harness, all passed.
+
+## The instrument library: 20 instruments in six slots, preset scrolling, icons (2026-11-02, evening)
+
+Request: (1) the preset browser could not reach its last presets (the list jumped back up when
+scrolled); fix it everywhere, with a test. (2) New line icons for every instrument. (3) Fourteen new
+instruments, twenty in all, without multiplying the six-instrument architecture; old sessions and presets
+open exactly as before; the design decision recorded here. (4) At least twenty factory presets on the
+new instruments.
+
+### Design decision: a library of twenty instruments, six slots
+
+The architecture is sized for six *slots*, not six sounds: 61 Liminality parameters, 192 effect
+parameters, the solo choice, every room's per-instrument shaping and Liminality nudges, the MIDI ranges,
+the presets, the editor's strip and pages are all indexed by slot (`params::instrumentKeys`: piano,
+synth, glass, choir, box, drone). Multiplying them by twenty would have meant ~880 new parameters, a
+solo list of twenty, twenty rooms' worth of per-instrument tuning and an editor that no longer fits.
+Instead (the developer's suggestion, taken as is):
+
+- **Each slot holds any one of the twenty instruments.** One new parameter per slot, `<slot>_type`
+  (a choice of twenty, appended; its default is the slot's own instrument, so a song or preset saved
+  before has every slot exactly as it was).
+- **Everything after the voices stays the slot's**: level and on/off, Liminality (its ten controls and
+  the room/Character nudges keyed to the slot), Distance (slots 1, 3, 5), the effects rack and its place
+  defaults, the rooms' per-slot shaping and signature share, the MIDI key range and velocity, solo. A
+  slot that holds the guitar is processed by the rooms as that slot always was.
+- **Sound controls:** the original six keep their own named controls (Piano Age, Synth Warmth ...) and
+  read them in whichever slot holds them (two slots holding the piano share the piano's six controls;
+  each still has its own level, Liminality, effects and room). The fourteen new instruments read six
+  controls **per slot**, appended: `<slot>_lib_tone`, `_age`, `_soft`, `_decay`, `_width`, `_colour`
+  (0.5 = as designed), the sixth named by each instrument (Other Room, Section, Col Legno, Broken, Bell,
+  Tremolo, PA, Vowel, Memory, Tape Wear, Grit, Floor, Wow, Bow). 6 + 36 = **42 new parameters** in all.
+- **DSP:** each slot owns a preallocated kit: one instance of each original class and three of
+  `DSP/Library` (the fourteen new instruments in one class: the one playing and up to two fading out),
+  about 1 MB a slot, nothing allocated on the audio thread. A change of instrument (the picker, a preset,
+  automation, a scene morph's half-way point) lets the old one go with a 10 ms fade of its notes, renders
+  it until silent, then its own tail (an echo, a chorus) for 0.5 s more under a fade; Liminality's
+  held-back notes are dropped; the new one starts clean. Choosing an instrument that is still fading
+  out picks it up where it is.
+- **Old sessions:** `Tests/fixtures/sessions-v2.xml` was written by the build *before* the library
+  (Part 1's commit): the default state, a state with all six on and many controls moved (scenes stored),
+  and all twenty factory scenes, each with a fingerprint of a rendered phrase. Group `sessions` loads
+  them into today's build: every saved parameter returns, every slot holds its own instrument, every
+  250 ms window within 0.05 dB: **worst 0.000 dB**. With the recordings, the full listening renders
+  `--render` and `--render-recorded` of the old and new builds were compared sample by sample here:
+  **max difference 0.0**.
+
+### 1. The preset browser's scrolling
+
+**Cause:** the wheel handler moved the list two rows by the event's sign only:
+`scroll + (wheel.deltaY < 0 ? 2 : -2)`. A trackpad sends events with `deltaY == 0` at the start and end
+of every gesture, through its momentum phase and for a sideways swipe; each counted as "up two rows",
+so scrolling to the bottom bounced back and the last presets could not be reached (most of all in the
+26-row Instruments group and the 30 Characters). There was no scrollbar to drag and no keys.
+
+**Fix:** `Source/UI/ScrollList.h`, one scrolling list used by every list that scrolls: a pixel offset
+clamped to `[0, rows x rowHeight - view]` (the last row ends exactly at the bottom), wheel movement
+proportional to `deltaY` (JUCE's Viewport scale; zero never moves it), a scrollbar (drag the thumb, click
+the track to page), keys (arrows, Page Up/Down, Home/End, once the list is clicked), rows clipped at the
+list's edge. Nothing resets it but a new tab (another list); a repaint, the editor's timer, loading a
+preset leave it where it is.
+
+**Every other list checked:** the presets were the only list that scrolled (the places list, the
+Characters, the effects and the instrument pages are fixed and fit at every size; combo boxes use JUCE's
+own menus). The new instrument picker (twenty rows) uses the same `ScrollList`.
+
+**Test group `scroll`** (29 checks): the list's arithmetic (zero deltas never move it, a stream of small
+trackpad deltas reaches the end, the thumb dragged to the bottom, track paging, keys); then the real
+browser in the editor at **85, 100 and 150 %**: every group scrolled by trackpad flicks (with zero-delta
+events, repainting and ticking the editor between flicks) until it stops, the last three rows clicked
+(each loads that very preset, the list does not move), every row reached by the keys and by dragging the
+bar, the list and its last rows inside the window.
+
+### 2. The fourteen new instruments (`Source/DSP/Library.h/.cpp`)
+
+| # | Instrument | Recordings (sample bank) | Stand-in (no recordings) | Its own control |
+|---|---|---|---|---|
+| 7 | **Old Guitar** | classical guitar soft / medium / hard sweeps (15 notes each, new set `guitar`) | plucked string (Karplus-Strong, pluck position, damped by the hand on release) | OTHER ROOM: the wall takes the highs, the room next door's first reflections |
+| 8 | **Faded Strings** | violin bowed open strings (`violin-sustain`), up to three players (different takes, entering 21 / 37 ms late, apart by Section) | three detuned saws, a wooden body (formants), delayed vibrato | SECTION: one player .. a faded section; Age dulls it |
+| 9 | **Hallway Pizzicato** | violin pizzicato (new set `violin-pizz`: both files, 42 notes) + col legno (new set `violin-collegno`, 11 hits) | a short plucked string and the bow's wood | COL LEGNO; a sparse hallway echo (230 / 290 ms) |
+| 10 | **Toy Piano** | the piano's short hits with a forced short decay, the kalimba's tine under it, small (no low end) | modal rods (1, 3.93, 9.6) and a hammer thunk | BROKEN: some rods ring a second strike 18-48 cents apart |
+| 11 | **Lounge E-Piano** | - (synthesised) | a two-operator tine: index falling with the note, a bell partial (x14) | BELL |
+| 12 | **Elevator Vibraphone** | - | modal bars (1, 3.98, 9.92), damper on release | TREMOLO: the motor's speed and depth (1.2-5.6 Hz) |
+| 13 | **Mall Chimes** | - | bell partials (1, 2, 2.99, 4.16, 5.43) ringing on | PA: through the horn (high-pass, a 1.9 kHz bite, a little drive) |
+| 14 | **Solo Voice** | the developer's soft 'ooh' and 'aah' sweeps (one voice, no stacks), finding the note (-8 cents scoop) | a formant voice | VOWEL: ooh .. aah |
+| 15 | **Hummed Memory** | the soft 'mmm' sweep, scooping in, breathing in and out, darker | a nasal formant hum | MEMORY: how far it scoops and fades in and out |
+| 16 | **Cassette Strings** | the analog synth's soft pad (long hits), two copies apart by Width, worn tape (wow, flutter, saturation, head bump) | two detuned saws and a sub, low-passed | TAPE WEAR |
+| 17 | **Arcade Lead** | the analog synth's square and cyberpunk patches | a pulse wave with delayed vibrato | GRIT: square .. cyberpunk (and pulse width); Age: fewer bits |
+| 18 | **Basement Bass** | the analog synth's static-y bass | saw + sub, a filter that closes after the attack | FLOOR: through the floor (low-pass 2.4 kHz .. 260 Hz, a thump at 68 Hz) |
+| 19 | **Warped Organ** | - | drawbars (16' 8' 4' 2 2/3' 2' 1 1/3'), key click | WOW: the tired motor; with Age, some notes are dying (sag in pitch with LIMINALITY, fade) |
+| 20 | **Bowed Glass** | - (synthesised until glass is sampled) | sustained glass partials (1, a beating twin, 2.004, 2.76, 5.4), slow swell, rosin noise | BOW |
+
+Common to all fourteen: Tone (x0.25 .. x4 on the voice's low-pass), Age (a fixed per-key mistuning,
+the instrument's own wear), Softness (the onset x0.25 .. x4), Decay (release and any held decay),
+Width (stereo spread, ensemble width). Liminality's hook (`DSP/Instrument.h`) is honoured by every voice
+(Detune / Sour cents, drift and wow, each voice's warble, Unevenness' tone); the instrument's own random
+movement (Age wobble, tape and organ wow, a dying note's sag) is scaled by Liminality's `wander`, so at
+LIMINALITY 0 every instrument is perfectly stable. Notes beyond a recording's range by more than an
+octave play the stand-in. Each instrument is trimmed to the Forgotten Piano's level on one phrase, the
+recordings to their stand-in (`Library::trimDb`).
+
+**Sample prep:** `manifest.json` gained `guitar`, `violin-pizz` and `violin-collegno` (the guitar and
+pizzicato files left the `unused` list); `liminal.py` repairs their interface glitches like the others'
+(guitar 58, pizzicato 48, col legno 3 clicks). **790 notes** prepared (692 before), 54 MB of FLAC.
+Solo Voice, Hummed Memory, Cassette Strings, Arcade Lead, Basement Bass, Faded Strings and Toy Piano play
+sets that were already prepared for the originals.
+
+### 3. Icons (`Source/UI/InstrumentIcons`)
+
+Twenty line icons drawn as paths in a unit square (round caps, one stroke weight scaled to the size, a
+few filled marks, dashes for the "half there" ones), in the viewfinder's pale ink: an upright piano, a
+small synth with knobs, a wine glass, three singers, a music box with its crank, stacked waves, a tilted
+classical guitar, a violin with its bow, a violin with echo arcs, a toy piano on legs with one key out of
+line, an electric piano on an X stand, vibraphone bars with mallets, a PA horn, one singer, a dashed face
+humming, a cassette, a game pad, a bass clef over a floor, drawbars over a bent keyboard, a glass bowl
+with a bow. No logos. Used by the shelf, the picker, the slot header. `docs/snapshots/instrument-icons.png`
+(64 / 32 / 20 / 16 px), `page-instruments.jpg`, `page-instruments-picker.jpg`,
+`page-instruments-library.jpg`, `shelf-library.jpg`, `page-presets.jpg` (with its scrollbar). Test group
+`icons`: ink at 16 px between 6 and 55 % for each (12-33 %), every pair different at 32 and 16 px
+(closest: Solo Voice / Hummed Memory 9.8 / 12.2 %), drawn identically every time.
+
+**Editor:** the INSTRUMENTS page names each slot by what it holds; the tabs, the shelf, the PLAYING names
+and the EFFECTS tabs follow it. Beside SOUND / LIMINALITY: the slot's icon and name and **CHOOSE**, which
+opens the picker (icon, name, one line about it; the scrolling list; a click loads it, Esc closes). The
+SOUND controls are rebuilt only when a slot's instrument changes (the original's own controls with the
+slot's Distance, or the six library controls with the instrument's names); the picker paints in a few ms
+and only while open; the shelf repaints only on a change.
+
+### 4. Presets (28 on the new instruments; 114 factory presets in all)
+
+Instruments (each new instrument as it comes, in the slot it suits): OLD GUITAR, FADED STRINGS, HALLWAY
+PIZZICATO, TOY PIANO, LOUNGE E-PIANO, ELEVATOR VIBRAPHONE, MALL CHIMES, SOLO VOICE, HUMMED MEMORY,
+CASSETTE STRINGS, ARCADE LEAD, BASEMENT BASS, WARPED ORGAN, BOWED GLASS; variations GUITAR THROUGH THE
+WALL, ONE VIOLIN LEFT, FAST MOTOR VIBES, TAPE LEFT IN THE SUN. Scenes (appended after the twenty, so the
+host's program numbers 1-20 are unchanged; 31 programs now): LOBBY AT 4 A.M., ATTENTION SHOPPERS, THE
+ARCADE CLOSED IN 1999, SOMEONE PRACTISING DOWNSTAIRS, EMPTY STRING SECTION, LULLABY ON THE PLATFORM,
+HUMMING IN THE CORRIDOR, ELEVATOR TO NOWHERE, PIZZICATO IN THE HALL, SUNDAY ORGAN, FAR AWAY. Every one is
+reachable in the browser (group `scroll` covers all rows of every group).
+
+### Tests (Linux, this container, recordings + captures as in CI)
+
+**Full suite: 810 passed, 0 failed** with the recordings and the captures (CI's configuration; 673
+before this work); the `library` and `sessions` groups also pass without the recordings
+(`LIMINAL_NO_RECORDINGS=1`: a build without the token). `scripts/run-tests-parallel.sh`: new shards `scroll`, `library`,
+`sessions`, `icons`, `library-rooms`; `workflow` now runs alone because it times Eco against Standard:
+under the four new parallel shards that wall-clock comparison came out 30.1 vs 32.7 % once, 15.1 vs
+23.0 % alone).
+
+- **`library`** (89 checks), with the recordings and again on the stand-ins (`BypassRecordings`), each
+  new instrument in the synth's slot, dry, LIMINALITY 0:
+  - plays from MIDI in a slot that held another instrument, and the slot holds it;
+  - **in tune** across its range, a note every 4 semitones, Age 0 (cents of every note printed in the
+    log): recordings worst Solo Voice 19.9 cents (E2, the voice's own wobble at the bottom of its range),
+    Hummed Memory 18.9, Basement Bass 16.5 (the patch detunes itself), Arcade Lead 10.2, the others
+    within 7 (guitar 1.4); stand-ins: Arcade Lead 10.1 and Cassette Strings 7.6 (delayed vibrato and
+    detuned oscillators), Faded Strings 6.9, the others within 2.4;
+  - **no clicks** (the recorded group's detector) through the phrase, a pedalled six-note chord and its
+    release: 0 on all fourteen, both ways;
+  - **level-matched** to the Forgotten Piano on one phrase, within 3 dB (all at -0.5 dB +/- 0.3 after
+    the trims; Arcade Lead's recordings -1.2), and each instrument's recordings to its stand-in within
+    1.5 dB (worst 0.7);
+  - **changing a slot's instrument while notes sound**: fourteen changes 0.7 s apart, each takes effect
+    at once, 0 clicks; every slot can hold a new instrument and plays it;
+  - **distinct**: features of one phrase and one held note (spectral centroid and five band shares,
+    attack, held decay, release, level movement, inharmonicity) for all twenty; every new instrument
+    against all nineteen others: closest pair **Mall Chimes / Forgotten Piano 2.24** (threshold 1.5);
+    next Old Guitar / Forgotten Piano 2.92, Old Guitar / Basement Bass 3.03;
+  - **presets**: 28 factory presets use the new instruments, every one of the fourteen has one, each
+    loads its instruments into their slots and plays in its place;
+  - CPU: six new instruments (one per slot) x 16 held notes + pedal: 9 % of one core alone, 13 %
+    under the parallel suite (checked under 60 %).
+- **`library-rooms`** (2 checks + 14 report lines): each new instrument through all ten rooms against
+  its six controls swept end to end (the environments group's measure for the originals). Every pair of
+  places differs (closest 2.09, Mall Chimes school / supermarket); **a change of place, on average,
+  changes every new instrument more than any of its controls** (closest margin Bowed Glass: rooms 4.94
+  vs Tone 4.42). Report-only, as for the original six since Direction Update 2: "even the closest pair of
+  places beats the strongest control" (the originals miss it too: piano 2.73 vs Distance 4.77, music box
+  2.07 vs Decay 7.33).
+- **`sessions`** (5): above (worst 0.000 dB).
+- **`scroll`** (29), **`icons`** (12): above.
+- **`workflow`**: the host's program list is Init + 30 scenes now; the check says so and that the first
+  twenty keep their numbers.
+- **Listening render** `--render-library` (CI test-logs artifact `library-instruments.flac` + `.txt`
+  cue sheet, 10:40): the same phrase (E4 G4 C5 B4 A4 G4 F4 E4, then C and Am) on all twenty instruments,
+  dry and in the school, the hotel and the indoor pool (ambience -12 dB, LIMINALITY 40 %). Peak -5.2
+  dBFS, no NaNs. **Not listened to** (no audio output here).
+- Editor CPU (group `cpu`, normal playing): VHS Off 11.9 %, Light 18.1 %, Heavy 17.4 % of one core
+  (the VHS milestone measured 10.3-11.1 / 17.7-18.7 / 17.4-17.7 %): unchanged.
+
+### Decisions (recorded instead of asking)
+
+- **The design above** (a library in six slots), the developer's suggestion as given. The slot keys and
+  every existing parameter ID are unchanged; host automation names too ("Piano Echo" is the first slot's
+  echo, whatever it plays). New parameters are named by slot ("Piano Slot Instrument", "Synth Slot Tone").
+- **The original six keep their own controls** wherever they are loaded (shared if two slots hold the
+  same one) rather than being mapped onto the generic six: their controls and their sound in old songs
+  stay exactly what they were. The slot's Distance (slots 1, 3, 5) is shown for whatever it holds.
+- **Names kept** from the request: none renamed. "Lounge E-Piano" and the others carry no brand.
+  The sixth controls: OTHER ROOM, SECTION, COL LEGNO, BROKEN, BELL, TREMOLO, PA, VOWEL, MEMORY, TAPE WEAR,
+  GRIT, FLOOR, WOW, BOW.
+- **Recordings used:** the guitar (all three dynamics), both pizzicato files and the col legno (11 of
+  its hits; the number per string varies, counted from the audio), the soft ooh / aah / mmm sweeps
+  (single voice, no stacks: "one distant singer"), the analog synth's soft pad, square, cyberpunk and
+  static-y bass long hits, the piano's short hits and the kalimba (Toy Piano), the violin's bowed open
+  strings (Faded Strings: only G3 D4 A4 E5 exist, so a section is three takes of four notes stretched
+  over the range; more notes would help). Still unused: banjo, djembes, whispers, 'ee' / 'oh' sweeps,
+  breaths, the hummed melody, the grungy eeeh (as before).
+- **Synthesised:** Lounge E-Piano, Elevator Vibraphone, Mall Chimes, Warped Organ (as asked) and Bowed
+  Glass (until glass is sampled).
+- **Arcade Lead's "8 bit"**: fewer bits with Age, the rounding error growing with the level and the
+  steps smoothed by an output filter; a sample-rate reduction (stepped hold) was tried first and dropped:
+  its steps are clicks by the suite's detector and to the ear.
+- **Plucks rounded at the top** (Old Guitar, Hallway Pizzicato, Toy Piano: a soft limit at 0.3 per voice,
+  as the music box's pin): the kalimba under the toy piano and the plucked stand-ins peaked near 0 dBFS
+  at their matched level.
+- **Toy Piano** sounds where it is played (in tune with MIDI), not an octave up.
+- **A real bug found by the new `library-rooms` group** before the push: the six library controls were
+  never passed from the parameters to the instruments (every control sat at 0.5; the end-to-end sweeps
+  measured exactly 0). Fixed in `updateSettings`; the library group re-run with the controls live.
+- **Report-only** (see `library-rooms`): the closest pair of places against the strongest control, as
+  for the originals.
+
+### Not verified here
+
+macOS, the AU, GarageBand: the first CI run on this commit is the first macOS build of the library and
+the picker. Nothing was listened to (no audio output in this container). The fingerprints of old sessions
+are checked on Linux (x86_64) only; macOS runs its usual smoke groups.
+
+### For the developer's GarageBand check
+
+1. **Old songs first:** open a song from before; every slot should hold what it held, sound the same.
+2. **The preset browser:** PRESETS > INSTRUMENTS and CHARACTERS: scroll to the bottom with the trackpad
+   (flick, let it coast): it must stay at the bottom; drag the thin bar on the right; click the list and
+   use the arrow keys, Page Down, End. Try it at the smallest and largest window size.
+3. **INSTRUMENTS > a slot > CHOOSE:** the picker; load each new instrument into one slot and play the
+   same phrase. Listen for: each one recognisable at once; nothing horror-like (the hum and the voice
+   especially); levels close to the piano; Old Guitar's OTHER ROOM; Faded Strings' SECTION (0 = one
+   violin); Hallway Pizzicato's COL LEGNO and its hallway echo; Toy Piano's BROKEN; the vibraphone's
+   TREMOLO; Mall Chimes' PA; Solo Voice's VOWEL; Hummed Memory's MEMORY; Cassette Strings' TAPE WEAR;
+   Arcade Lead's GRIT and Age (fewer bits); Basement Bass' FLOOR; Warped Organ's WOW (and with
+   LIMINALITY up, the dying notes); Bowed Glass' BOW.
+4. **Rooms over controls:** one new instrument through several places, then its strongest control end
+   to end: the place should still be the bigger change.
+5. **Change a slot's instrument while holding a chord** (in the picker or with automation): the old one
+   should fade out, no click.
+6. **The new presets:** the ten new scenes (LOBBY AT 4 A.M. ... SUNDAY ORGAN, FAR AWAY) and the
+   eighteen instrument presets.
+7. Compare with `library-instruments.flac` (Linux test-logs artifact; cue sheet beside it).
+8. Worth recording next: more violin notes (bowed, every 3 semitones like the pizzicato) for Faded
+   Strings; a struck and a rubbed glass for Bowed Glass / Glass Memories; a few held organ or
+   electric-piano notes if there is one to hand.

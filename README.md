@@ -3,15 +3,18 @@
 A cinematic environmental **instrument** (AU / VST3, macOS; GarageBand and Logic Pro):
 playable, unsettling instruments placed inside liminal spaces.
 
-**Status: Milestones 0–6 and 8 done (7 to come).** Six playable instruments — Forgotten
-Piano, Faded Synth, Glass Memories, Empty Choir, Lost Music Box, Hollow Drone, five of them now
-playing the developer's own recordings (Milestone 8, prepared in CI from a private repository;
-synthesised stand-ins without them)
+**Status: Milestones 0–6 and 8 done (7 to come), plus the instrument library.** Twenty
+instruments in six slots (each slot plays any of them, with its own Liminality, effects and room):
+Forgotten Piano, Faded Synth, Glass Memories, Empty Choir, Lost Music Box, Hollow Drone, Old Guitar,
+Faded Strings, Hallway Pizzicato, Toy Piano, Lounge E-Piano, Elevator Vibraphone, Mall Chimes, Solo
+Voice, Hummed Memory, Cassette Strings, Arcade Lead, Basement Bass, Warped Organ, Bowed Glass — most
+playing the developer's own recordings (prepared in CI from a private repository; synthesised
+stand-ins without them)
 ([`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — in ten places that each reshape
 every instrument and have their own room and sounds ([`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md)),
 each with three Characters, evolution, four macros and Scene A/B morphing
 ([`docs/CHARACTERS.md`](docs/CHARACTERS.md)); per-instrument effects with the place's defaults
-([`docs/EFFECTS.md`](docs/EFFECTS.md)); 86 factory presets, ambience export to WAV,
+([`docs/EFFECTS.md`](docs/EFFECTS.md)); 114 factory presets, ambience export to WAV,
 Eco/Standard/High quality. The interface is the "viewfinder": every place as its own scene,
 graded per Character, lights that answer the music ([`docs/snapshots/`](docs/snapshots/)).
 

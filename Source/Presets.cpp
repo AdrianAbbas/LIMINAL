@@ -29,6 +29,24 @@ Values operator+(Values a, const Values& b) {
     return a;
 }
 std::pair<juce::String, float> fx(int instrument, const char* name, float value) { return { fxId(instrument, name), value }; }
+// The instrument library (2026-11-02): slots holding instruments. { slot, instrument (0..19), dB }; the
+// other slots off.
+struct Held { int slot, type; float db; };
+Values holding(std::initializer_list<Held> held) {
+    Values v;
+    for (int i = 0; i < instrumentCount; ++i) {
+        const Held* h = nullptr;
+        for (const auto& x : held)
+            if (x.slot == i) h = &x;
+        v.push_back({ instrumentOn[i], h != nullptr ? 1.0f : 0.0f });
+        if (h != nullptr) {
+            v.push_back({ instrumentLevel[i], h->db });
+            v.push_back({ slotTypeId(i), float(h->type) });
+        }
+    }
+    return v;
+}
+std::pair<juce::String, float> lib(int slot, const char* control, float value) { return { libId(slot, control), value }; }
 
 std::vector<Preset> build() {
     std::vector<Preset> list;
@@ -76,6 +94,29 @@ std::vector<Preset> build() {
     variation("SUB HUM", 5, "Low and nearly pure", { { droneHarmonics, 0.1f }, { droneSub, 1.0f }, { droneMovement, 0.2f } });
     variation("BRIGHT SWARM", 5, "Many voices, moving", { { droneDensity, 0.9f }, { droneHarmonics, 0.8f }, { droneMovement, 0.8f } });
     variation("SLOW TIDE", 5, "Very long rise and fall, smeared", { { droneAttack, 6.0f }, { droneRelease, 10.0f }, { droneMovement, 0.3f }, fx(5, fx::grain, 0.4f) });
+    // The instrument library (2026-11-02): each new instrument as it comes, in the slot it suits (its
+    // Distance where the slot has one), then a few variations.
+    const auto held = [&](const char* name, int slot, int type, const char* description, Values v = {}) {
+        list.push_back({ name, Category::instrument, slot, description, holding({ { slot, type, 0.0f } }) + v });
+    };
+    held("OLD GUITAR", 0, 6, "A classical guitar heard from another room");
+    held("FADED STRINGS", 5, 7, "A string section, faded like an old film");
+    held("HALLWAY PIZZICATO", 2, 8, "Plucked violin echoing down an empty hall");
+    held("TOY PIANO", 4, 9, "Small, bright, slightly broken");
+    held("LOUNGE E-PIANO", 1, 10, "A soft electric piano in a hotel lobby");
+    held("ELEVATOR VIBRAPHONE", 2, 11, "Muzak vibes with a slow tremolo");
+    held("MALL CHIMES", 4, 12, "Public-address chimes over an empty concourse");
+    held("SOLO VOICE", 3, 13, "One distant singer: a soft ooh and aah");
+    held("HUMMED MEMORY", 3, 14, "A hum you almost remember");
+    held("CASSETTE STRINGS", 1, 15, "A soft pad played from a worn tape");
+    held("ARCADE LEAD", 1, 16, "The lead of an empty arcade's game console");
+    held("BASEMENT BASS", 5, 17, "A dull bass from the floor below");
+    held("WARPED ORGAN", 5, 18, "An old combo organ, wow, notes dying");
+    held("BOWED GLASS", 2, 19, "A glassy bowed pad");
+    held("GUITAR THROUGH THE WALL", 0, 6, "Further away, behind a closed door", { lib(0, "colour", 0.9f), lib(0, "tone", 0.35f), { pianoDistance, 0.4f } });
+    held("ONE VIOLIN LEFT", 5, 7, "The section has gone home; one player stays", { lib(5, "colour", 0.0f), lib(5, "age", 0.3f) });
+    held("FAST MOTOR VIBES", 2, 11, "The vibraphone's motor turned up", { lib(2, "colour", 0.9f), lib(2, "decay", 0.7f) });
+    held("TAPE LEFT IN THE SUN", 1, 15, "The cassette has warped", { lib(1, "colour", 0.95f), lib(1, "age", 0.7f), fx(1, fx::tapeHiss, 0.5f) });
     // Scenes: everything together.
     const auto scene = [&](const char* name, const char* description, int place, int ch, Values v) {
         const Values all = Values { { environment, float(place) }, { character, float(ch) } } + v;
@@ -122,6 +163,27 @@ std::vector<Preset> build() {
           playing({ { 3, -6.0f }, { 1, -8.0f } }) + Values { { synthAttack, 1.0f }, { synthRelease, 3.0f }, fx(3, fx::grain, 0.3f) });
     scene("FAMILIAR WALLS", "Almost a normal room: piano and glass", int(P::impossible), 0,
           playing({ { 0, 0.0f }, { 2, -6.0f } }) + Values { { evolution, 0.7f } });
+    // Scenes on the instrument library (2026-11-02; appended, so the host's program numbers stay).
+    scene("LOBBY AT 4 A.M.", "A lounge e-piano and slow vibes, nobody at the desk", int(P::hotel), 1,
+          holding({ { 1, 10, -2.0f }, { 2, 11, -7.0f } }) + Values { lib(2, "colour", 0.35f), { presence, 0.55f } });
+    scene("ATTENTION SHOPPERS", "Chimes over the PA and a worn tape of strings", int(P::mall), 0,
+          holding({ { 4, 12, -4.0f }, { 1, 15, -6.0f } }) + Values { { farAway, 0.4f }, lib(1, "colour", 0.6f) });
+    scene("THE ARCADE CLOSED IN 1999", "A game-console lead and a bass under the floor", int(P::mall), 2,
+          holding({ { 1, 16, -3.0f }, { 5, 17, -6.0f } }) + Values { lib(1, "colour", 0.4f), { unreal, 0.2f } });
+    scene("SOMEONE PRACTISING DOWNSTAIRS", "An old guitar through the floor, a toy piano upstairs", int(P::school), 0,
+          holding({ { 0, 6, 0.0f }, { 4, 9, -9.0f } }) + Values { lib(0, "colour", 0.7f), { pianoDistance, 0.3f } });
+    scene("EMPTY STRING SECTION", "Faded strings and bowed glass in the open plan", int(P::office), 1,
+          holding({ { 5, 7, -3.0f }, { 2, 19, -8.0f } }) + Values { lib(5, "colour", 0.7f), { scale, 0.7f } });
+    scene("LULLABY ON THE PLATFORM", "One voice and a toy piano, the last train gone", int(P::subway), 0,
+          holding({ { 3, 13, -2.0f }, { 4, 9, -8.0f } }) + Values { lib(3, "colour", 0.3f) });
+    scene("HUMMING IN THE CORRIDOR", "A half-remembered hum and glass, very quiet", int(P::hospital), 0,
+          holding({ { 3, 14, 0.0f }, { 2, 19, -10.0f } }) + Values { lib(3, "colour", 0.6f), { presence, 0.4f } });
+    scene("ELEVATOR TO NOWHERE", "Vibes and a dull bass between floors", int(P::hotel), 2,
+          holding({ { 2, 11, -3.0f }, { 5, 17, -8.0f } }) + Values { { unreal, 0.25f }, lib(5, "colour", 0.75f) });
+    scene("PIZZICATO IN THE HALL", "Plucked strings and a cassette pad after the bell", int(P::school), 1,
+          holding({ { 2, 8, 0.0f }, { 1, 15, -9.0f } }) + Values { lib(2, "colour", 0.4f) });
+    scene("SUNDAY ORGAN, FAR AWAY", "A warped organ and strings from the end of the car park", int(P::garage), 0,
+          holding({ { 5, 18, -4.0f }, { 1, 7, -9.0f } }) + Values { lib(5, "colour", 0.55f), { farAway, 0.3f } });
     return list;
 }
 } // namespace

@@ -119,6 +119,8 @@ double distanceOf(const Features& a, const Features& b) {
 
 } // namespace librarytest
 
+void testLibraryPresets(Suite& s);
+
 void testLibrary(Suite& s) {
     s.section("library (the fourteen new instruments, in a slot)");
     using namespace librarytest;
@@ -257,8 +259,60 @@ void testLibrary(Suite& s) {
         for (std::size_t k = 0; k < std::min<std::size_t>(6, pairs.size()); ++k)
             std::cout << "  [distinct] " << params::libraryNames[std::get<1>(pairs[k])] << " / " << params::libraryNames[std::get<2>(pairs[k])] << ": " << num(std::get<0>(pairs[k]), 2) << "\n";
         s.metric("closest pair (feature distance)", closest);
-        s.check(closest >= 1.0, "every new instrument is distinct from the other nineteen (closest pair's feature distance >= 1.0)", closestPair + ": " + num(closest, 2));
+        s.check(closest >= 1.5, "every new instrument is distinct from the other nineteen (closest pair's feature distance >= 1.5)", closestPair + ": " + num(closest, 2));
     }
+    testLibraryPresets(s);
+    // CPU: six new instruments at once (one in each slot), sixteen held notes and the pedal, dry.
+    {
+        Rig rig(rate);
+        const int held[] { 6, 7, 13, 11, 9, 18 };   // guitar, strings, voice, vibraphone, toy piano, organ
+        const char* ons[] { params::pianoOn, params::synthOn, params::glassOn, params::choirOn, params::boxOn, params::droneOn };
+        for (int i = 0; i < params::instrumentCount; ++i) {
+            rig.set(ons[i], 1.0f);
+            rig.set(params::slotTypeId(i).toRawUTF8(), float(held[i]));
+        }
+        dry(rig);
+        std::vector<Event> e { { rig.time, pedal(true) } };
+        for (int k = 0; k < 16; ++k) e.push_back({ rig.time + 0.01 * k, on(40 + 3 * k, 90) });
+        const auto t0 = std::chrono::steady_clock::now();
+        rig.render(10.0, e);
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        s.metric("six new instruments x 16 held notes + pedal, CPU (one core, dry)", seconds / 10.0 * 100.0, " %");
+        s.check(seconds / 10.0 < 0.6, "six new instruments with sixteen held notes each run well within real time (under 60 % of one core)", num(seconds * 10.0, 1) + " %");
+    }
+}
+
+// The factory presets on the new instruments: at least twenty, each loads the instrument into its slot and plays.
+void testLibraryPresets(Suite& s) {
+    using namespace librarytest;
+    int using_ = 0, silent = 0, wrongSlot = 0;
+    std::set<int> kinds;
+    for (const auto& preset : presets::factory()) {
+        std::vector<std::pair<int, int>> held;   // slot, instrument
+        for (const auto& [id, value] : preset.values)
+            for (int slot = 0; slot < params::instrumentCount; ++slot)
+                if (id == params::slotTypeId(slot) && value >= 6.0f) held.push_back({ slot, int(std::lround(value)) });
+        if (held.empty()) continue;
+        ++using_;
+        Rig rig(rate);
+        rig.p->applyPreset(preset);
+        rig.render(0.1);
+        const auto y = rig.render(4.0, recordedPhrase(rig.time + 0.1));
+        for (const auto& [slot, type] : held) {
+            kinds.insert(type);
+            if (rig.p->playingIn(slot) != type) ++wrongSlot;
+        }
+        bool finite = true;
+        for (float v : y.first) finite = finite && std::isfinite(v);
+        if (!finite || windowDb(y, rate, 0.2, 4.0) < -50.0) {
+            ++silent;
+            std::cout << "  silent preset: " << preset.name << " " << num(windowDb(y, rate, 0.2, 4.0)) << " dB\n";
+        }
+    }
+    s.check(using_ >= 20, "at least twenty factory presets use the new instruments", std::to_string(using_) + " presets");
+    s.check(int(kinds.size()) == 14, "every new instrument has a factory preset", std::to_string(kinds.size()) + " of 14");
+    s.check(wrongSlot == 0 && silent == 0, "each of them loads its instruments into their slots and plays (its place, its Character)",
+            std::to_string(wrongSlot) + " wrong slots, " + std::to_string(silent) + " silent");
 }
 
 // The probe (developer aid): each new instrument's phrase level against the piano, and features.
@@ -330,5 +384,79 @@ int probeLibraryClicks(int kind, bool recorded) {
         }
     }
     }
+    return 0;
+}
+
+// The rooms still matter most (the developer's rule since 1b): for each new instrument, its closest pair
+// of places against its strongest control swept end to end (in the hospital), as the environments group
+// measures the originals. Every pair of places must clearly differ; the control comparison is checked on
+// the closest pair of places (enforced where it holds for the originals' measure, see DEVLOG).
+void testLibraryRooms(Suite& s) {
+    s.section("library: the rooms change every new instrument more than its controls");
+    recordingsReady();
+    using namespace librarytest;
+    const char* placeNames[] { "hospital", "mall", "school", "garage", "pool", "hotel", "subway", "supermarket", "office", "impossible room" };
+    int notDistinct = 0, controlWins = 0;
+    double worstRatio = 1e9;
+    std::string worst;
+    for (const auto& c : cases()) {
+        const int which = c.kind + 6;
+        const auto render = [&](int place, const char* control, float normalised) {
+            auto rig = rigIn(place);
+            rig->set(params::ambience, params::minDb);
+            rig->set(params::pianoOn, 0.0f);
+            rig->set(params::synthOn, 1.0f);
+            rig->set(params::slotTypeId(testSlot).toRawUTF8(), float(which));
+            if (control != nullptr) rig->p->parameters.getParameter(control)->setValueNotifyingHost(normalised);
+            rig->render(1.0);
+            return characterOf(rig->render(7.0, standardPhrase(rig->time)), rate);
+        };
+        std::vector<Character> cs;
+        for (int place = 0; place < dsp::placeCount; ++place) cs.push_back(render(place, nullptr, 0.0f));
+        double nearest = 1e9, mean = 0;
+        int pairs = 0;
+        std::string pair;
+        for (int a = 0; a < dsp::placeCount; ++a)
+            for (int b = a + 1; b < dsp::placeCount; ++b) {
+                const double d = characterDistance(cs[std::size_t(a)], cs[std::size_t(b)]);
+                mean += d;
+                ++pairs;
+                if (d < nearest) { nearest = d; pair = std::string(placeNames[a]) + " / " + placeNames[b]; }
+            }
+        mean /= double(pairs);
+        double strongest = 0;
+        std::string control;
+        for (int k = 0; k < params::lib::count; ++k) {
+            const auto id = params::libId(testSlot, params::lib::keys[k]);
+            const double d = characterDistance(render(0, id.toRawUTF8(), 0.0f), render(0, id.toRawUTF8(), 1.0f));
+            if (d > strongest) { strongest = d; control = k == 5 ? dsp::library::info(which).colour : params::lib::names[k]; }
+        }
+        const std::string name = params::libraryNames[which];
+        std::cout << "  [rooms] " << name << ": closest places " << pair << " " << num(nearest, 2) << ", mean " << num(mean, 2) << "; strongest control " << control << " "
+                  << num(strongest, 2) << "\n";
+        if (nearest <= 1.0) ++notDistinct;
+        if (mean <= strongest) ++controlWins;
+        if (mean / std::max(1e-9, strongest) < worstRatio) { worstRatio = mean / std::max(1e-9, strongest); worst = name + ": rooms " + num(mean, 2) + " vs " + control + " " + num(strongest, 2); }
+        s.report(nearest > strongest, name + ": even the closest pair of places changes it more than its strongest control", pair + " " + num(nearest, 2) + " vs " + control + " " + num(strongest, 2));
+    }
+    s.check(notDistinct == 0, "every new instrument sounds different in every pair of places", std::to_string(notDistinct) + " not");
+    s.check(controlWins == 0, "for every new instrument a change of place (on average) changes it more than any of its controls end to end", "closest margin: " + worst);
+}
+
+// Developer aid: every new instrument with each control at 0 and at 1: finite? level?
+int probeExtremes() {
+    using namespace librarytest;
+    recordingsReady();
+    for (const auto& c : cases())
+        for (int k = 0; k < params::lib::count; ++k)
+            for (const float v : { 0.0f, 1.0f }) {
+                auto rig = libraryRig(c.kind);
+                rig->p->parameters.getParameter(params::libId(testSlot, params::lib::keys[k]))->setValueNotifyingHost(v);
+                const auto y = rig->render(7.0, standardPhrase(rig->time + 0.1));
+                bool finite = true;
+                for (float x : y.first) finite = finite && std::isfinite(x);
+                if (!finite || windowDb(y, rate, 0.1, 7.0) < -60.0)
+                    std::cout << params::libraryNames[c.kind + 6] << " " << params::lib::names[k] << "=" << v << ": finite " << finite << " level " << num(windowDb(y, rate, 0.1, 7.0)) << "\n";
+            }
     return 0;
 }

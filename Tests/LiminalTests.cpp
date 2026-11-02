@@ -6,6 +6,8 @@
 //   LiminalTests --render-places f.wav the same phrase in each environment (listening aid)
 //   LiminalTests --render-liminality f.wav  one piano phrase at LIMINALITY 0/40/100 %, dry and in three rooms
 //   LiminalTests --render-recorded f.wav    Milestone 8: phrase + chords on each instrument, dry, three rooms, LIMINALITY 0/50/100 %
+//   LiminalTests --render-library f.flac    the same phrase on all twenty instruments, dry and in three rooms (2026-11-02)
+//   LiminalTests --library-snapshots dir    the icon sheet and the instrument pages for docs/snapshots
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "Export.h"
@@ -1059,6 +1061,7 @@ int renderPlaces(const juce::String& path) {
 #include "ScrollTests.h"
 #include "SessionTests.h"
 #include "IconTests.h"
+#include "LibraryRender.h"
 
 } // namespace
 
@@ -1219,6 +1222,7 @@ int main(int argc, char** argv) {
         else if (arg == "--render-recorded" && i + 1 < argc) return renderRecorded(argv[++i]);
         else if (arg == "--probe-chord") return probeChord();
         else if (arg == "--probe-library") return probeLibrary();
+        else if (arg == "--probe-extremes") return probeExtremes();
         else if (arg == "--probe-library-clicks" && i + 2 < argc) return probeLibraryClicks(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]) != 0);
         else if (arg == "--probe-jump") return probeJump();
         else if (arg == "--probe-clicks" && i + 4 < argc) return probeClicks(argv[i + 1], std::atoi(argv[i + 2]), std::atoi(argv[i + 3]), std::atof(argv[i + 4]));
@@ -1231,6 +1235,7 @@ int main(int argc, char** argv) {
         }
         else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
         else if (arg == "--library-snapshots" && i + 1 < argc) return writeLibrarySnapshots(argv[++i]);
+        else if (arg == "--render-library" && i + 1 < argc) return renderLibrary(argv[++i]);
         else if (arg == "--vhs-snapshots" && i + 1 < argc) return writeVhsSnapshots(argv[++i]);
         else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
             const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(argv[++i]);
@@ -1270,6 +1275,7 @@ int main(int argc, char** argv) {
     }
     if (run("recorded")) testRecorded(s);
     if (run("library")) testLibrary(s);
+    if (run("library-rooms")) testLibraryRooms(s);
     if (run("instruments")) testInstruments(s);
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);

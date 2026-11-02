@@ -76,7 +76,10 @@ void testWorkflow(Suite& s) {
                     && rig.p->parameters.getRawParameterValue(params::droneOn)->load() < 0.5f,
                 "an instrument preset changes the instruments and keeps the place");
         LiminalProcessor p;
-        s.check(p.getNumPrograms() == 21 && p.getProgramName(0) == "Init" && p.getProgramName(1) == "FORGOTTEN CHILDHOOD", "the host sees Init and the twenty scenes as programs");
+        // (2026-11-02: ten scenes on the instrument library appended: the first twenty keep their program numbers.)
+        s.check(p.getNumPrograms() == 31 && p.getProgramName(0) == "Init" && p.getProgramName(1) == "FORGOTTEN CHILDHOOD" && p.getProgramName(20) == "FAMILIAR WALLS"
+                    && p.getProgramName(21) == "LOBBY AT 4 A.M.",
+                "the host sees Init and the thirty scenes as programs (the first twenty keep their numbers)");
         p.setCurrentProgram(2);
         s.check(p.getCurrentProgram() == 2 && p.presetName() == "THE LAST PATIENT" && p.parameters.getRawParameterValue(params::droneOn)->load() > 0.5f, "choosing a host program loads that scene");
         p.setCurrentProgram(0);

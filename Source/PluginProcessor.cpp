@@ -399,6 +399,18 @@ void LiminalProcessor::updateSettings() {
     d.release = droneSettings[5]->load();
     d.attack = droneSettings[6]->load();
     for (auto& slot : slots) slot.kit->drone.setSettings(d);
+    // The library's six controls (2026-11-02), per slot.
+    for (auto& slot : slots) {
+        dsp::Library::Settings l;
+        const auto v = [&](int k) { return slot.libParams[std::size_t(k)]->load(); };
+        l.tone = v(0);
+        l.age = v(1);
+        l.softness = v(2);
+        l.decay = v(3);
+        l.width = v(4);
+        l.colour = v(5);
+        for (auto& lib : slot.kit->library) lib.setSettings(l);
+    }
 }
 
 // On the fixed 64-sample control grid (counted from prepareToPlay, independent of the host's

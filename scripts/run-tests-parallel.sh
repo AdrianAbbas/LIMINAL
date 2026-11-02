@@ -17,7 +17,6 @@ mkdir -p "$logs"
 "$tests" --only characters > "$logs/8-characters.txt" 2>&1 &
 "$tests" --only rules > "$logs/11-rules.txt" 2>&1 &
 "$tests" --only distinct > "$logs/12-distinct.txt" 2>&1 &
-"$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
 # 2026-11-02: the scrolling lists (preset browser) at every window size.
 "$tests" --only scroll > "$logs/19-scroll.txt" 2>&1 &
 # Milestone 8: the instruments on the developer's recordings (stand-ins only without them).
@@ -26,7 +25,10 @@ mkdir -p "$logs"
 "$tests" --only library > "$logs/20-library.txt" 2>&1 &
 "$tests" --only sessions > "$logs/21-sessions.txt" 2>&1 &
 "$tests" --only icons > "$logs/22-icons.txt" 2>&1 &
+"$tests" --only library-rooms > "$logs/23-library-rooms.txt" 2>&1 &
 wait
+# Presets, MIDI, quality, export (it times Eco against Standard: alone, so the other shards do not disturb it).
+"$tests" --only workflow > "$logs/9-workflow.txt" 2>&1
 # The VHS look (its editor checks run in real time), then the editor's CPU in normal playing per
 # VHS amount, each alone so their timing is not disturbed.
 "$tests" --only vhs > "$logs/13-vhs.txt" 2>&1

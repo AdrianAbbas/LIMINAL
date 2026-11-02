@@ -2,9 +2,11 @@
 // FACTORY PRESETS (Milestone 6), in four groups plus the player's own (saved as files):
 //   Environments (10)  the place, its first Character, nothing else touched
 //   Characters (30)    the place and one of its Characters, with macros/evolution to suit
-//   Instruments (26)   six foundational (each instrument on its own) + 20 variations; only
-//                      the instruments change, the place stays
-//   Scenes (20)        everything: instruments, effects, place, Character, macros
+//   Instruments (44)   six foundational (each instrument on its own) + 20 variations, then the
+//                      fourteen new instruments of the library (2026-11-02) + 4 variations;
+//                      only the instruments change, the place stays
+//   Scenes (30)        everything: instruments, effects, place, Character, macros (the last ten
+//                      on the library's instruments)
 // Values are real parameter values (dB, seconds, %/100, indices), by parameter ID.
 #include <juce_core/juce_core.h>
 #include <utility>
@@ -18,7 +20,7 @@ inline const char* categoryNames[] { "ENVIRONMENTS", "CHARACTERS", "INSTRUMENTS"
 struct Preset {
     juce::String name;
     Category category;
-    int instrument = -1;   // instrument presets: which one (its controls are reset first)
+    int instrument = -1;   // instrument presets: which slot (its controls, and what it holds, are reset first)
     juce::String description;
     std::vector<std::pair<juce::String, float>> values;
 };
