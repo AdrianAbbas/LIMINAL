@@ -1055,6 +1055,8 @@ int renderPlaces(const juce::String& path) {
 #include "FrameTests.h"
 #include "VhsTests.h"
 #include "ConvolverTests.h"
+#include "ScrollTests.h"
+#include "SessionTests.h"
 
 } // namespace
 
@@ -1217,6 +1219,7 @@ int main(int argc, char** argv) {
         else if (arg == "--probe-jump") return probeJump();
         else if (arg == "--probe-clicks" && i + 4 < argc) return probeClicks(argv[i + 1], std::atoi(argv[i + 2]), std::atoi(argv[i + 3]), std::atof(argv[i + 4]));
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
+        else if (arg == "--write-session-fixtures" && i + 1 < argc) return writeSessionFixtures(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
             const auto cwd = juce::File::getCurrentWorkingDirectory();
@@ -1282,6 +1285,8 @@ int main(int argc, char** argv) {
     if (run("convolver")) testConvolver(s);
     if (run("captures")) testCaptures(s);
     if (run("liminality")) testLiminality(s);
+    if (run("scroll")) testScroll(s);
+    if (run("sessions")) testSessions(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

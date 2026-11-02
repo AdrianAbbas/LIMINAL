@@ -18,6 +18,8 @@ mkdir -p "$logs"
 "$tests" --only rules > "$logs/11-rules.txt" 2>&1 &
 "$tests" --only distinct > "$logs/12-distinct.txt" 2>&1 &
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1 &
+# 2026-11-02: the scrolling lists (preset browser) at every window size.
+"$tests" --only scroll > "$logs/19-scroll.txt" 2>&1 &
 # Milestone 8: the instruments on the developer's recordings (stand-ins only without them).
 "$tests" --only recorded > "$logs/18-recorded.txt" 2>&1 &
 wait

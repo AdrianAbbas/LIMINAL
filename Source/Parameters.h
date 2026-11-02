@@ -168,6 +168,8 @@ inline constexpr const char* synthBlend = "synth_blend";
 inline const char* synthPatchNames[] { "Analog", "Soft Pad", "Pulse", "Square", "Cyberpunk", "Static Bass" };
 inline juce::String limId(int instrument, const char* control) { return juce::String(instrumentKeys[instrument]) + "_lim_" + control; }
 inline juce::String midiId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_" + name; }
+// The instrument library (2026-11-02): which of the twenty instruments a slot holds ("<slot>_type").
+inline juce::String slotTypeId(int slot) { return juce::String(instrumentKeys[slot]) + "_type"; }
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }
 
 inline constexpr float minDb = -60.0f; // the bottom of every level: silence

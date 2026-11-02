@@ -14,6 +14,7 @@
 #include "UI/Vhs.h"
 #include "UI/PhotoScene.h"
 #include "UI/SceneArt.h"
+#include "UI/ScrollList.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <array>
@@ -290,21 +291,29 @@ public:
     void resized() override;
     void mouseMove(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    bool keyPressed(const juce::KeyPress&) override;
     void showCategory(int category);
+    int shownCategory() const { return category; }
     void load(int row);              // as a click on that row (tests)
     int rows() const;
     bool poll();                     // export progress; true if something changed
     std::function<void()> onLoad;
+    // The list's scrolling (2026-11-02: wheel / trackpad, the bar, keys; see UI/ScrollList.h).
+    const ui::ScrollList& list() const { return scroller; }
+    int rowAt(juce::Point<int> p) const { return scroller.rowAt(p); }   // (tests: what a click there loads)
 
 private:
-    juce::Rectangle<int> rowArea(int visibleRow) const;
+    juce::Rectangle<int> listArea() const { return { 16, 60, getWidth() - 32, visibleRows * 22 }; }
+    ui::ScrollList scroller;
     juce::String rowName(int row) const;
     juce::String rowDescription(int row) const;
     void startExport();
     LiminalProcessor& processor;
-    int category = 3, scroll = 0, hover = -1;
+    int category = 3, hover = -1;   // hover: the row under the mouse (-1: none)
     juce::Array<juce::File> userFiles;
     std::array<juce::TextButton, 5> tabs;
     juce::TextEditor nameField;

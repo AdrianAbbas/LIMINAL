@@ -76,6 +76,27 @@ the checklist below.
   - [x] 8.3 Empty Choir (voice sweeps + falsetto, stacks as a distant ensemble, the falsetto ooh ghost, G2 hum under the lowest note), Lost Music Box (kalimba + piano top, mechanism), Faded Synth (patch choice + analog blend), Hollow Drone (voice drones, violin, pad, static bass); Glass Memories kept synthesised; stand-ins level-matched; editor controls — push `[skip ci]`
   - [x] 8.4 Tests (`recorded` group: in tune with cents report, velocity layers, clicks at loops/note-offs/handovers, levels; older groups green), listening render `--render-recorded`, DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 
+- [ ] **Instrument library: 20 instruments in six slots, preset scrolling, icons** (2026-11-02, evening; section at the end). Resume from the first unticked line:
+  - [x] Part 1 — preset browser scrolling fixed (`UI/ScrollList.h`: pixel offset, wheel deltas (a zero delta never moves it), draggable bar, keys); every other scrolling list checked (only the presets scrolled; the new instrument picker uses the same list); test group `scroll`; fixture of old sessions written by the pre-library build (`Tests/fixtures/sessions-v2.xml`) — push `[skip ci]`
+  - [ ] Part 2 — the library: `<slot>_type` (20 choices, default = the slot's own instrument) + six generic sound controls per slot; `DSP/Library` (the fourteen new instruments, recordings + synthesised stand-ins); sample-prep sets for the guitar and the pizzicato; processor routing (each slot plays any instrument, swaps without clicks); group `sessions` (old sessions unchanged) — push `[skip ci]`
+  - [ ] Part 3 — the editor: an instrument picker per slot, controls follow the loaded instrument; twenty line icons (shelf, picker, tabs); icon snapshots in `docs/snapshots/` — push `[skip ci]`
+  - [ ] Part 4 — at least 20 factory presets on the new instruments; group `library` (in tune, no clicks, level-matched, distinct); listening render `--render-library`; DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+  - Instruments (one line each; ticked when it plays from MIDI in tune, click-free, level-matched and distinct, recordings and stand-in):
+    - [ ] Old Guitar
+    - [ ] Faded Strings
+    - [ ] Hallway Pizzicato
+    - [ ] Toy Piano
+    - [ ] Lounge E-Piano
+    - [ ] Elevator Vibraphone
+    - [ ] Mall Chimes
+    - [ ] Solo Voice
+    - [ ] Hummed Memory
+    - [ ] Cassette Strings
+    - [ ] Arcade Lead
+    - [ ] Basement Bass
+    - [ ] Warped Organ
+    - [ ] Bowed Glass
+
 **Overnight plan (2026-10-30, developer asleep):** order 2b → 3 → 5 → 6 → 4, without stopping
 between milestones. Push each part with `[skip ci]`, each whole milestone without. Backup wake-ups
 at 7:00, 10:00, 13:00 Toronto time: resume from the first unticked item above.

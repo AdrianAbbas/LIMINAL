@@ -1231,6 +1231,7 @@ PresetDrawer::PresetDrawer(LiminalProcessor& p) : processor(p) {
     exportButton.setTooltip("Render the place's own sounds (no instruments) to a WAV file, with the same engine, offline");
     exportButton.onClick = [this] { startExport(); };
     addAndMakeVisible(exportButton);
+    setWantsKeyboardFocus(true);   // the list's keys (arrows, page up / down, home / end) once it is clicked
     showCategory(3);
 }
 
@@ -1248,9 +1249,10 @@ juce::String PresetDrawer::rowDescription(int row) const {
 
 void PresetDrawer::showCategory(int c) {
     category = std::clamp(c, 0, 4);
-    scroll = 0;
     hover = -1;
     if (category == 4) userFiles = processor.userPresets();
+    scroller.setGeometry(listArea(), 22, rows());
+    scroller.restart(rows());   // a new list starts at its top (the only thing that ever moves it back)
     for (int i = 0; i < 5; ++i) tabs[std::size_t(i)].setToggleState(i == category, juce::dontSendNotification);
     nameField.setVisible(category == 4);
     save.setVisible(category == 4);
@@ -1265,8 +1267,6 @@ void PresetDrawer::load(int row) {
     repaint();
 }
 
-juce::Rectangle<int> PresetDrawer::rowArea(int visibleRow) const { return { 16, 60 + visibleRow * 22, getWidth() - 32, 21 }; }
-
 void PresetDrawer::paint(juce::Graphics& g) {
     const auto area = getLocalBounds().toFloat();
     g.setColour(juce::Colour(0x5507100f));
@@ -1277,32 +1277,31 @@ void PresetDrawer::paint(juce::Graphics& g) {
     g.setColour(ink.withAlpha(0.45f));
     g.drawText("PRESETS  -  NOW: " + processor.presetName().toUpperCase(), area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
     const int total = rows();
-    for (int i = 0; i < visibleRows && scroll + i < total; ++i) {
-        const auto r = rowArea(i).toFloat();
-        const int row = scroll + i;
-        const bool current = rowName(row).equalsIgnoreCase(processor.presetName());
-        if (current || hover == i) {
-            g.setColour(ink.withAlpha(current ? 0.14f : 0.07f));
-            g.fillRoundedRectangle(r, 3.0f);
+    {
+        juce::Graphics::ScopedSaveState clip(g);
+        g.reduceClipRegion(scroller.viewArea());   // a row half scrolled out is cut at the list's edge
+        for (int row = scroller.firstVisible(); row <= scroller.lastVisible() && row < total; ++row) {
+            const auto r = scroller.rowBounds(row).toFloat();
+            const bool current = rowName(row).equalsIgnoreCase(processor.presetName());
+            if (current || hover == row) {
+                g.setColour(ink.withAlpha(current ? 0.14f : 0.07f));
+                g.fillRoundedRectangle(r, 3.0f);
+            }
+            g.setColour(ink.withAlpha(current ? 1.0f : hover == row ? 0.9f : 0.72f));
+            g.setFont(font(10.5f, current));
+            g.drawText(rowName(row), r.reduced(10, 0), juce::Justification::centredLeft);
         }
-        g.setColour(ink.withAlpha(current ? 1.0f : hover == i ? 0.9f : 0.72f));
-        g.setFont(font(10.5f, current));
-        g.drawText(rowName(row), r.reduced(10, 0), juce::Justification::centredLeft);
     }
     if (total == 0) {
         g.setColour(ink.withAlpha(0.45f));
         g.setFont(font(10.0f));
-        g.drawText("NO PRESETS OF YOUR OWN YET - NAME ONE BELOW AND SAVE", rowArea(0), juce::Justification::centredLeft);
+        g.drawText("NO PRESETS OF YOUR OWN YET - NAME ONE BELOW AND SAVE", listArea().withHeight(21), juce::Justification::centredLeft);
     }
-    if (total > visibleRows) {   // a thin scroll indicator
-        const float h = float(visibleRows * 22), y0 = 60.0f + h * float(scroll) / float(total), len = h * float(visibleRows) / float(total);
-        g.setColour(ink.withAlpha(0.35f));
-        g.fillRect(area.getRight() - 9.0f, y0, 2.0f, len);
-    }
-    if (hover >= 0 && scroll + hover < total) {
+    scroller.paintBar(g, ink);   // drag it, click its track, or use the wheel / arrow keys
+    if (hover >= 0 && hover < total) {
         g.setColour(ink.withAlpha(0.55f));
         g.setFont(font(9.0f));
-        g.drawFittedText(rowDescription(scroll + hover).toUpperCase(), rowArea(visibleRows).withHeight(14).translated(0, -4), juce::Justification::centredLeft, 1, 0.8f);
+        g.drawFittedText(rowDescription(hover).toUpperCase(), juce::Rectangle<int>(16, listArea().getBottom() - 4, getWidth() - 32, 14), juce::Justification::centredLeft, 1, 0.8f);
     }
     g.setColour(ink.withAlpha(0.12f));
     g.fillRect(16, quality[0].getY() - 22, getWidth() - 32, 1);
@@ -1323,7 +1322,8 @@ void PresetDrawer::resized() {
     auto tabRow = area.removeFromTop(24);
     const int widths[] { 58, 92, 100, 62, 0 };   // by the length of each word
     for (int i = 0; i < 5; ++i) tabs[std::size_t(i)].setBounds(i < 4 ? tabRow.removeFromLeft(widths[i]) : tabRow);
-    const int listBottom = rowArea(visibleRows - 1).getBottom() + 18;
+    scroller.setGeometry(listArea(), 22, rows());   // (the offset stays where it was, kept in range)
+    const int listBottom = listArea().getBottom() - 1 + 18;
     auto user = juce::Rectangle<int>(16, listBottom, getWidth() - 32, 24);
     save.setBounds(user.removeFromRight(70));
     nameField.setBounds(user.withTrimmedRight(8));
@@ -1340,10 +1340,9 @@ void PresetDrawer::resized() {
 }
 
 void PresetDrawer::mouseMove(const juce::MouseEvent& e) {
-    int h = -1;
-    for (int i = 0; i < visibleRows; ++i)
-        if (rowArea(i).contains(e.getPosition()) && scroll + i < rows()) h = i;
-    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    const int h = scroller.rowAt(e.getPosition());
+    const bool onBar = scroller.scrollable() && scroller.barArea().expanded(3, 0).contains(e.getPosition());
+    setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : onBar ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
     if (h != hover) {
         hover = h;
         repaint();
@@ -1355,18 +1354,38 @@ void PresetDrawer::mouseExit(const juce::MouseEvent&) {
     repaint();
 }
 
-void PresetDrawer::mouseUp(const juce::MouseEvent& e) {
-    if (!e.mouseWasClicked()) return;
-    for (int i = 0; i < visibleRows; ++i)
-        if (rowArea(i).contains(e.getPosition())) load(scroll + i);
+void PresetDrawer::mouseDown(const juce::MouseEvent& e) {
+    if (scroller.viewArea().contains(e.getPosition())) grabKeyboardFocus();
+    if (scroller.mouseDown(e.getPosition())) repaint();
 }
 
-void PresetDrawer::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) {
-    const int next = std::clamp(scroll + (wheel.deltaY < 0 ? 2 : -2), 0, std::max(0, rows() - visibleRows));
-    if (next != scroll) {
-        scroll = next;
+void PresetDrawer::mouseDrag(const juce::MouseEvent& e) {
+    if (scroller.mouseDrag(e.getPosition())) {
+        hover = -1;
         repaint();
     }
+}
+
+void PresetDrawer::mouseUp(const juce::MouseEvent& e) {
+    const bool wasDragging = scroller.draggingThumb();
+    scroller.mouseUp();
+    if (wasDragging) { repaint(); return; }
+    if (!e.mouseWasClicked()) return;
+    const int row = scroller.rowAt(e.getPosition());
+    if (row >= 0) load(row);
+}
+
+void PresetDrawer::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) {
+    if (scroller.wheel(wheel)) {
+        hover = scroller.rowAt(e.getPosition());   // the row now under the mouse
+        repaint();
+    }
+}
+
+bool PresetDrawer::keyPressed(const juce::KeyPress& k) {
+    if (!scroller.key(k)) return false;
+    repaint();
+    return true;
 }
 
 void PresetDrawer::startExport() {
