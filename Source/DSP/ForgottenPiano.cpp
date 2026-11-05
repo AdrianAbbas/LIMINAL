@@ -70,6 +70,8 @@ void ForgottenPiano::addEvent(float hz, float q, float seconds, float knock, flo
     const auto g = panGains(pan);
     e.panL = g.l;
     e.panR = g.r;
+    e.onset = 0;
+    e.onsetStep = 1.0f / std::max(1.0f, 0.004f * float(sr));
 }
 
 void ForgottenPiano::start(Voice& v, int note, float velocity) {
@@ -224,7 +226,7 @@ void ForgottenPiano::control(Voice& v) {
     v.wobbleCents = v.wobble.tick(rng, 0.35f, tick) * (0.3f + 2.5f * settings.age) * wander();
     const float ratio = bend * cents(v.wobbleCents + shapeCents(v.shape, tick));
     if (damp != v.damped || std::abs(ratio - v.appliedRatio) > 2.0e-6f) {
-        if (damp && !v.damped && !v.stolen)
+        if (damp && !v.damped && !v.stolen && knocks++ < 2)
             addEvent(380.0f + 200.0f * keyHash(v.note, 8), 4.0f, 0.03f, 0.03f * settings.noise * (1.0f + settings.age),
                      0.004f * settings.noise * (1.0f + settings.age), 3000.0f, 0.0f);
         v.damped = damp;
@@ -238,6 +240,7 @@ void ForgottenPiano::render(float* left, float* right, int n) {
     int done = 0;
     while (done < n) {
         if (clock == 0) {
+            knocks = 0;
             for (auto& v : pool.voices)
                 if (v.active()) control(v);
             for (auto& v : rpool.voices)
@@ -277,8 +280,10 @@ void ForgottenPiano::render(float* left, float* right, int n) {
                 e.amp *= e.decay;
                 e.y2 = e.y1;
                 e.y1 = y;
-                l[i] += y * e.panL;
-                r[i] += y * e.panR;
+                const float heard = y * e.onset * e.onset * (3.0f - 2.0f * e.onset);
+                e.onset = std::min(1.0f, e.onset + e.onsetStep);
+                l[i] += heard * e.panL;
+                r[i] += heard * e.panR;
             }
         }
         // The open strings: driven while the pedal is down, quickly damped when it lifts.
@@ -465,7 +470,7 @@ void ForgottenPiano::controlRecorded(RVoice& v, float tick) {
         // Let go before the handover: the short note goes on (its own recorded damper follows),
         // the long one is not needed.
         if (v.handCountdown > 0) { v.handCountdown = -1; v.longNote.on = false; }
-        if (!v.stolen)
+        if (!v.stolen && knocks++ < 2)
             addEvent(380.0f + 200.0f * keyHash(v.note, 8), 4.0f, 0.03f, 0.012f * settings.noise * (1.0f + settings.age),
                      0.002f * settings.noise * (1.0f + settings.age), 3000.0f, 0.0f);
     } else if (!damp && v.damped) {   // pedal down again while it was being damped

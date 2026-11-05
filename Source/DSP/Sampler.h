@@ -37,7 +37,9 @@ struct Reader {
     float outRate = 48000;
     float tailMix = 0, tailStep = 0;
     int wait = 0;          // samples of silence before it speaks
+    float ramp = 1, rampStep = 0;   // a start mid-recording or after a wait ramps in (4 ms): never a step
     bool on = false, released = false;
+    bool holdLoop = false;   // let go before its sustain: it keeps looping, the instrument's envelope ends it
 
     static float read(const int16_t* d, double p) {
         const auto i = int(p);
@@ -66,6 +68,11 @@ struct Reader {
         outRate = float(sampleRate);
         wait = 0;
         released = false;
+        holdLoop = false;
+        rampStep = 1.0f / std::max(1.0f, 0.004f * outRate);
+        // (only a full-weight start well past the recording's onset: a note's own attack, and a layer that
+        // fades in by its weight, are left exactly as they were)
+        ramp = (pos > double(std::max(2048, z->onset + 2048)) && x >= 0.999f) ? 0.0f : 1.0f;
         return on = true;
     }
     // Pitch: `ratio` multiplies the key's rate (bend, Liminality, drift); `extraSemis` moves it.
@@ -76,10 +83,18 @@ struct Reader {
         xStep = (xTarget - x) / std::max(1.0f, samples);
     }
     // Key up: out of the loop into the recorded release tail (40 ms crossfade) if there is one.
+    // A note let go before it reached its sustain (a staccato note still in its attack) does not jump
+    // to the tail: the tail was recorded at the full sustain level, so a short note bloomed up to
+    // 8 dB louder after its note-off and rang on (2026-11-05: "hangs on random notes" in fast
+    // patterns). It goes on looping instead, and the instrument's release envelope ends it.
     void release() {
         if (!on || released) return;
         released = true;
         const auto& z = *zone;
+        if (z.loops() && pos < double(z.loopStart)) { holdLoop = true; return; }
+        // No recorded tail: it goes on looping too (the samples before the loop's end were blended with
+        // its start when it was prepared, so playing on past the end is a step).
+        if (z.loops() && z.release <= 0) { holdLoop = true; return; }
         if (z.loops() && z.release > 0 && pos < double(z.release)) {
             tailPos = double(z.release);
             tailMix = 0;
@@ -88,20 +103,29 @@ struct Reader {
     }
     float tick() {
         if (!on) return 0.0f;
-        if (wait > 0) { --wait; return 0.0f; }
+        if (wait > 0) {
+            if (--wait == 0) ramp = 0.0f;
+            return 0.0f;
+        }
         const auto& z = *zone;
         float y = read(z.data, pos);
+        if (ramp < 1.0f) { y *= ramp; ramp = std::min(1.0f, ramp + rampStep); }
+        bool moved = false;
         if (tailPos >= 0.0) {
             y = y * (1.0f - tailMix) + read(z.data, tailPos) * tailMix;
             tailPos += double(inc);
             tailMix += tailStep;
-            if (tailMix >= 1.0f || tailPos >= double(z.length - 3)) {
-                pos = tailPos;
+            if (tailMix >= 1.0f || tailPos >= double(z.length - 3)) {   // the tail carries on from where it is
+                pos = tailPos;                                         // (it used to step on a second sample here)
                 tailPos = -1;
+                moved = true;
             }
         }
-        pos += double(inc);
-        if (z.loops() && !released && pos >= double(z.loopEnd)) pos -= double(z.loopEnd - z.loopStart);
+        if (!moved) pos += double(inc);
+        // While the release tail cross-fades in, the loop keeps looping under it (2026-11-05: a released
+        // note's head ran on past the loop's end into the unblended samples: a click after every
+        // pedal-up and note-off that fell near the end of a loop).
+        if (z.loops() && (!released || holdLoop || tailPos >= 0.0) && pos >= double(z.loopEnd)) pos -= double(z.loopEnd - z.loopStart);
         if (xStep != 0.0f) {
             x += xStep;
             if ((xStep > 0.0f && x >= xTarget) || (xStep < 0.0f && x <= xTarget)) { x = xTarget; xStep = 0; }
@@ -112,29 +136,36 @@ struct Reader {
         // The last 1024 samples of a recording fade out (a note trimmed where it fell 50 dB never
         // ends in a step).
         const double rem = double(z.length - 3) - pos;
-        if (rem < 1024.0 && (released || !z.loops())) y *= float(std::max(0.0, rem) * (1.0 / 1024.0));
+        if (rem < 1024.0 && ((released && !holdLoop) || !z.loops())) y *= float(std::max(0.0, rem) * (1.0 / 1024.0));
         return y * gain * w;
     }
     // Moves on `n` samples without reading (cheap; a layer at zero weight keeps its place).
     void skip(int n) {
         if (!on) return;
-        if (wait > 0) { const int w = std::min(wait, n); wait -= w; n -= w; }
+        if (wait > 0) { const int w = std::min(wait, n); wait -= w; n -= w; if (wait == 0) ramp = 0.0f; }
         if (n <= 0) return;
+        ramp = std::min(1.0f, ramp + rampStep * float(n));
         const auto& z = *zone;
-        pos += double(inc) * double(n);
+        bool moved = false;
+        if (tailPos >= 0.0) {   // a release tail cross-fading in moves on too
+            tailPos += double(inc) * double(n);
+            tailMix += tailStep * float(n);
+            if (tailMix >= 1.0f || tailPos >= double(z.length - 3)) { pos = tailPos; tailPos = -1; moved = true; }
+        }
+        if (!moved) pos += double(inc) * double(n);
         if (xStep != 0.0f) {
             x += xStep * float(n);
             if ((xStep > 0.0f && x >= xTarget) || (xStep < 0.0f && x <= xTarget)) { x = xTarget; xStep = 0; }
             w = fadeIn(x);
             if (x <= 0.0f) on = false;
         }
-        if (z.loops() && !released) while (pos >= double(z.loopEnd)) pos -= double(z.loopEnd - z.loopStart);
+        if (z.loops() && (!released || holdLoop || tailPos >= 0.0)) while (pos >= double(z.loopEnd)) pos -= double(z.loopEnd - z.loopStart);
         if (pos >= double(z.length - 3)) on = false;
     }
     // Samples left before the recording ends (at the current rate), or a large number while looping.
     double samplesLeft() const {
         if (!on || zone == nullptr) return 0;
-        if (zone->loops() && !released) return 1.0e9;
+        if (zone->loops() && (!released || holdLoop)) return 1.0e9;
         return (double(zone->length - 3) - pos) / std::max(1.0e-6, double(inc));
     }
 };

@@ -197,11 +197,20 @@ float Liminality::modulators(double t) const {
     return c;
 }
 
-void Liminality::relocate(std::uint64_t clock) {
-    // The pitch is a pure function of the position: it continues from there without a blend (a
-    // blend would depend on where the jump came from, and a replay would drift out of phase).
-    lastClock = clock;
+void Liminality::relocate(std::uint64_t clock, bool sounding) {
+    // The pitch is a pure function of the position: from silence it continues from there without a
+    // blend (a blend would depend on where the jump came from, and a replay would drift out of
+    // phase). While notes still ring (a cycle jump in the middle of a chord) it glides over from
+    // where it was in about 150 ms instead of stepping, and the audio side carries on untouched.
     noise.state = mix(salt(99), std::uint32_t(clock) ^ std::uint32_t(clock >> 32)) | 1u;
+    if (sounding && clockKnown) {
+        const float before = pitch.cents;
+        lastClock = clock;
+        relocateOffset = before - modulators(double(clock) / sr);
+        relocateDecay = float(std::exp(-64.0 / (0.15 * sr)));
+        return;
+    }
+    lastClock = clock;
     dropLeft = 0;          // a dropout in progress ends (ramping back up)
     // Wear's level match starts again from a typical value for its amount (a replay must match)
     wearIn = wearOut = 0;

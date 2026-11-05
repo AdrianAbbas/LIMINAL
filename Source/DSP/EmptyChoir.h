@@ -46,6 +46,7 @@ public:
     void render(float* left, float* right, int n) override;
     void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active() + rpool.active(); }
+    int heldVoices() const override { return pool.held() + rpool.held(); }
     static constexpr float recordedTrimDb = 9.8f;   // level-matched to the stand-in (tests: recorded)
 
 private:

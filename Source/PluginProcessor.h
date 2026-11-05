@@ -53,6 +53,7 @@ public:
     struct Meters {
         std::atomic<float> instrument { 0 }, ambience { 0 }, output { 0 }; // RMS, linear
         std::atomic<int> voices { 0 };
+        std::atomic<int> held { 0 };    // voices a key or the pedal still holds (hung-note tests)
         std::atomic<int> place { 0 };   // the environment being heard
         std::atomic<int> character { 0 };
         std::atomic<float> activity { 0 };   // evolution movement + events (0..1), for the interface
@@ -197,6 +198,8 @@ private:
     std::atomic<float>* warbleOn = nullptr;
     std::atomic<float>* liminalityMacro = nullptr;
     std::uint64_t limClock = 0;   // Liminality's timeline: the host's position while it plays
+    bool hostWasPlaying = false;
+    static constexpr double relocateTolerance = 0.1;   // seconds of disagreement that are only a host's rounding
     void updateLiminality(int place, int character);
     dsp::TapeWarble warble;
     dsp::Place selectedPlace() const;

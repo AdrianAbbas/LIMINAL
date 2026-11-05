@@ -25,6 +25,7 @@ struct Probe final : dsp::Instrument {
     void allSoundOff() override {}
     void render(float*, float*, int) override {}
     int activeVoices() const override { return 0; }
+    int heldVoices() const override { return 0; }
     // The hook as a voice uses it.
     dsp::VoiceShape take(const dsp::NoteShape& s) { nextShape = s; return takeShape(); }
     float voiceCents(dsp::VoiceShape& v, float tick) const { return shapeCents(v, tick); }

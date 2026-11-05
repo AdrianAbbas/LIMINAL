@@ -26,6 +26,8 @@ mkdir -p "$logs"
 "$tests" --only sessions > "$logs/21-sessions.txt" 2>&1 &
 "$tests" --only icons > "$logs/22-icons.txt" 2>&1 &
 "$tests" --only library-rooms > "$logs/23-library-rooms.txt" 2>&1 &
+# 2026-11-05: hung notes (thousands of fast notes on every instrument, a wavering host timeline).
+"$tests" --only hung > "$logs/24-hung.txt" 2>&1 &
 wait
 # Presets, MIDI, quality, export (it times Eco against Standard: alone, so the other shards do not disturb it).
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1

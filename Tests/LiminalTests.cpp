@@ -1062,6 +1062,8 @@ int renderPlaces(const juce::String& path) {
 #include "SessionTests.h"
 #include "IconTests.h"
 #include "LibraryRender.h"
+#include "PieceRender.h"
+#include "StressTests.h"
 
 } // namespace
 
@@ -1236,6 +1238,9 @@ int main(int argc, char** argv) {
         else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
         else if (arg == "--library-snapshots" && i + 1 < argc) return writeLibrarySnapshots(argv[++i]);
         else if (arg == "--render-library" && i + 1 < argc) return renderLibrary(argv[++i]);
+        else if (arg == "--render-piece" && i + 1 < argc) return renderPiece(argv[++i]);
+        else if (arg == "--probe-click-pattern" && i + 1 < argc) return probeClickPattern(std::atoi(argv[++i]));
+        else if (arg == "--probe-cpu-pattern" && i + 1 < argc) return probeCpuPattern(std::atoi(argv[++i]));
         else if (arg == "--vhs-snapshots" && i + 1 < argc) return writeVhsSnapshots(argv[++i]);
         else if (arg == "--scenes" && i + 1 < argc) {   // every place and Character's artwork as PNG (1x)
             const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(argv[++i]);
@@ -1300,6 +1305,8 @@ int main(int argc, char** argv) {
     if (run("scroll")) testScroll(s);
     if (run("sessions")) testSessions(s);
     if (run("icons")) testIcons(s);
+    if (run("hung")) testHungNotes(s);
+    if (run("hung") || run("timeline")) testWaveringTimeline(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;
 }

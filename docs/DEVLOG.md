@@ -69,6 +69,11 @@ the checklist below.
 
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
+- [ ] **Patch notes 2026-11-05 (GarageBand test with the four-part piece and the test suite)** (section at the end). Resume from the first unticked line:
+  - [x] Part 1 — hung / glitching notes: found and fixed (see the section); stress test group `hung` on all twenty instruments (thousands of fast notes, overlaps, note-offs inside Timing's delay, pedal, a GarageBand-like pattern with rests, a host timeline that wavers by a sample); baseline before/after logged — push `[skip ci]`
+  - [ ] Part 2 — the voices remembered, not recorded: a built-in treatment (distance, tape/age, blur, de-ess/de-breath, slow drift) always part of Empty Choir, Solo Voice and the Hollow Drone's voice layer, more room in their defaults; Solo Voice further (a corridor / a wall), smoother legato, tuning and loops checked; Faded Strings and Hallway Pizzicato softer and darker (de-click); Arcade Lead heard across a closed mall; Cassette Strings +2.5 dB; measurements before/after — push `[skip ci]`
+  - [ ] Part 3 — Hummed Memory removed; DISTANT RADIO in its slot (old sessions load it), icon, presets; in tune, level-matched, distinct — push `[skip ci]`
+  - [ ] Part 4 — listening render of the four-part piece before/after (`--render-piece`, CI test-logs); DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`

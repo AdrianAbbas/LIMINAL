@@ -84,6 +84,9 @@ public:
     virtual void allSoundOff() = 0;               // short fade of everything
     virtual void render(float* left, float* right, int n) = 0;
     virtual int activeVoices() const = 0;
+    // Voices whose key (or the pedal) still holds them: 0 once every key is up and the pedal is up
+    // (the hung-note tests).
+    virtual int heldVoices() const = 0;
     // Quality (Milestone 6): 0 Eco, 1 Standard, 2 High. Affects new notes only (never a
     // sounding one), so changing it is silent.
     void setQuality(int q) { quality = std::clamp(q, 0, 2); }
@@ -162,7 +165,7 @@ struct VoicePool {
     std::uint64_t counter = 0;
 
     // Finds the slot for a new note. A ringing copy of the same note fades over
-    // `restrikeSeconds`; over `polyphony` sounding notes the quietest fades in 5 ms.
+    // `restrikeSeconds`; over `polyphony` sounding notes the quietest fades in 10 ms.
     template <class Level>
     V& allocate(int note, int polyphony, double sr, double restrikeSeconds, Level level) {
         int sounding = 0;
@@ -175,7 +178,7 @@ struct VoicePool {
             V* quietest = nullptr;
             for (auto& v : voices)
                 if (v.active() && !v.stolen && (quietest == nullptr || level(v) < level(*quietest))) quietest = &v;
-            if (quietest != nullptr) quietest->steal(0.005, sr);
+            if (quietest != nullptr) quietest->steal(0.010, sr);   // (10 ms: a 5 ms fade of a loud low note was itself a click, 2026-11-05)
         }
         for (auto& v : voices)
             if (!v.active()) return v;
@@ -215,6 +218,7 @@ struct VoicePool {
             if (v.active()) v.steal(0.01, sr);
     }
     int active() const { return int(std::count_if(voices.begin(), voices.end(), [](const V& v) { return v.active(); })); }
+    int held() const { return int(std::count_if(voices.begin(), voices.end(), [](const V& v) { return v.active() && !v.stolen && !v.releasing(); })); }
 };
 
 // A bank of exponentially decaying sinusoids, each a complex phasor rotated (and shrunk)

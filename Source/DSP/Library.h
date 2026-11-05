@@ -67,14 +67,16 @@ public:
     void allNotesOff() override { pool.allNotesOff(); }
     void allSoundOff() override { pool.allSoundOff(sr); }
     void render(float* left, float* right, int n) override;
-    void reseed(std::uint32_t s) override {
+    void reseed(std::uint32_t s) override {   // (while notes sound, only the randomness: see FadedSynth)
         rng.state = s | 1u;
+        if (activeVoices() > 0) return;
         wow = {};
         wowCents = 0;
         lfoPhase = float(s >> 8) * (1.0f / 16777216.0f);
         pool.counter = 0;
     }
     int activeVoices() const override { return pool.active(); }
+    int heldVoices() const override { return pool.held(); }
     // Whether a note now would play recordings (false: the stand-in).
     bool recordedNow() const;
     // Level trims (dB): the recordings matched to the stand-in, the stand-ins to the piano (tests: library).

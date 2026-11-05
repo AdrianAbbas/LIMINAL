@@ -50,6 +50,7 @@ public:
     void render(float* left, float* right, int n) override;
     void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active() + rpool.active(); }
+    int heldVoices() const override { return pool.held() + rpool.held(); }
     static constexpr float recordedTrimDb = -2.4f;   // level-matched to the stand-in (tests: recorded)
 
 private:
@@ -67,6 +68,7 @@ private:
     struct Event {   // a short mechanical sound: noise through a resonator
         Random noise;
         float amp = 0, decay = 0, b1 = 0, b2 = 0, y1 = 0, y2 = 0, lp = 0, lpCoef = 1, panL = 0.7f, panR = 0.7f;
+        float onset = 1, onsetStep = 0;   // heard in over 4 ms: a thump, never a step (2026-11-05)
     };
     void start(Voice&, int note, float velocity);
     void control(Voice&);
@@ -107,6 +109,7 @@ private:
 
     std::array<Event, 16> events {};
     int nextEvent = 0;
+    int knocks = 0;   // dampers that knocked this control period (a pedal lift is one thump, not one per key)
 
     // Open strings ringing in sympathy while the pedal is down.
     struct Comb { std::vector<float> line; int pos = 0; float lp = 0, feedback = 0.99f; };

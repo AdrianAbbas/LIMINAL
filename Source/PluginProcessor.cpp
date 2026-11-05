@@ -277,6 +277,7 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     environments.setAmount(environmentAmount->load());
     samplePosition = 0;
     limClock = 0;
+    hostWasPlaying = false;
     lastSeed = evolutionSeed->load();
     captures.build(sampleRate);
     environments.setCaptures(&captures);
@@ -591,17 +592,26 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
             if (const auto bpm = position->getBpm()) hostBpm = std::clamp(*bpm, 20.0, 400.0);
             // Liminality's clock follows the song while it plays, so a replay or a bounce of the same
             // passage has the same detuned notes, drift and wow.
-            if (position->getIsPlaying())
+            // Only a real jump of the timeline is a relocation (a cycle, a click in the ruler, play
+            // from elsewhere): hosts report their position with rounding (GarageBand derives it from
+            // the beat position), and a sample or two of disagreement, block after block, used to
+            // reseed every instrument and Liminality mid-note - clicks, a jumping chorus, notes that
+            // seemed to hang (2026-11-05). Within the tolerance the stage keeps its own count.
+            const bool playing = position->getIsPlaying();
+            if (playing)
                 if (const auto at = position->getTimeInSamples()) {
                     const auto host = std::uint64_t(std::max<std::int64_t>(0, *at));
-                    if (host != limClock) {
+                    const auto gap = host > limClock ? host - limClock : limClock - host;
+                    const auto tolerance = std::uint64_t(std::max(256.0, relocateTolerance * preparedRate));
+                    if (gap > (hostWasPlaying ? tolerance : 0)) {
                         limClock = host;
                         for (std::size_t i = 0; i < slots.size(); ++i) {
-                            slots[i].lim.relocate(limClock);
+                            slots[i].lim.relocate(limClock, slots[i].running && slots[i].instrument->activeVoices() > 0);
                             slots[i].instrument->reseed(std::uint32_t(limClock * 0x9E3779B97F4A7C15ull >> 32) ^ std::uint32_t(i * 0x85EBCA77u));
                         }
                     }
                 }
+            hostWasPlaying = playing;
         }
     // The macros (Milestone 5). Presence brings the instruments forward (and the place's
     // sounds back); Scale, Activity and Unreal act on the place, each in its own way.
@@ -674,6 +684,10 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     for (const auto& slot : slots)
         if (slot.running) voices += slot.instrument->activeVoices() + slot.fadingVoices();
     meters.voices.store(voices, std::memory_order_relaxed);
+    int held = 0;
+    for (const auto& slot : slots)
+        if (slot.running) held += slot.instrument->heldVoices();
+    meters.held.store(held, std::memory_order_relaxed);
     meters.place.store(int(environments.place()), std::memory_order_relaxed);
     meters.character.store(environments.current().characterIndex(), std::memory_order_relaxed);
     meters.events.store(environments.current().ambienceEvents(), std::memory_order_relaxed);

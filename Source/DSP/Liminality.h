@@ -69,7 +69,9 @@ public:
     void setSeed(std::uint32_t s) { seed = s; }
     // The timeline jumped (the host relocated): the modulators continue from the new position
     // (they are pure functions of it) and the audio side's noise is reseeded from it.
-    void relocate(std::uint64_t clock);
+    // `sounding`: notes still ring; then nothing jumps (the drift glides over from where it was, the
+    // ghost's heads and Wear's level match carry on): only the randomness is reseeded.
+    void relocate(std::uint64_t clock, bool sounding = false);
 
     // Every control tick (64 samples, on the processor's grid). `clock`: the stage's timeline
     // position. Hands the instrument its pitch (Drift, Wow & Flutter, Warble depth, wander gate).

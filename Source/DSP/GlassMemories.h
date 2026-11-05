@@ -41,6 +41,7 @@ public:
     void render(float* left, float* right, int n) override;
     void reseed(std::uint32_t s) override { rng.state = s | 1u; }
     int activeVoices() const override { return pool.active(); }
+    int heldVoices() const override { return pool.held(); }
 
 private:
     static constexpr int controlPeriod = 128;

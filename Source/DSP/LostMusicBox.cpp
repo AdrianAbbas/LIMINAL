@@ -155,6 +155,7 @@ void LostMusicBox::render(float* left, float* right, int n) {
             if (!v.active()) continue;
             for (int i = 0; i < m; ++i) {
                 if (v.delay > 0) { --v.delay; continue; }
+                if (v.ringLeft > 0 && --v.ringLeft == 0) v.decayMul = std::min(v.decayMul, t60(1.2, sr));
                 if (v.topCountdown >= 0 && v.topCountdown-- == 0) v.top.fadeTo(0.0f, 0.3f * float(sr));
                 // The thumb's hard hit rounded off (a soft limit on the first transient only:
                 // the ring is far below it), as a pin plucks a tine.
@@ -177,7 +178,7 @@ void LostMusicBox::render(float* left, float* right, int n) {
                 // The recording is about to end: fade out over its last 50 ms (never a step).
                 const double left = std::max({ v.a.samplesLeft(), v.b.samplesLeft(), v.top.samplesLeft() });
                 const bool silent = (!v.a.on && !v.b.on && !v.top.on) || left < 0.06 * sr;
-                if (!v.stolen && v.delay == 0 && (silent || v.level < 2.0e-5f)) v.steal(0.05, sr);
+                if (!v.stolen && v.delay == 0 && (silent || v.level < 2.0e-5f || v.env * v.level < 1.0e-5f)) v.steal(0.05, sr);
                 if (v.stolen && v.fade <= 0.0f) v.note = -1;
             }
         }
@@ -274,6 +275,9 @@ bool LostMusicBox::startRecorded(int note, float velocity) {
     if (dull) extra = extra > 0.0f ? std::min(extra, 0.8f * pitchFactor) : 0.8f * pitchFactor;
     v.decayMul = extra > 0.0f ? t60(extra, sr) : 1.0f;
     v.env = 1.0f;
+    // However long the recording: a few seconds of ring (longer with Decay, longer down low), then
+    // it dies away over a second (the recordings' last seconds are a noise floor, not a tooth).
+    v.ringLeft = int((2.5f + 5.0f * st.decay) * std::clamp(pitchFactor, 0.7f, 1.3f) * float(sr));
     const float bright = std::clamp(st.brightness * 0.8f + velocity * 0.3f + 0.3f * v.shape.tone, 0.0f, 1.0f);
     v.tone.clear();
     v.tone.set(std::clamp(2.0f * f1, 900.0f, 5000.0f), 0.45f + 1.1f * bright, sr);

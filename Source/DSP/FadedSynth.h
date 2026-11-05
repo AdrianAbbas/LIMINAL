@@ -52,15 +52,19 @@ public:
     void render(float* left, float* right, int n) override;
     // The host jumped: the shared wow, the chorus sweep and the voice count (which side a note
     // pans to) start again from the new position, so a replay matches.
+    // While notes sound only the randomness is reseeded: the wow and the chorus sweep carry on (a
+    // jump in either is a click or a pitch step in a held note).
     void reseed(std::uint32_t s) override {
         rng.state = s | 1u;
+        if (activeVoices() > 0) return;
         wow = {};
         wowCents = 0;
         chorusPhase = float(s >> 8) * (1.0f / 16777216.0f);
-        pool.counter = 0;
+        pool.counter = rpool.counter = 0;
         lastHz = 0;
     }
     int activeVoices() const override { return pool.active() + rpool.active(); }
+    int heldVoices() const override { return pool.held() + rpool.held(); }
     static constexpr float recordedTrimDb = 13.2f;   // level-matched to the stand-in (tests: recorded)
 
 private:

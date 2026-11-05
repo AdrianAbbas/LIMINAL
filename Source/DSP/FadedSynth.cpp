@@ -29,6 +29,9 @@ void FadedSynth::reset() {
     for (auto& v : pool.voices) v = Voice {};
     pool.pedal = false;
     pool.counter = 0;
+    for (auto& v : rpool.voices) v = RVoice {};   // (the recorded patches' voices too: a reset never leaves one sounding)
+    rpool.pedal = false;
+    rpool.counter = 0;
     rng = {};
     rng.state = 0x51ED270Bu;
     bend = 1.0f;

@@ -41,14 +41,16 @@ public:
     void allSoundOff() override { pool.allSoundOff(sr); rpool.allSoundOff(sr); }
     void render(float* left, float* right, int n) override;
     // The host jumped: the spring motor and the clockwork start again from the new position.
-    void reseed(std::uint32_t s) override {
+    void reseed(std::uint32_t s) override {   // (while notes sound, only the randomness: see FadedSynth)
         rng.state = s | 1u;
         tickRng.state = (s * 2654435761u) | 1u;
+        if (activeVoices() > 0) return;
         motor = {};
         flutter = {};
         tickCountdown = 0;
     }
     int activeVoices() const override { return pool.active() + rpool.active(); }
+    int heldVoices() const override { return pool.held() + rpool.held(); }
     static constexpr float transientCeiling = 0.22f;   // a recorded tine's peak, at most
     static constexpr float recordedTrimDb = -0.8f;   // level-matched to the stand-in (tests: recorded)
 
@@ -70,6 +72,7 @@ private:
         float panL = 0.7f, panR = 0.7f, env = 1, decayMul = 1, cents = 0, level = 0;
         float click = 0, clickDecay = 0;
         int delay = 0;             // the worn mechanism plays it late
+        int ringLeft = 0;          // a tooth rings a few seconds at most, then dies away (no voice lingers)
         int topCountdown = -1;     // the piano note's fade before its recorded damper
         Svf clickTone;
         Random noise;
