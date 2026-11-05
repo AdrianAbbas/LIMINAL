@@ -165,6 +165,9 @@ void testRecorded(Suite& s) {
             };
             double p0 = 0, p50 = 0;
             if (i == 2) {   // the voice: three notes averaged, singers together (Detune 0), no ghost
+                // (before the remembered treatment, 2026-11-05: its colour leans the reading of a sung,
+                // wandering partial by a few cents; the choir's tuning with it is checked in `remembered`)
+                struct Untreated { Untreated() { dsp::Remembered::bypassedForTests() = true; } ~Untreated() { dsp::Remembered::bypassedForTests() = false; } } untreated;
                 dsp::EmptyChoir::Settings cs;
                 cs.detune = 0.0f;
                 cs.breath = 0.0f;

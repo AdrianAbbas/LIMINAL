@@ -86,7 +86,7 @@ float pulseWave(float p, float w, float inc) {
 float Library::trimDb(int kind, bool recorded) {
     //                         guitar strings pizz  toy    ep     vib    chimes voice  radio  tape   arcade bass   organ  glass
     // (2026-11-05: Cassette Strings +2.5 dB, as asked; it stays within the 3 dB of the piano.)
-    static const float standIn[] { 8.6f, -7.7f, 16.1f, 2.1f, -10.8f, -8.4f, -8.0f, -7.5f, -6.2f, -6.6f, -15.6f, -12.3f, -18.1f, -14.6f };
+    static const float standIn[] { 8.6f, -7.7f, 16.1f, 2.1f, -10.8f, -8.4f, -8.0f, -8.2f, -6.2f, -6.6f, -15.6f, -12.3f, -18.1f, -14.6f };
     static const float rec[] { 4.1f, 5.2f, 4.6f, 12.8f, -10.8f, -8.4f, -8.0f, 2.0f, 5.4f, 4.3f, 3.5f, 8.0f, -18.1f, -14.6f };
     const int k = std::clamp(kind, 0, kinds - 1);
     return recorded ? rec[k] : standIn[k];
@@ -155,20 +155,28 @@ void Library::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
     // Solo Voice is one singer (2026-11-05: smoother legato): a note sung while another is still
-    // held (or still clearly ringing) takes over from it: the last note fades over 180 ms while the new
-    // one glides in from its pitch (120 ms) and swells in over 100 ms.
+    // held (or still clearly ringing) takes over from it: the last note fades over 300 ms while the new
+    // one, from its sustain (no second sung onset), glides in from its pitch (120 ms) and swells in over 100 ms.
     int legatoFrom = -1;
     if (kindNow == soloVoice)
         for (auto& o : pool.voices)
             if (o.active() && !o.stolen && o.note != note && (!o.releasing() || o.amp > 0.35f)) {
                 if (legatoFrom < 0 || !o.releasing()) legatoFrom = o.note;
-                o.steal(0.18, sr);
+                o.steal(0.3, sr);
             }
     auto& v = pool.allocate(note, voices(polyphony), sr, 0.02, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
     v.shape = takeShape();
     startVoice(v, note, std::clamp(velocity, 0.0f, 1.0f));
     if (legatoFrom >= 0) {
+        // Sung on from the last note: no fresh onset (the take's own sung attack): its sustain from the start.
+        if (v.engine == Engine::recorded)
+            for (auto& r : v.r)
+                if (r.on && r.zone != nullptr && r.zone->loops() && r.wait == 0) {
+                    const float g = r.gain;
+                    r.start(r.zone, r.base * r.outRate, double(r.outRate), r.semis + r.zone->root, double(r.zone->loopStart));
+                    r.gain = g;
+                }
         v.scoop = std::clamp(100.0f * float(legatoFrom - note), -700.0f, 700.0f);
         v.scoopTime = 0.12f;
         v.attackCoef = float(1.0 - std::pow(0.3 / 1.3, 1.0 / (0.1 * sr)));

@@ -2418,3 +2418,16 @@ reproduced and fixed on their own.
    radio in another room; STATION from clear to more off-station.
 6. **Cassette Strings** a little louder; **Arcade Lead** muffled, wobbly, distant, still the game lead.
 7. Compare `piece-before.flac` / `piece-after.flac` (Linux test-logs artifact, cue sheets beside them).
+
+### CI fixes after the final push (2026-11-05)
+
+First CI run of the patch (`ec2fc9b`): Linux 1249 of 1251, macOS smoke + `recorded` 56 of 57. Both found
+the same check: the recorded choir's "applies a note's Liminality pitch" read +58.1 cents for +50 (limit
++/- 8): the treatment's colour leans the reading of a sung, wandering partial (the code before read 50.6;
+a filter cannot move a stable pitch). That check now measures before the treatment (a test-only bypass);
+the choir's tuning with the treatment stays checked by `recorded`'s in-tune check and `remembered`. And
+Solo Voice's legato line had a 9.1 dB hole on CI (7.9 here before CI's sample prep also tuned the loops):
+a legato note now starts from its sustain loop (no second sung onset) and the last note fades over 300 ms:
+worst hole 6.9 dB; Solo Voice's level re-matched (+1.4 dB make-up, stand-in trim -0.7 dB). Local suite
+1250 of 1251; the one failure is the wall-clock "Liminality is light" CPU check, which the code before the
+patch fails here too on some runs (32.0 -> 42.4 %) and passes on re-runs; it passed on CI.

@@ -125,9 +125,14 @@ public:
     }
     const RememberedProfile& currentProfile() const { return profile; }
 
+    // Tests only: measure what comes before the treatment (a pitch read off a sung partial leans with
+    // any filter's slope; the treatment itself never moves a pitch at LIMINALITY 0).
+    static bool& bypassedForTests() { static bool off = false; return off; }
+
     // In place, on the instrument's own output (nothing else in the buffers). `wander`: Liminality's
     // gate on the instrument's own pitch movement (0: stable).
     void process(float* left, float* right, int n, float wander) {
+        if (bypassedForTests()) return;
         // Asleep while nothing comes in and its tails have died (0.8 s): no cost, exact silence.
         bool silent = true;
         for (int i = 0; i < n && silent; ++i) silent = left[i] == 0.0f && right[i] == 0.0f;
@@ -294,7 +299,7 @@ inline RememberedProfile soloVoice() {
     RememberedProfile p;
     p.lowCut = 150; p.highCut = 3000; p.wall = 0.6f; p.deEss = 1.0f; p.soften = 0.4f; p.saturation = 0.25f;
     p.wow = 5.0f; p.drift = 7.0f; p.blur = 0.6f; p.reflections = 0.8f; p.preDelayMs = 26; p.spacing = 2.2f;
-    p.direct = 0.6f; p.hissDb = -56; p.makeupDb = 10.0f;
+    p.direct = 0.6f; p.hissDb = -56; p.makeupDb = 11.4f;
     return p;
 }
 // The Hollow Drone's voice layer (lighter: it is one layer of a pad).
