@@ -31,7 +31,7 @@ std::vector<Case> cases() {
         { elevatorVibraphone, 53, 89, 1.0, false, {} },
         { mallChimes, 60, 96, 1.0, false, {} },
         { soloVoice, 40, 72, 1.8, true, {} },
-        { hummedMemory, 40, 67, 1.8, true, {} },
+        { distantRadio, 40, 84, 1.0, false, {} },
         { cassetteStrings, 36, 84, 1.6, true, {} },
         { arcadeLead, 48, 84, 1.2, true, {} },
         { basementBass, 28, 60, 1.2, true, {} },

@@ -182,12 +182,15 @@ void build(int i, Path& s, Path& f, Path& d) {
         arc(s, 0.62f, 0.40f, 0.14f, 0.28f * pi, 0.72f * pi);
         break;
     }
-    case 14: {   // Hummed Memory: a face half there (dashed), lips closed, a hum leaving it
-        d.addEllipse(0.16f, 0.18f, 0.34f, 0.40f);
-        s.startNewSubPath(0.28f, 0.46f); s.lineTo(0.38f, 0.46f);
-        s.startNewSubPath(0.52f, 0.44f);
-        for (float x = 0.0f; x <= 1.0001f; x += 0.05f) s.lineTo(0.52f + 0.38f * x, 0.44f + std::sin(x * 6.2832f * 1.5f) * 0.05f * (1.0f - 0.5f * x));
-        arc(s, 0.33f, 1.02f, 0.26f, -0.42f * pi, 0.42f * pi);
+    case 14: {   // Distant Radio (2026-11-05): a small radio, its speaker and dial, the aerial; the sound faint (dashed)
+        s.addRoundedRectangle(0.10f, 0.40f, 0.76f, 0.44f, 0.06f);
+        s.addEllipse(0.17f, 0.48f, 0.28f, 0.28f);
+        f.addEllipse(0.28f, 0.59f, 0.06f, 0.06f);
+        s.startNewSubPath(0.54f, 0.54f); s.lineTo(0.78f, 0.54f);
+        s.startNewSubPath(0.54f, 0.66f); s.lineTo(0.78f, 0.66f);
+        s.startNewSubPath(0.62f, 0.40f); s.lineTo(0.84f, 0.10f);
+        d.startNewSubPath(0.90f, 0.46f); d.lineTo(0.96f, 0.40f);
+        d.startNewSubPath(0.92f, 0.62f); d.lineTo(0.99f, 0.62f);
         break;
     }
     case 15: {   // Cassette Strings: a cassette

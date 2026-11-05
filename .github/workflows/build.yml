@@ -172,6 +172,17 @@ jobs:
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-recorded build/test-logs/recorded-instruments.wav
       - name: Listening render (the instrument library, the same phrase on all twenty instruments, dry and in three rooms, with cue sheet)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-library build/test-logs/library-instruments.flac
+      # 2026-11-05 patch notes: the four-part test piece on the seven instruments they name, after the patch
+      # and before it (the code before, 13351aa, built with today's render: scripts/build-before.sh).
+      - name: Listening render (the four-part test piece on seven instruments, after the patch notes)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render-piece build/test-logs/piece-after.flac
+      - name: Build the code before the patch notes, for the before render
+        run: bash scripts/build-before.sh 13351aa58e15bc454eb9cfddaed1a5dfc3253988 "${{ runner.temp }}/before-src" "${{ runner.temp }}/before-build" "${{ runner.temp }}/juce" build/samples build/captures
+      - name: Listening render (the four-part test piece, before the patch notes)
+        run: |
+          "${{ runner.temp }}/before-build/LiminalTests_artefacts/Release/LiminalTests" --render-piece build/test-logs/piece-before.flac
+          "${{ runner.temp }}/before-build/LiminalTests_artefacts/Release/LiminalTests" --probe-treatment | tee build/test-logs/treatment-before.txt
+          build/LiminalTests_artefacts/Release/LiminalTests --probe-treatment | tee build/test-logs/treatment-after.txt
       - name: Upload test logs, editor snapshot and listening render
         if: always()
         uses: actions/upload-artifact@v4

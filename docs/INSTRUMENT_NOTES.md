@@ -206,9 +206,25 @@ measured by the tests (in tune, level, distinct); the developer's listening deci
 - **Drawbars** (Warped Organ): sines at 16', 8', 4', 2 2/3', 2', 1 1/3' (0.5, 1, 2, 3, 4, 6), a key
   click, the motor's wow (2-22 cents at ~0.45 Hz), dying notes (a sag of up to 45 cents over seconds,
   only while LIMINALITY lets the instrument wander, and a slow fade).
-- **Formant voices** (Solo Voice, Hummed Memory stand-ins): a saw through three band-passes, ooh
+- **Formant voices** (the Solo Voice stand-in): a saw through three band-passes, ooh
   (300 / 870 / 2240 Hz) to aah (720 / 1150 / 2490 Hz) *(ref: Peterson & Barney's male averages, as in
-  Milestone 1b)*; the hum: 250 Hz with a weak 2.6 kHz and a 520 Hz low-pass (a closed mouth).
+  Milestone 1b)*. (Hummed Memory, the hum, was removed on 2026-11-05: Distant Radio has its slot.)
+- **Distant Radio** (2026-11-05): the developer's piano (short notes, velocity layers) heard through a small
+  radio in another room: the speaker's band (high-pass ~320-380 Hz, low-pass ~2.9 kHz, a 1.25 kHz cone
+  resonance, soft cone saturation), the set a few cents flat (3 + 8 x Station), the station drifting
+  (4-12 cents at ~0.3 Hz, only while LIMINALITY lets an instrument wander), slow AM fading (two unrelated
+  cycles, 0.09 and 0.23 Hz, 12-37 % deep) and static under the music (both follow the playing and die
+  with it), then a wall (low-mid body) and the next room's early reflections. *(Small-speaker band and
+  resonance: estimates for a palm-sized transistor radio.)* Stand-in: a soft two-operator tine through
+  the same radio.
+- **Remembered** (2026-11-05, `DSP/Remembered.h`): built into Empty Choir, Solo Voice, the Hollow Drone's
+  voice layer, Faded Strings, Hallway Pizzicato, Arcade Lead and Distant Radio, never an effect to find:
+  bandwidth (tape / distance), a de-esser on the band above 4.5 kHz (sibilants, consonants, breaths), an
+  attack that cannot rise faster than the profile allows (onsets and plucks rounded), a little tape
+  saturation, wow and a slower drift (0.55 / 0.07 Hz, scaled by LIMINALITY's wander), a short allpass
+  diffuser (blur), pre-delayed early reflections (distance; spread wider for a corridor), a far echo for
+  the arcade, a faint hiss that follows the playing; level-matched per profile. The profiles are in the
+  file; Solo Voice is the strongest (a corridor / a wall: 150 Hz - 3 kHz, the direct sound at 0.6).
 - **Recorded voices** (all sampled ones): the sample bank's `Reader` (Milestone 8), every note evened to
   one loudness (`-21 - loudnessDb`), velocity as a curve, the instrument's own envelope on top
   (Softness, Decay), looped sets released into their recorded tails.

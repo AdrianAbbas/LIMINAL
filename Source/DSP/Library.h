@@ -10,16 +10,17 @@
 // originals since Milestage 8) and keeps a synthesised stand-in that plays without them (a build without
 // SAMPLES_TOKEN, or while the bank loads): a plucked string (Old Guitar, Hallway Pizzicato), modal bars
 // and bells (Toy Piano, Elevator Vibraphone, Mall Chimes, Bowed Glass), a two-operator tine (Lounge
-// E-Piano), drawbars (Warped Organ) and analog / formant voices (Faded Strings, Solo Voice, Hummed Memory,
+// E-Piano, Distant Radio), drawbars (Warped Organ) and analog / formant voices (Faded Strings, Solo Voice,
 // Cassette Strings, Arcade Lead, Basement Bass). Six controls per slot, the same six for all fourteen,
 // each read by the instrument in its own way: Tone, Age, Softness, Decay, Width and one of its own
-// (Colour: "Other Room", "Section", "Col Legno", "Broken", "Bell", "Tremolo", "PA", "Vowel", "Memory",
+// (Colour: "Other Room", "Section", "Col Legno", "Broken", "Bell", "Tremolo", "PA", "Vowel", "Station",
 // "Tape Wear", "Grit", "Floor", "Wow", "Bow"). 0.5 everywhere is the instrument as designed.
 //
 // Real-time rules as everywhere: fixed storage (the plucked string's line lives in the voice), no
 // allocation after prepare(), modulation on a 32-sample control clock.
 #include "DSP/Filters.h"
 #include "DSP/Instrument.h"
+#include "DSP/Remembered.h"
 #include "DSP/Sampler.h"
 #include <vector>
 
@@ -28,7 +29,7 @@ namespace liminal::dsp {
 namespace library {
 inline constexpr int originals = 6;   // the original six instruments come first (slot i's own = i)
 inline constexpr int total = 20;
-enum Kind { oldGuitar, fadedStrings, hallwayPizzicato, toyPiano, loungeEPiano, elevatorVibraphone, mallChimes, soloVoice, hummedMemory,
+enum Kind { oldGuitar, fadedStrings, hallwayPizzicato, toyPiano, loungeEPiano, elevatorVibraphone, mallChimes, soloVoice, distantRadio,
             cassetteStrings, arcadeLead, basementBass, warpedOrgan, bowedGlass, kinds };
 struct Info {
     const char* name;         // the instrument (product name, no brands)
@@ -40,6 +41,20 @@ struct Info {
 // Index 0..19 over the whole library (0..5 the originals).
 const Info& info(int instrument);
 inline bool isOriginal(int instrument) { return instrument >= 0 && instrument < originals; }
+// How much of the room an instrument sends by default, against the piano's 1 (2026-11-05: the voices,
+// the violin and the arcade lead remembered in their place, so more of the room).
+inline float roomSend(int instrument) {
+    switch (instrument) {
+    case 3: return 1.5f;                // Empty Choir
+    case 5: return 1.15f;               // Hollow Drone (its voice layer)
+    case originals + 1: return 1.25f;   // Faded Strings
+    case originals + 2: return 1.25f;   // Hallway Pizzicato
+    case originals + 7: return 1.8f;    // Solo Voice
+    case originals + 8: return 1.4f;    // Distant Radio (in another room)
+    case originals + 10: return 2.0f;   // Arcade Lead (across the mall: mostly the mall)
+    default: return 1.0f;
+    }
+}
 } // namespace library
 
 class Library final : public Instrument {
@@ -94,12 +109,14 @@ private:
         VoiceShape shape;
         Wander wobble;
         float panL = 0.7f, panR = 0.7f;
-        float scoop = 0;            // cents at the start that glide to 0 (Hummed Memory, Solo Voice)
+        float scoop = 0;            // cents at the start that glide to 0 (Solo Voice: a legato glide from the last note)
+        float scoopTime = 0.18f;    // seconds of that glide
         float sag = 0, sagRate = 0; // a dying note (Warped Organ): cents and level it loses
         // Recorded: up to three readers (a second set or articulation, an ensemble copy).
         std::array<Reader, 3> r {};
         std::array<float, 3> rL {}, rR {}, rCents {};
         float mix = 0;              // vowel / patch crossfade (equal power), set at control rate
+        bool oneTake = false;       // Solo Voice's lowest notes: one take for both vowels (no crossfade)
         // Modal (bars, bells, drawbars, glass).
         ModeBank<8> modes;
         // Tine (two-operator FM: the e-piano).
@@ -143,6 +160,14 @@ private:
     int echoWrite = 0;
     float echoLp[2] {}, crushOut[2] {};
     void updatePost();
+    // 2026-11-05: the voice, the violin and the arcade lead remembered, not recorded (DSP/Remembered.h).
+    Remembered remembered;
+    bool treated = false;
+    void updateTreatment();
+    // Distant Radio (2026-11-05, in Hummed Memory's place): the station's slow fading and its static,
+    // both following the playing (they die with it).
+    float radioLevel = 0, radioLevelCoef = 0, radioFadePhase = 0, staticZ = 0, crackle = 0;
+    Random radioNoise;
 };
 
 } // namespace liminal::dsp

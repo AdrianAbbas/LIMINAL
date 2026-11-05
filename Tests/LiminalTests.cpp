@@ -1063,6 +1063,8 @@ int renderPlaces(const juce::String& path) {
 #include "IconTests.h"
 #include "LibraryRender.h"
 #include "PieceRender.h"
+#include "TreatmentProbe.h"
+#include "RememberedTests.h"
 #include "StressTests.h"
 
 } // namespace
@@ -1230,6 +1232,7 @@ int main(int argc, char** argv) {
         else if (arg == "--probe-clicks" && i + 4 < argc) return probeClicks(argv[i + 1], std::atoi(argv[i + 2]), std::atoi(argv[i + 3]), std::atof(argv[i + 4]));
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
         else if (arg == "--write-session-fixtures" && i + 1 < argc) return writeSessionFixtures(argv[++i]);
+        else if (arg == "--refresh-session-fingerprints") return refreshSessionFingerprints();
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
             const auto cwd = juce::File::getCurrentWorkingDirectory();
@@ -1239,6 +1242,8 @@ int main(int argc, char** argv) {
         else if (arg == "--library-snapshots" && i + 1 < argc) return writeLibrarySnapshots(argv[++i]);
         else if (arg == "--render-library" && i + 1 < argc) return renderLibrary(argv[++i]);
         else if (arg == "--render-piece" && i + 1 < argc) return renderPiece(argv[++i]);
+        else if (arg == "--probe-treatment") return probeTreatment();
+        else if (arg == "--probe-voice-pitch") return probeVoicePitch();
         else if (arg == "--probe-click-pattern" && i + 1 < argc) return probeClickPattern(std::atoi(argv[++i]));
         else if (arg == "--probe-cpu-pattern" && i + 1 < argc) return probeCpuPattern(std::atoi(argv[++i]));
         else if (arg == "--vhs-snapshots" && i + 1 < argc) return writeVhsSnapshots(argv[++i]);
@@ -1306,6 +1311,7 @@ int main(int argc, char** argv) {
     if (run("sessions")) testSessions(s);
     if (run("icons")) testIcons(s);
     if (run("hung")) testHungNotes(s);
+    if (run("remembered")) testRemembered(s);
     if (run("hung") || run("timeline")) testWaveringTimeline(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;

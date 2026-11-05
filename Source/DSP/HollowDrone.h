@@ -15,6 +15,7 @@
 // Harmonics opens the low-pass. The oscillators are the stand-in.
 #include "DSP/Filters.h"
 #include "DSP/Instrument.h"
+#include "DSP/Remembered.h"
 #include "DSP/Sampler.h"
 
 namespace liminal::dsp {
@@ -75,6 +76,7 @@ private:
     bool startRecorded(int note, float velocity);
     void controlRecorded(RVoice&, float tick);
     float level(const RVoice& v) const { return v.amp * v.gain * v.fade; }
+    Remembered voiceLayer;   // 2026-11-05: the voice drones remembered, not recorded (DSP/Remembered.h)
     VoicePool<RVoice, slots> rpool;
 
     double sr = 48000.0;

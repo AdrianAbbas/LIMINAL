@@ -18,6 +18,8 @@ constexpr int vowelCount = 5;
 
 void EmptyChoir::prepare(double sampleRate) {
     sr = std::clamp(sampleRate, 8000.0, 384000.0);
+    remembered.setProfile(remembered::choir());
+    remembered.prepare(sr);
     reset();
 }
 
@@ -33,6 +35,7 @@ void EmptyChoir::reset() {
     rng.state = 0x3C6EF372u;
     bend = 1.0f;
     clock = 0;
+    remembered.reset();
 }
 
 void EmptyChoir::noteOn(int note, float velocity) {
@@ -129,8 +132,8 @@ void EmptyChoir::render(float* left, float* right, int n) {
             clock = controlPeriod;
         }
         const int m = std::min(n - done, clock);
-        float* l = left + done;
-        float* r = right + done;
+        // The voices into the choir's own buffer, then the remembered treatment, then out.
+        float l[controlPeriod] {}, r[controlPeriod] {};
         if (humChanged) { updateHum(); humChanged = false; }
         for (auto& v : rpool.voices) {
             if (!v.active()) continue;
@@ -198,6 +201,11 @@ void EmptyChoir::render(float* left, float* right, int n) {
             }
             // Voices end only at the end of a control period, so the block size never matters.
             if (m == clock && ((v.stolen && v.fade <= 0.0f) || (releasing && v.amp < 1.0e-4f))) v.note = -1;
+        }
+        remembered.process(l, r, m, wander());
+        for (int i = 0; i < m; ++i) {
+            left[done + i] += l[i];
+            right[done + i] += r[i];
         }
         clock -= m;
         done += m;

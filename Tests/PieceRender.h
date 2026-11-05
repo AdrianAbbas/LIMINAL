@@ -64,7 +64,7 @@ int renderPiece(const juce::String& path) {
     file.getParentDirectory().createDirectory();
     struct Take { int which; int place; const char* what; };
     const Take takes[] { { 1, -1, "Faded Synth" }, { 3, 0, "Empty Choir, in the hospital" }, { 13, -1, "Solo Voice" }, { 7, -1, "Faded Strings" },
-                         { 8, -1, "Hallway Pizzicato" }, { 16, -1, "Arcade Lead" }, { 14, -1, "the Hummed Memory slot" } };
+                         { 8, -1, "Hallway Pizzicato" }, { 16, -1, "Arcade Lead" }, { 14, -1, "Hummed Memory's slot: Distant Radio since the patch" } };
     Signal out;
     juce::String cues = "LIMINAL - the four-part test piece (pattern, chorale, melody, repeats over a drone).\n"
                         "Product defaults (LIMINALITY 40 %), ambience -12 dB, the default place unless named.\n"

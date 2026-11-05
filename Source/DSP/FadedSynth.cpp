@@ -242,8 +242,8 @@ void FadedSynth::render(float* left, float* right, int n) {
                 const float delay = float((0.0035 + 0.0018 * double(sweep)) * sr);
                 float pos = float(write) - delay;
                 if (pos < 0) pos += float(size);
-                const int a = int(pos);
-                const float f = pos - float(a);
+                const int a = int(pos) % size;   // (-1e-5 + size rounds to size in float: never read past the end)
+                const float f = pos - std::floor(pos);
                 return line[std::size_t(a)] + f * (line[std::size_t((a + 1) % size)] - line[std::size_t(a)]);
             };
             wetL += 0.45f * (read(lineL, sweepL) - wetL);   // bucket-brigade darkness

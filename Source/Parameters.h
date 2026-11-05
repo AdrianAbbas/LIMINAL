@@ -176,7 +176,7 @@ inline juce::String midiId(int instrument, const char* name) { return juce::Stri
 inline constexpr int libraryCount = 20;
 inline const char* libraryNames[] { "Forgotten Piano", "Faded Synth", "Glass Memories", "Empty Choir", "Lost Music Box", "Hollow Drone",
                                     "Old Guitar", "Faded Strings", "Hallway Pizzicato", "Toy Piano", "Lounge E-Piano", "Elevator Vibraphone",
-                                    "Mall Chimes", "Solo Voice", "Hummed Memory", "Cassette Strings", "Arcade Lead", "Basement Bass",
+                                    "Mall Chimes", "Solo Voice", "Distant Radio", "Cassette Strings", "Arcade Lead", "Basement Bass",
                                     "Warped Organ", "Bowed Glass" };
 namespace lib {
 inline constexpr const char* keys[] { "tone", "age", "soft", "decay", "width", "colour" };

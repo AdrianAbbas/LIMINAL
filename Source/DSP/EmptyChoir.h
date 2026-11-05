@@ -15,6 +15,7 @@
 // into the formant choir (the stand-in) over a fifth.
 #include "DSP/Filters.h"
 #include "DSP/Instrument.h"
+#include "DSP/Remembered.h"
 #include "DSP/Sampler.h"
 
 namespace liminal::dsp {
@@ -80,6 +81,7 @@ private:
     float level(const RVoice& v) const { return v.amp * v.gain * v.fade; }
     VoicePool<RVoice, slots> rpool;
     bool humChanged = false;
+    Remembered remembered;   // 2026-11-05: always part of the choir (DSP/Remembered.h)
 
     double sr = 48000.0;
     Settings settings;

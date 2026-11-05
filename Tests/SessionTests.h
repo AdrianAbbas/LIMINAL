@@ -131,6 +131,31 @@ int writeSessionFixtures(const juce::String& path) {
     return root.writeTo(file) ? 0 : 1;
 }
 
+// Re-takes the fingerprints of the fixture's states with today's build, keeping the states (written by
+// the build before the library) as they are: for a patch that changes the instruments' sound on purpose
+// (2026-11-05: the remembered treatment, the hung-note fixes, Distant Radio). The loading checks
+// (every parameter back, every slot its own instrument) still run on the old states.
+int refreshSessionFingerprints() {
+    using namespace sessiontest;
+    auto xml = juce::XmlDocument::parse(fixtureFile());
+    if (xml == nullptr) return 1;
+    for (auto* e : xml->getChildWithTagNameIterator("SESSION")) {
+        juce::MemoryBlock packed, state;
+        packed.fromBase64Encoding(e->getStringAttribute("state"));
+        {
+            juce::MemoryInputStream in(packed, false);
+            juce::GZIPDecompressorInputStream unzip(in);
+            unzip.readIntoMemoryBlock(state);
+        }
+        e->setAttribute("fingerprint", join(fingerprint(state)));
+        std::cout << "fingerprint: " << e->getStringAttribute("name") << "\n";
+    }
+    xml->setAttribute("comment", "States saved by LIMINAL before the instrument library (2026-11-02); fingerprints of a phrase rendered from them "
+                                 "(dB per 250 ms window, left then right; stand-ins, rooms without captures), re-taken 2026-11-05 after the patch "
+                                 "notes changed the instruments' sound on purpose. Tests/SessionTests.h.");
+    return xml->writeTo(fixtureFile()) ? 0 : 1;
+}
+
 void testSessions(Suite& s) {
     s.section("old sessions and presets open exactly as before (2026-11-02)");
     using namespace sessiontest;

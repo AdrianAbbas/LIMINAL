@@ -4,10 +4,13 @@ namespace liminal::dsp {
 
 void HollowDrone::prepare(double sampleRate) {
     sr = std::clamp(sampleRate, 8000.0, 384000.0);
+    voiceLayer.setProfile(remembered::droneVoice());
+    voiceLayer.prepare(sr);
     reset();
 }
 
 void HollowDrone::reset() {
+    voiceLayer.reset();
     for (auto& v : pool.voices) v = Voice {};
     pool.pedal = false;
     pool.counter = 0;
@@ -101,27 +104,32 @@ void HollowDrone::render(float* left, float* right, int n) {
         const int m = std::min(n - done, clock);
         float* l = left + done;
         float* r = right + done;
+        float vl[controlPeriod] {}, vr[controlPeriod] {};   // the voice layer, treated on its own
         for (auto& v : rpool.voices) {
             if (!v.active()) continue;
             const bool releasing = v.releasing();
             for (int i = 0; i < m; ++i) {
                 v.amp += releasing ? releaseCoef * (0.0f - v.amp) : attackCoef * (1.02f - v.amp);
                 if (!releasing) v.amp = std::min(v.amp, 1.0f);
-                float sl = 0, sr_ = 0;
+                float sl = 0, sr_ = 0, voL = 0, voR = 0;
                 for (int k = 0; k < layers; ++k) {
                     auto& rd = v.r[std::size_t(k)];
                     if (!rd.on) continue;
                     const float x = rd.tick();
-                    sl += x * v.gl[std::size_t(k)];
-                    sr_ += x * v.gr[std::size_t(k)];
+                    (k == 0 ? voL : sl) += x * v.gl[std::size_t(k)];
+                    (k == 0 ? voR : sr_) += x * v.gr[std::size_t(k)];
                 }
                 float g = v.amp * v.gain;
                 if (v.stolen) {
                     v.fade = std::max(0.0f, v.fade - v.fadeStep);
                     g *= v.fade;
                 }
+                // The violin, pad and bass through the drone's low-pass as before; the voice layer goes to
+                // its own remembered treatment below (its own, darker low-pass among it).
                 l[i] += v.lpL.lp(sl) * g;
                 r[i] += v.lpR.lp(sr_) * g;
+                vl[i] += voL * g;
+                vr[i] += voR * g;
             }
             if (m == clock) {
                 bool any = false;
@@ -129,6 +137,11 @@ void HollowDrone::render(float* left, float* right, int n) {
                 if (!v.stolen && ((releasing && v.amp < 1.0e-4f) || !any)) v.steal(0.05, sr);
                 if (v.stolen && v.fade <= 0.0f) v.note = -1;
             }
+        }
+        voiceLayer.process(vl, vr, m, wander());
+        for (int i = 0; i < m; ++i) {
+            l[i] += vl[i];
+            r[i] += vr[i];
         }
         for (auto& v : pool.voices) {
             if (!v.active()) continue;

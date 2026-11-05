@@ -490,7 +490,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         std::fill(slotSendR, slotSendR + n, 0.0f);
         std::fill(slotEchoL, slotEchoL + n, 0.0f);
         std::fill(slotEchoR, slotEchoR + n, 0.0f);
-        const float sendFactor = 1.0f + 1.5f * (slot.distance != nullptr ? slot.distance->load() : 0.0f);
+        const float sendFactor = (1.0f + 1.5f * (slot.distance != nullptr ? slot.distance->load() : 0.0f)) * dsp::library::roomSend(slot.playing);
         slot.rack.process(slotL, slotR, slotSendL, slotSendR, slotEchoL, slotEchoR, sendFactor, n);
         slot.share.target = slot.rack.placeShare();
         for (int i = 0; i < n; ++i) {

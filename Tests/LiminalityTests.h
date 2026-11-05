@@ -381,6 +381,11 @@ void testLiminality(Suite& s) {
             const auto play = [&](float cents) {
                 all[i]->prepare(rate);
                 all[i]->setLiminalPitch({ 0.0f, 0.0f, 0.0f });   // no wander of its own: a clean measure
+                if (i == 3) {   // (one singer's worth of pitch: the four detuned singers' joint peak leans with the choir's remembered colour)
+                    dsp::EmptyChoir::Settings one;
+                    one.detune = 0.0f;
+                    choir.setSettings(one);
+                }
                 all[i]->shapeNextNote({ cents, 0.0f, 7u });
                 all[i]->noteOn(69, 0.8f);
                 std::vector<float> l(std::size_t(rate * 1.5), 0.0f), r(l.size(), 0.0f);

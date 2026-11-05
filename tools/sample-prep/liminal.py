@@ -176,6 +176,29 @@ def declick(x, clicks, root):
     return done
 
 
+def loop_f0(x, near):
+    """The fundamental of a short stretch by normalised autocorrelation, searched within a fifth of `near` (Hz)."""
+    x = x - x.mean()
+    n = len(x)
+    if n < 64 or not np.any(x):
+        return 0.0
+    spec = np.fft.rfft(x, 2 * n)
+    ac = np.fft.irfft(np.abs(spec) ** 2)[:n]
+    if ac[0] <= 0:
+        return 0.0
+    ac /= ac[0]
+    lo, hi = int(RATE / (near * 1.5)), min(n - 2, int(RATE / (near / 1.5)) + 1)
+    if hi <= lo + 2:
+        return 0.0
+    lag = lo + int(np.argmax(ac[lo:hi]))
+    if ac[lag] < 0.5:
+        return 0.0
+    y0, y1, y2 = ac[lag - 1], ac[lag], ac[lag + 1]
+    den = y0 - 2 * y1 + y2
+    shift = 0.5 * (y0 - y2) / den if abs(den) > 1e-12 else 0.0
+    return RATE / (lag + shift)
+
+
 def main():
     out = sys.argv[1]
     report_path = os.path.join(out, "report.json")
@@ -388,6 +411,37 @@ def main():
         if rk:
             lines.append(f"kalimba velocity layers: correlation with the next layer up {min(rk):+.2f} to {max(rk):+.2f} (median {np.median(rk):+.2f})")
         json.dump(kal, open(kp, "w"), indent=1, allow_nan=False)
+    # The voices are tuned to what is heard while a note is held: its loop (2026-11-05). A sung note
+    # moves; its pitch over the whole take (the root prepare.py detected) can sit 10-20 cents from the
+    # pitch of the part that loops. Each looping voice zone's root becomes its loop's pitch (the median
+    # of 40 ms frames), when the two agree within 40 cents.
+    for sid in ("voice-ooh", "voice-aah", "voice-mm", "voice-drone", "voice-hum", "choir-ooh", "choir-aah", "choir-mm"):
+        vp = os.path.join(out, sid + ".json")
+        if not os.path.exists(vp):
+            continue
+        mp = json.load(open(vp))
+        moved = []
+        for z in mp["zones"]:
+            ls, le = z.get("loopStart", -1), z.get("loopEnd", -1)
+            if ls is None or le is None or ls < 0 or le - ls < int(0.2 * RATE):
+                continue
+            seg = load(z)[ls:le].astype(np.float64)
+            f_root = 440.0 * 2 ** ((z["root"] - 69) / 12)
+            frame = int(0.04 * RATE)
+            pitches = []
+            for at in range(0, len(seg) - 2 * frame, frame):
+                f = loop_f0(seg[at:at + 2 * frame], f_root)
+                if f > 0:
+                    pitches.append(69 + 12 * np.log2(f / 440.0))
+            if len(pitches) < 4:
+                continue
+            loop_root = float(np.median(pitches))
+            if abs(loop_root - z["root"]) <= 0.4:
+                moved.append(100 * (loop_root - z["root"]))
+                z["root"] = round(loop_root, 3)
+        if moved:
+            json.dump(mp, open(vp, "w"), indent=1, allow_nan=False)
+            lines.append(f"{sid}: {len(moved)} zone(s) tuned to their loop ({min(moved):+.1f} to {max(moved):+.1f} cents)")
     report["liminal"] = lines
     json.dump(report, open(report_path, "w"), indent=1)
     for line in lines:

@@ -19,7 +19,7 @@ const Info& info(int instrument) {
         { "Elevator Vibraphone", "VIBRAPHONE", "TREMOLO", "Muzak vibraphone with a slow motor tremolo", "" },
         { "Mall Chimes", "CHIMES", "PA", "Public-address chime tones over an empty concourse", "" },
         { "Solo Voice", "VOICE", "VOWEL", "One distant singer, a soft ooh and aah", "voice-ooh, voice-aah" },
-        { "Hummed Memory", "HUM", "MEMORY", "A soft hum, half-remembered", "voice-mm" },
+        { "Distant Radio", "RADIO", "STATION", "A melody from a small radio in another room", "piano" },
         { "Cassette Strings", "CASSETTE", "TAPE WEAR", "A soft analog pad played from a worn tape", "mlg-softpad-long" },
         { "Arcade Lead", "ARCADE", "GRIT", "An empty arcade's game-console lead", "mlg-square-long, mlg-cyberpunk-long" },
         { "Basement Bass", "BASS", "FLOOR", "A dull bass from the floor below", "mlg-staticbass-long" },
@@ -46,16 +46,16 @@ struct Design {
 Design design(int kind) {
     switch (kind) {
     case oldGuitar: return { 0.002f, 0.0f, 0.28f, 6500.0f, 1.0f, false };
-    case fadedStrings: return { 0.16f, 0.0f, 0.75f, 5200.0f, 0.6f, true };
-    case hallwayPizzicato: return { 0.0035f, 0.0f, 0.9f, 7000.0f, 1.0f, false };
+    case fadedStrings: return { 0.26f, 0.0f, 0.9f, 4200.0f, 0.6f, true };   // (2026-11-05: slower, softer, darker)
+    case hallwayPizzicato: return { 0.009f, 0.0f, 0.9f, 4600.0f, 1.0f, false };   // (2026-11-05: less clicky, darker)
     case toyPiano: return { 0.0015f, 1.1f, 0.22f, 9000.0f, 1.0f, false };
     case loungeEPiano: return { 0.002f, 4.5f, 0.3f, 5200.0f, 1.0f, false };
     case elevatorVibraphone: return { 0.0015f, 6.0f, 0.4f, 9000.0f, 0.9f, false };
     case mallChimes: return { 0.003f, 0.0f, 2.4f, 12000.0f, 0.7f, false };
     case soloVoice: return { 0.14f, 0.0f, 0.9f, 5000.0f, 0.6f, true };
-    case hummedMemory: return { 0.32f, 0.0f, 1.4f, 2600.0f, 0.5f, true };
+    case distantRadio: return { 0.006f, 0.0f, 0.35f, 5000.0f, 0.8f, false };
     case cassetteStrings: return { 0.3f, 0.0f, 1.2f, 4200.0f, 0.5f, true };
-    case arcadeLead: return { 0.004f, 0.0f, 0.12f, 4200.0f, 0.6f, true };
+    case arcadeLead: return { 0.018f, 0.0f, 0.16f, 3400.0f, 0.6f, true };   // (2026-11-05: softer, across the mall)
     case basementBass: return { 0.006f, 9.0f, 0.25f, 2200.0f, 0.8f, true };
     case warpedOrgan: return { 0.006f, 0.0f, 0.08f, 7000.0f, 0.3f, true };
     default: return { 0.8f, 0.0f, 1.8f, 9000.0f, 0.5f, true };   // bowed glass
@@ -69,7 +69,7 @@ std::pair<const char*, const char*> setsOf(int kind) {
     case hallwayPizzicato: return { "violin-pizz", "violin-collegno" };
     case toyPiano: return { "piano", "kalimba" };
     case soloVoice: return { "voice-ooh", "voice-aah" };
-    case hummedMemory: return { "voice-mm", nullptr };
+    case distantRadio: return { "piano", nullptr };
     case cassetteStrings: return { "mlg-softpad-long", nullptr };
     case arcadeLead: return { "mlg-square-long", "mlg-cyberpunk-long" };
     case basementBass: return { "mlg-staticbass-long", nullptr };
@@ -84,9 +84,10 @@ float pulseWave(float p, float w, float inc) {
 } // namespace
 
 float Library::trimDb(int kind, bool recorded) {
-    //                         guitar strings pizz  toy    ep     vib    chimes voice  hum    tape   arcade bass   organ  glass
-    static const float standIn[] { 8.6f, -7.7f, 16.1f, 2.1f, -10.8f, -8.4f, -8.0f, -4.4f, -10.8f, -9.1f, -17.4f, -12.3f, -18.1f, -14.6f };
-    static const float rec[] { 4.1f, 5.2f, 4.6f, 12.8f, -10.8f, -8.4f, -8.0f, 2.0f, 3.8f, 1.8f, 3.5f, 8.0f, -18.1f, -14.6f };
+    //                         guitar strings pizz  toy    ep     vib    chimes voice  radio  tape   arcade bass   organ  glass
+    // (2026-11-05: Cassette Strings +2.5 dB, as asked; it stays within the 3 dB of the piano.)
+    static const float standIn[] { 8.6f, -7.7f, 16.1f, 2.1f, -10.8f, -8.4f, -8.0f, -7.5f, -6.2f, -6.6f, -15.6f, -12.3f, -18.1f, -14.6f };
+    static const float rec[] { 4.1f, 5.2f, 4.6f, 12.8f, -10.8f, -8.4f, -8.0f, 2.0f, 5.4f, 4.3f, 3.5f, 8.0f, -18.1f, -14.6f };
     const int k = std::clamp(kind, 0, kinds - 1);
     return recorded ? rec[k] : standIn[k];
 }
@@ -102,7 +103,23 @@ void Library::prepare(double sampleRate) {
     sr = std::clamp(sampleRate, 8000.0, 384000.0);
     echoL.assign(std::size_t(0.6 * sr) + 4, 0.0f);
     echoR.assign(echoL.size(), 0.0f);
+    remembered.prepare(sr);
+    radioLevelCoef = float(1.0 - std::exp(-1.0 / (0.4 * sr)));
     reset();
+}
+
+// Which instruments carry the remembered treatment, and how much (DSP/Remembered.h).
+void Library::updateTreatment() {
+    treated = true;
+    switch (kindNow) {
+    case soloVoice: remembered.setProfile(remembered::soloVoice()); break;
+    case fadedStrings: remembered.setProfile(remembered::strings()); break;
+    case hallwayPizzicato: remembered.setProfile(remembered::pizzicato()); break;
+    case arcadeLead: remembered.setProfile(remembered::arcade()); break;
+    case distantRadio: remembered.setProfile(remembered::radio()); break;
+    default: treated = false; break;
+    }
+    remembered.reset();
 }
 
 void Library::reset() {
@@ -126,7 +143,10 @@ void Library::reset() {
     std::fill(echoR.begin(), echoR.end(), 0.0f);
     echoWrite = 0;
     echoLp[0] = echoLp[1] = crushOut[0] = crushOut[1] = 0;
+    radioLevel = radioFadePhase = staticZ = crackle = 0;
+    radioNoise.state = 0x52AD10u;
     updatePost();
+    updateTreatment();
 }
 
 bool Library::recordedNow() const { return setsOf(kindNow).first != nullptr && recordings(setsOf(kindNow).first) != nullptr; }
@@ -134,10 +154,26 @@ bool Library::recordedNow() const { return setsOf(kindNow).first != nullptr && r
 void Library::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
+    // Solo Voice is one singer (2026-11-05: smoother legato): a note sung while another is still
+    // held (or still clearly ringing) takes over from it: the last note fades over 180 ms while the new
+    // one glides in from its pitch (120 ms) and swells in over 100 ms.
+    int legatoFrom = -1;
+    if (kindNow == soloVoice)
+        for (auto& o : pool.voices)
+            if (o.active() && !o.stolen && o.note != note && (!o.releasing() || o.amp > 0.35f)) {
+                if (legatoFrom < 0 || !o.releasing()) legatoFrom = o.note;
+                o.steal(0.18, sr);
+            }
     auto& v = pool.allocate(note, voices(polyphony), sr, 0.02, [this](const Voice& x) { return level(x); });
     pool.begin(v, note);
     v.shape = takeShape();
     startVoice(v, note, std::clamp(velocity, 0.0f, 1.0f));
+    if (legatoFrom >= 0) {
+        v.scoop = std::clamp(100.0f * float(legatoFrom - note), -700.0f, 700.0f);
+        v.scoopTime = 0.12f;
+        v.attackCoef = float(1.0 - std::pow(0.3 / 1.3, 1.0 / (0.1 * sr)));
+        control(v, 0.0f);
+    }
 }
 
 void Library::startVoice(Voice& v, int note, float velocity) {
@@ -150,7 +186,7 @@ void Library::startVoice(Voice& v, int note, float velocity) {
     v.attacking = true;
     v.scoop = v.sag = v.sagRate = 0;
     v.burst = 0;
-    v.mix = st.colour;
+    v.mix = kindNow == arcadeLead ? 0.2f + 0.6f * st.colour : st.colour;   // (GRIT: the cyberpunk patch never wholly replaces the square, 2026-11-05)
     v.wobble.start(rng);
     v.noise.state = rng.state ^ 0x9E3779B9u ^ std::uint32_t(note * 2654435761u);
     if (v.noise.state == 0) v.noise.state = 1;
@@ -176,8 +212,10 @@ void Library::startVoice(Voice& v, int note, float velocity) {
     // Age: a fixed per-key mistuning (the instrument's own, not Liminality's).
     const float keyCents = (keyHash(note, 31 + kindNow) - 0.5f) * 2.0f * st.age * st.age * 9.0f;
     v.shape.cents += keyCents;
-    if (kindNow == hummedMemory) v.scoop = -(12.0f + 50.0f * st.colour);
+    v.scoopTime = 0.18f;
     if (kindNow == soloVoice) v.scoop = -8.0f;
+    // Distant Radio: the set is a little off-speed (a fixed few cents flat, more with Station).
+    if (kindNow == distantRadio) v.shape.cents -= 3.0f + 8.0f * st.colour;
     if (kindNow == warpedOrgan && keyHash(note, 77 + int(pool.counter % 5)) < 0.08f + 0.45f * st.age * st.colour) {
         v.sagRate = -(4.0f + 10.0f * rng.uniform()) * (0.4f + st.colour);   // this note is dying: it sags
         v.heldCoef = t60(14.0 + 10.0 * rng.uniform(), sr);
@@ -255,14 +293,28 @@ bool Library::startRecorded(Voice& v, int note, float velocity) {
         setPan(2, 0.3f * w);
         break;
     }
-    case soloVoice:
-        ok = start(0, a, 0.25f, 0.0f);
-        if (ok && b != nullptr) start(1, b, 0.25f, 0.0f);
+    case soloVoice: {
+        // Below the sweeps' lowest note (E3) by more than a few semitones, his low 'aah' drone (G2):
+        // a voice taken down nine semitones from E3 no longer sounds like one (2026-11-05: tuning).
+        const auto* low = recordings("voice-drone");
+        v.oneTake = false;
+        if (low != nullptr && float(note) < a->lowRoot - 4.0f) {
+            const auto* z = low->find(note, 0.5f, 0.0f);
+            if (z != nullptr && z->root < a->lowRoot - 4.0f) {
+                ok = start(0, low, 0.5f, 0.0f);
+                v.oneTake = ok;
+            }
+        }
+        if (!ok) {
+            ok = start(0, a, 0.25f, 0.0f);
+            if (ok && b != nullptr) start(1, b, 0.25f, 0.0f);
+        }
         setPan(0, 0.0f);
         setPan(1, 0.0f);
         break;
-    case hummedMemory:
-        ok = start(0, a, 0.25f, 0.0f);
+    }
+    case distantRadio:   // the piano's short notes through the radio (mono: one small speaker)
+        ok = start(0, a, velocity, pick);
         setPan(0, 0.0f);
         break;
     case cassetteStrings: {
@@ -377,6 +429,16 @@ void Library::startSynth(Voice& v, int note, float velocity) {
         setModes({ 1.0f, 1.0f + 0.0021f * (1.0f + st.width), 2.004f, 2.76f, 5.4f }, { 1.0f, 0.55f, 0.3f, 0.14f * (0.4f + st.tone), 0.05f * st.tone },
                  { 1000, 1000, 1000, 1000, 1000 }, { 1000, 1000, 1000, 1000, 1000 }, 0.0f);
         break;
+    case distantRadio: {   // without the recordings: a soft tine through the same radio, dying away like a struck note
+        v.engine = Engine::tine;
+        v.pc = v.pm = v.pt = 0;
+        v.index = (0.10f + 0.25f * velocity) * expRange(st.tone, 1.5f);
+        v.indexDecay = t60(0.6 * decayScale, sr);
+        v.bell = 0.04f * velocity;
+        v.bellDecay = t60(0.08, sr);
+        v.heldCoef = t60(2.4 * decayScale * std::pow(261.6f / hz, 0.3f), sr);
+        break;
+    }
     case loungeEPiano: {
         v.engine = Engine::tine;
         v.pc = v.pm = v.pt = 0;
@@ -413,19 +475,19 @@ void Library::control(Voice& v, float tick) {
     const float own = (wowCents + v.wobble.tick(rng, 0.3f, std::max(tick, 1.0e-4f)) * st.age * 3.0f) * wander;
     c += own;
     if (v.scoop != 0.0f) {
-        const float x = std::clamp(v.age / (kindNow == hummedMemory ? 0.45f : 0.18f), 0.0f, 1.0f);
+        const float x = std::clamp(v.age / v.scoopTime, 0.0f, 1.0f);
         c += v.scoop * (1.0f - x) * (1.0f - x);
     }
     if (v.sagRate != 0.0f) v.sag = std::max(-45.0f, v.sag + v.sagRate * tick / 4.0f);
     c += v.sag * wander;   // (a dying note's sag is the instrument's own movement: none at LIMINALITY 0)
     // Vibrato (voices and bows, after a moment; the arcade's lead later and faster).
     float vib = 0;
-    if (kindNow == soloVoice || kindNow == fadedStrings || kindNow == arcadeLead || kindNow == hummedMemory) {
+    if (kindNow == soloVoice || kindNow == fadedStrings || kindNow == arcadeLead) {
         v.vibPhase += tick * (kindNow == arcadeLead ? 6.2f : v.vibRate);
         v.vibPhase -= std::floor(v.vibPhase);
         const float delayIn = kindNow == arcadeLead ? 0.35f : 0.45f;
         const float grow = std::clamp((v.age - delayIn) / 0.6f, 0.0f, 1.0f);
-        const float depth = kindNow == arcadeLead ? 22.0f : kindNow == hummedMemory ? 5.0f : 11.0f;
+        const float depth = kindNow == arcadeLead ? 22.0f : 11.0f;
         vib = depth * grow * std::sin(twoPi * v.vibPhase) * (v.engine == Engine::recorded && kindNow != arcadeLead ? 0.35f : 1.0f);
     }
     const float ratio = bend * cents(c + vib);
@@ -457,14 +519,13 @@ void Library::control(Voice& v, float tick) {
         switch (kindNow) {
         case fadedStrings: cutoff = 2600.0f * bright; break;
         case soloVoice: cutoff = 3800.0f * bright; break;
-        case hummedMemory: cutoff = 520.0f * bright; q = 0.8f; break;
         case cassetteStrings: cutoff = 1700.0f * bright; q = 0.75f; break;
         case arcadeLead: cutoff = std::min(3400.0f, 2600.0f * bright); q = 0.5f; break;   // (a console's soft edges: no sharper than a few samples)
         case basementBass: cutoff = (380.0f + 900.0f * std::exp(-v.age / 0.12f)) * bright; q = 0.9f; break;
         default: break;
         }
         v.filter.set(std::clamp(cutoff, 60.0f, 0.42f * float(sr)), q, sr);
-        // Formants: the voice's vowel (ooh .. aah), the hum's nasal m, the strings' wooden body.
+        // Formants: the voice's vowel (ooh .. aah), the strings' wooden body.
         struct F { float hz, q, gain; };
         F f[3] { { 0, 1, 0 }, { 0, 1, 0 }, { 0, 1, 0 } };
         if (kindNow == soloVoice) {
@@ -472,9 +533,6 @@ void Library::control(Voice& v, float tick) {
             f[0] = { 300.0f + 420.0f * m, 6.0f, 1.0f };
             f[1] = { 870.0f + 280.0f * m, 8.0f, 0.35f + 0.2f * m };
             f[2] = { 2240.0f + 250.0f * m, 10.0f, 0.1f + 0.12f * m };
-        } else if (kindNow == hummedMemory) {
-            f[0] = { 250.0f, 4.0f, 1.0f };
-            f[1] = { 2600.0f, 8.0f, 0.04f };
         } else if (kindNow == fadedStrings) {
             f[0] = { 290.0f, 2.0f, 0.7f };
             f[1] = { 1100.0f, 2.5f, 0.5f };
@@ -488,7 +546,7 @@ void Library::control(Voice& v, float tick) {
     }
     }
     // Recorded voices: the vowel / patch crossfade; the per-voice tone.
-    v.mix = st.colour;
+    v.mix = kindNow == arcadeLead ? 0.2f + 0.6f * st.colour : st.colour;   // (GRIT: the cyberpunk patch never wholly replaces the square, 2026-11-05)
     float toneHz = v.tone;
     if (kindNow == fadedStrings) toneHz *= 1.0f - 0.55f * st.age;   // faded: the highs go first
     if (kindNow == basementBass) toneHz *= expRange(1.0f - st.colour, 2.0f);
@@ -520,8 +578,11 @@ void Library::updatePost() {
         postL[0].lowPass(11000.0 * std::pow(2200.0 / 11000.0, double(st.colour)), 0.7, s);
         postL[1].peak(110.0, 0.8, 1.5 * st.colour, s);
         break;
+    case distantRadio:   // the small speaker's own resonance (the rest of its sound: DSP/Remembered radio())
+        postL[0].peak(1250.0, 1.1, 5.0, s);
+        postL[1].highPass(320.0, 0.8, s);
+        break;
     case soloVoice:
-    case hummedMemory:
         postL[0].highPass(90.0, 0.7, s);
         postL[1].lowPass(7500.0 * std::pow(0.5, double(st.age)), 0.6, s);
         break;
@@ -560,7 +621,7 @@ void Library::renderVoice(Voice& v, float* outL, float* outR, int m, const float
         case Engine::recorded: {
             float y[3];
             for (std::size_t k = 0; k < 3; ++k) y[k] = v.r[k].on ? v.r[k].tick() : 0.0f;
-            if (kindNow == soloVoice || kindNow == arcadeLead) { y[0] *= w0; y[1] *= w1; }
+            if ((kindNow == soloVoice && !v.oneTake) || kindNow == arcadeLead) { y[0] *= w0; y[1] *= w1; }
             for (std::size_t k = 0; k < 3; ++k) { l += y[k] * v.rL[k]; r += y[k] * v.rR[k]; }
             if (kindNow == cassetteStrings) { l = softClip(1.6f * l) / 1.6f; r = softClip(1.6f * r) / 1.6f; }
             break;
@@ -617,21 +678,21 @@ void Library::renderVoice(Voice& v, float* outL, float* outR, int m, const float
         case Engine::analog: {
             float x = 0;
             switch (kindNow) {
-            case arcadeLead: x = 0.7f * pulseWave(v.ph[0], 0.25f - 0.12f * st.colour, v.inc[0]); break;
+            case arcadeLead: x = 0.7f * pulseWave(v.ph[0], 0.22f - 0.06f * st.colour, v.inc[0]); break;   // (GRIT narrowed around its default, 2026-11-05)
             case basementBass: x = 0.55f * blepSaw(v.ph[0], v.inc[0]) + 0.7f * sinCycle(v.ph[1]); break;
             case cassetteStrings: x = 0.4f * (blepSaw(v.ph[0], v.inc[0]) + blepSaw(v.ph[1], v.inc[1])) + 0.25f * blepSaw(v.ph[2], v.inc[2]); break;
             case fadedStrings: x = 0.33f * (blepSaw(v.ph[0], v.inc[0]) + blepSaw(v.ph[1], v.inc[1]) + blepSaw(v.ph[2], v.inc[2])); break;
             default: x = blepSaw(v.ph[0], v.inc[0]); break;   // the voices: a glottal-ish saw
             }
             for (std::size_t k = 0; k < 3; ++k) { v.ph[k] += v.inc[k]; v.ph[k] -= std::floor(v.ph[k]); }
-            if (kindNow == soloVoice || kindNow == hummedMemory) x += v.noise.bipolar() * 0.05f;   // breath
+            if (kindNow == soloVoice) x += v.noise.bipolar() * 0.05f;   // breath
             v.filter.tick(x);
             float y = v.filter.low;
             if (v.formantGain[0] > 0.0f) {
                 float f = 0;
                 for (int k = 0; k < 3; ++k)
                     if (v.formantGain[k] > 0.0f) { v.formant[k].tick(kindNow == fadedStrings ? y : x); f += v.formant[k].band * v.formant[k].k * v.formantGain[k]; }
-                y = kindNow == fadedStrings ? 0.6f * y + 0.8f * f : (kindNow == hummedMemory ? 0.5f * y + f : f);
+                y = kindNow == fadedStrings ? 0.6f * y + 0.8f * f : f;
             }
             l = y * v.panL;
             r = y * v.panR;
@@ -639,9 +700,6 @@ void Library::renderVoice(Voice& v, float* outL, float* outR, int m, const float
         }
         }
         float g = v.amp * v.gain * trim * trem[i];
-        if (kindNow == hummedMemory) {   // half-remembered: the hum breathes in and out
-            g *= 1.0f - 0.35f * st.colour * (0.5f + 0.5f * std::sin(twoPi * (0.17f * v.age + 0.3f * float(v.note))));
-        }
         if (v.stolen) {
             v.fade = std::max(0.0f, v.fade - v.fadeStep);
             g *= v.fade;
@@ -680,7 +738,7 @@ void Library::render(float* left, float* right, int n) {
             float depth = 0, rate = 0.5f;
             if (kindNow == cassetteStrings) { depth = 2.0f + 11.0f * st.colour; rate = 0.7f; }
             if (kindNow == warpedOrgan) { depth = 2.0f + 20.0f * st.colour; rate = 0.45f; }
-            if (kindNow == hummedMemory) { depth = 3.0f + 6.0f * st.colour; rate = 0.25f; }
+            if (kindNow == distantRadio) { depth = 4.0f + 8.0f * st.colour; rate = 0.3f; }   // the station drifts (with Liminality's wander)
             flutterPhase += tick * 7.5f;
             flutterPhase -= std::floor(flutterPhase);
             wowCents = wow.tick(rng, rate, tick) * depth + (kindNow == cassetteStrings ? 1.5f * st.colour * std::sin(twoPi * flutterPhase) : 0.0f);
@@ -741,8 +799,26 @@ void Library::render(float* left, float* right, int n) {
                 l += mix * echoLp[1];
                 r += mix * echoLp[0];
             }
-            left[done + i] += l;
-            right[done + i] += r;
+            // Distant Radio: the station fades slowly in and out (two slow, unrelated cycles), and its static
+            // sits under the music (more of both with Station); both follow the playing and die with it.
+            if (kindNow == distantRadio) {
+                radioLevel += radioLevelCoef * ((std::abs(l) + std::abs(r)) - radioLevel);
+                radioFadePhase += 1.0f / float(sr);
+                if (radioFadePhase >= 1000.0f) radioFadePhase -= 1000.0f;
+                const float depth = 0.12f + 0.25f * st.colour;
+                const float fade = 1.0f - depth * (0.5f + 0.25f * std::sin(twoPi * 0.093f * radioFadePhase) + 0.25f * std::sin(twoPi * 0.231f * radioFadePhase + 1.3f));
+                staticZ += 0.35f * (radioNoise.bipolar() - staticZ);
+                const float hiss = (0.05f + 0.12f * st.colour) * staticZ * std::min(radioLevel, 0.4f);
+                l = l * fade + hiss;
+                r = r * fade + 0.92f * hiss;
+            }
+            bufL[i] = l;
+            bufR[i] = r;
+        }
+        if (treated) remembered.process(bufL, bufR, m, wander());
+        for (int i = 0; i < m; ++i) {
+            left[done + i] += bufL[i];
+            right[done + i] += bufR[i];
         }
         clock -= m;
         done += m;

@@ -107,7 +107,7 @@ std::vector<Preset> build() {
     held("ELEVATOR VIBRAPHONE", 2, 11, "Muzak vibes with a slow tremolo");
     held("MALL CHIMES", 4, 12, "Public-address chimes over an empty concourse");
     held("SOLO VOICE", 3, 13, "One distant singer: a soft ooh and aah");
-    held("HUMMED MEMORY", 3, 14, "A hum you almost remember");
+    held("DISTANT RADIO", 0, 14, "A melody from a small radio in another room");
     held("CASSETTE STRINGS", 1, 15, "A soft pad played from a worn tape");
     held("ARCADE LEAD", 1, 16, "The lead of an empty arcade's game console");
     held("BASEMENT BASS", 5, 17, "A dull bass from the floor below");
@@ -176,7 +176,7 @@ std::vector<Preset> build() {
           holding({ { 5, 7, -3.0f }, { 2, 19, -8.0f } }) + Values { lib(5, "colour", 0.7f), { scale, 0.7f } });
     scene("LULLABY ON THE PLATFORM", "One voice and a toy piano, the last train gone", int(P::subway), 0,
           holding({ { 3, 13, -2.0f }, { 4, 9, -8.0f } }) + Values { lib(3, "colour", 0.3f) });
-    scene("HUMMING IN THE CORRIDOR", "A half-remembered hum and glass, very quiet", int(P::hospital), 0,
+    scene("A RADIO DOWN THE CORRIDOR", "A radio in another ward and glass, very quiet", int(P::hospital), 0,
           holding({ { 3, 14, 0.0f }, { 2, 19, -10.0f } }) + Values { lib(3, "colour", 0.6f), { presence, 0.4f } });
     scene("ELEVATOR TO NOWHERE", "Vibes and a dull bass between floors", int(P::hotel), 2,
           holding({ { 2, 11, -3.0f }, { 5, 17, -8.0f } }) + Values { { unreal, 0.25f }, lib(5, "colour", 0.75f) });

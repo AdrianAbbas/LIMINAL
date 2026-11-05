@@ -71,8 +71,8 @@ the checklist below.
 
 - [ ] **Patch notes 2026-11-05 (GarageBand test with the four-part piece and the test suite)** (section at the end). Resume from the first unticked line:
   - [x] Part 1 — hung / glitching notes: found and fixed (see the section); stress test group `hung` on all twenty instruments (thousands of fast notes, overlaps, note-offs inside Timing's delay, pedal, a GarageBand-like pattern with rests, a host timeline that wavers by a sample); baseline before/after logged — push `[skip ci]`
-  - [ ] Part 2 — the voices remembered, not recorded: a built-in treatment (distance, tape/age, blur, de-ess/de-breath, slow drift) always part of Empty Choir, Solo Voice and the Hollow Drone's voice layer, more room in their defaults; Solo Voice further (a corridor / a wall), smoother legato, tuning and loops checked; Faded Strings and Hallway Pizzicato softer and darker (de-click); Arcade Lead heard across a closed mall; Cassette Strings +2.5 dB; measurements before/after — push `[skip ci]`
-  - [ ] Part 3 — Hummed Memory removed; DISTANT RADIO in its slot (old sessions load it), icon, presets; in tune, level-matched, distinct — push `[skip ci]`
+  - [x] Part 2 — the voices remembered, not recorded: a built-in treatment (distance, tape/age, blur, de-ess/de-breath, slow drift) always part of Empty Choir, Solo Voice and the Hollow Drone's voice layer, more room in their defaults; Solo Voice further (a corridor / a wall), smoother legato, tuning and loops checked; Faded Strings and Hallway Pizzicato softer and darker (de-click); Arcade Lead heard across a closed mall; Cassette Strings +2.5 dB; measurements before/after (group `remembered`) — push `[skip ci]`
+  - [x] Part 3 — Hummed Memory removed; DISTANT RADIO in its slot (old sessions load it), icon, presets; in tune, level-matched, distinct — push `[skip ci]`
   - [ ] Part 4 — listening render of the four-part piece before/after (`--render-piece`, CI test-logs); DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
@@ -2261,3 +2261,133 @@ folder from CMake (`LIMINAL_SOURCE_DIR`).
 **CI, `43f3955`: green.** `Prepared: 790 notes in all`; Linux full suite **810 passed, 0 failed** and every
 listening render (`library-instruments.flac`, peak -5.2 dBFS, in the test-logs artifact); macOS: build,
 smoke + `recorded` on arm64 57/57, smoke on x86_64 16/16, package, auval and the AU harness, all passed.
+
+## Patch notes 2026-11-05 (the developer's GarageBand test: the four-part piece and the test suite)
+
+"Overall it's really good; just these fixes." Seven notes; all done. What was found, what changed, how it
+is measured. The numbers are from this container (Linux, recordings + captures as in CI).
+
+### 1. Faded Synth "gets lost and bugs out on played notes" (and Faded Strings, Hallway Pizzicato)
+
+New test group **`hung`** first, then the causes it found, each fixed where it starts:
+
+- **The host's timeline (the main one).** The processor took *any* disagreement between the host's
+  reported position and its own count as a song jump: it reseeded every instrument and relocated
+  Liminality. GarageBand derives the AU's sample position from its beat position; if it wavers by a
+  sample or two (rounding that grows through a song: "well at first, then..."), that happened every
+  block, mid-note: Faded Synth's chorus sweep jumped (a click each time), its wow restarted, Liminality's
+  ghost heads and Wear's level match were reset. With a timeline wavering by +/-2 samples the old code
+  clicked 437 times in 28 s of pattern on Faded Synth (Basement Bass 1137, Elevator Vibraphone 546) and the
+  sound differed from an exact timeline by +2 dB. Now a disagreement under 0.1 s is a host's rounding
+  (the stage keeps its own count); a real jump (cycle, a click in the ruler) still relocates, but no longer
+  touches sounding notes: instruments reseed only their randomness while voices sound, Liminality's drift
+  glides over in ~150 ms. Wavering timeline now: bit-identical to an exact one (-330 dB), 0 clicks, all
+  twenty instruments.
+- **Staccato notes bloomed into the recorded release tail.** A recorded note let go before it reached its
+  sustain loop (the fast pattern's 60 ms notes) jumped into a release tail recorded at full sustain level:
+  +8 dB *after* the note-off, ringing for the release ("hanging on random notes"; fine on held drones).
+  Such a note now keeps looping and the instrument's own release envelope ends it.
+- **A released note ran past its loop's end.** The prepared loops are blended into their start just
+  before the loop's end; a released note's head ran on past it into the unblended samples (a click after
+  pedal-ups and note-offs that fell near a loop's end). The loop now keeps looping under the tail's
+  cross-fade; a loop without a tail keeps looping. Also: the end of the release cross-fade stepped one
+  sample; a delayed or mid-recording start (the choir's distant singers, 30-90 ms late) began at full
+  level (now a 4 ms ramp, never on a note's own attack).
+- **Out-of-bounds read in Faded Synth's chorus.** `float(write) - delay` a hair below 0, plus the line's
+  length, rounds to the length in float: one read past the end of the line (rare; a random glitch). Fixed
+  (and the same guard in the new treatment's lines; the other delay lines already wrapped with `%`).
+- Faded Synth's `reset()` left its recorded voices sounding; the Lost Music Box's recordings rang on at
+  -49 dBFS 9 s after the last note (now a few seconds of ring, then a one-second fade); the piano's
+  per-key damper knocks summed into one hard thump when the pedal lifted twelve notes (now two at most per
+  control period, and every mechanical noise starts over 4 ms); a polyphony steal fades in 10 ms (was 5).
+- Not a cause, checked: the timing queue (no note-off ever overtakes its note-on; overflow falls back in
+  order), the voice pools (no key-held voice in any rest), glide (off by default), CPU (4 % of one core
+  playing the pattern, worst block 10-48 % of the budget, steady over three minutes), drift (a note after
+  a storm is within 2 cents of a fresh instance at LIMINALITY 0).
+
+**`hung`** (every one of the twenty instruments at LIMINALITY 0, 40 and 100 %): a storm of 2,600+ notes in
+12 s (sixteenth-note patterns staccato / legato / overlapping, 1-15 ms notes far shorter than Timing's
+delay, the same key twice overlapping, note-off and note-on at one sample in both orders, velocity-0
+note-ons, six-note chords, the pedal up and down), random blocks of 32-1024, a playing timeline with cycle
+jumps; then 9 s of silence: **0 voices left, the last second below -90 dBFS (loudest -107), no clicks
+(outside the notes' own onsets), a note afterwards in tune (worst 1.6 cents)**. A GarageBand-like pattern
+(44.1 kHz, 1024 blocks, the timeline playing, rests of 0.6 s, the pedal over every fourth bar): 0 rests
+with a key-held voice. The wavering timeline: as above. Before the fixes (the same group on the old
+code): 437-1137 clicks with a wavering timeline, the music box's notes left sounding, 27 of 60
+instrument x LIMINALITY runs with clicks; now 0.
+
+### 2-4, 7. Remembered, not recorded: the voices, the strings, the pizzicato, the arcade lead
+
+`DSP/Remembered.h`: one chain, a profile per instrument, always part of the instrument (in every slot,
+whatever the effects): bandwidth (tape, distance, a wall), a de-esser on the band above 4.5 kHz
+(sibilants, consonants, breaths), an attack that cannot rise faster than its profile allows, a little
+tape saturation, wow and a slower drift (scaled by LIMINALITY's wander: at 0 % the instruments stay
+perfectly stable, as everywhere), a short allpass diffuser (blur), pre-delayed early reflections (spread
+wider for a corridor), a faint hiss that follows the playing and dies with it, a far echo for the arcade.
+Level-matched per profile. And more of the room by default (each instrument's send to the place's room:
+choir x1.5, Solo Voice x1.8, strings and pizzicato x1.25, arcade x2.0, radio x1.4, drone x1.15).
+
+- **Empty Choir**: 110 Hz - 4.2 kHz, de-ess 0.8, the attack spread over 0.4 s, blur 0.45, reflections
+  after 18 ms; still recognisably sung (vowels below 3 kHz untouched).
+- **Solo Voice** (the strongest: down a corridor / through a wall): 150 Hz - 3 kHz with a wall's body,
+  de-ess 1.0, blur 0.6, the direct sound at 0.6 and the corridor's reflections at 0.8 after 26 ms.
+  **Legato**: one singer now: a note sung while another is held (or still ringing) takes over from it
+  with a 120 ms glide from the last pitch, the last note fading over 180 ms (it used to be two overlapping
+  singers). **Tuning**: the sweeps start at E3; G2-C3 were the E3 take transposed down nine semitones
+  (+18 cents and not a voice any more): they now play his low 'aah' drone (G2). Held notes G2-C5 within
+  8.2 cents; 4 s held notes loop click-free across the range; each voice zone is also tuned to its loop
+  in `tools/sample-prep/liminal.py` (they agreed within 4 cents: the recordings were in tune).
+- **Hollow Drone**: its voice layer (only) through a lighter choir profile.
+- **Faded Strings**: attack 0.16 -> 0.26 s and the treatment's 0.45 s rise, 4.2 kHz per-voice tone,
+  100 Hz - 4 kHz, blur 0.35, reflections after 14 ms.
+- **Hallway Pizzicato**: attack 3.5 -> 9 ms plus an 18 ms rise (less clicky), darker (4.6 kHz voice tone,
+  3.6 kHz band), its hallway echo kept.
+- **Arcade Lead**: an empty arcade at night from across a closed mall: 220 Hz - 2.4 kHz, carpet-damped
+  (a wall's body), wow 9 cents (with LIMINALITY), attack 4 -> 18 ms, a far dark echo at 360 ms; still the
+  square lead. GRIT narrowed around its default (the rooms must still change it more than any control).
+- **Cassette Strings** (6): +2.5 dB (measured +2.54), nothing else.
+
+Measured (group **`remembered`**; "before" = `--probe-treatment` on the code before, 13351aa, built with
+`scripts/build-before.sh`): energy above 4 kHz against the whole, dB; attack = an isolated note's first
+60 ms against its body, dB; level of the phrase.
+
+| | above 4 kHz | attack | level |
+|---|---|---|---|
+| Empty Choir | -39.1 -> -49.6 | -24.1 -> -39.2 | -30.83 -> -30.83 |
+| Solo Voice | -44.6 -> -68.3 | -16.4 -> -32.8 | -24.41 -> -24.40 |
+| Faded Strings | -27.0 -> -40.2 | -19.2 -> -33.9 | -24.41 -> -24.47 |
+| Hallway Pizzicato | -14.8 -> -30.7 | +10.5 -> +2.4 | -24.37 -> -24.36 |
+| Arcade Lead | -26.6 -> -54.1 | -0.1 -> -5.1 | -25.09 -> -25.05 |
+| Cassette Strings | -86.1 -> -87.5 | -14.8 -> -14.8 | -24.41 -> -21.87 |
+| Hollow Drone | -33.3 -> -34.1 | -19.5 -> -19.5 | -28.54 -> -28.69 |
+
+Checks: at least 6 dB less above 4 kHz, at least 4 dB softer attack, the level within 1 dB (Cassette:
++2.5 +/- 0.5); the rooms still clearly change the choir and the solo voice (every pair of the ten
+places apart: closest 1.83 and 2.00; group `library-rooms` for the others).
+
+### 5. Hummed Memory removed: DISTANT RADIO in its place
+
+A melody from a small radio in another room: the developer's piano recordings (short notes, velocity
+layers) through a small speaker (320-380 Hz - 2.9 kHz, a 1.25 kHz cone resonance, cone saturation), the set
+a few cents flat (more with its own control, STATION), the station drifting (with LIMINALITY), slow AM
+fading and static under the music, muffled through a wall into the next room. Stand-in: a soft FM tine
+through the same radio. Same index (14) in the slot's list, so **an old session that held Hummed Memory
+loads Distant Radio** (group `sessions`: the old states load, every slot keeps its type). Icon: a small
+radio with its aerial. Presets: DISTANT RADIO (instrument), A RADIO DOWN THE CORRIDOR (the scene that
+was HUMMING IN THE CORRIDOR, same program number). In tune (worst 7.7 cents with the recordings, 7.1 on the
+stand-in), level-matched to the piano (-0.1 dB), distinct (group `library`).
+
+### Tests and renders
+
+- Groups added: `hung` (2-4 min), `remembered`; both in `scripts/run-tests-parallel.sh`.
+- `sessions`: the fixture's saved states are the old ones (loading checked as before); their sound
+  fingerprints were re-taken with this build (`--refresh-session-fingerprints`), because the patch
+  changes the instruments' sound on purpose.
+- `liminality`: the choir's "applies a note's pitch" check reads one singer (Detune 0): the four detuned
+  singers' joint spectral peak leaned with the new colour; the pitch itself is unchanged.
+- **Listening render** (CI test-logs, `piece-after.flac`, `piece-before.flac` + cue sheets, and
+  `treatment-before.txt` / `treatment-after.txt`): the four-part piece (pattern, chorale with pedal,
+  legato melody, repeats over a drone) on Faded Synth, Empty Choir in the hospital, Solo Voice, Faded
+  Strings, Hallway Pizzicato, Arcade Lead and the radio's slot (Hummed Memory before), product defaults.
+  The "before" comes from the old code itself: CI builds 13351aa with today's render
+  (`scripts/build-before.sh`). **Not listened to** (no audio output here).
