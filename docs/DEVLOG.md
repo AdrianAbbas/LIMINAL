@@ -69,11 +69,11 @@ the checklist below.
 
 **Render queue (Part 3, resume note):** scenes render one after another with `LIMINAL_SAMPLES=80 python3 tools/scenes/render.py <scene>` (~45-60 min each on 4 cores). If a scene's EXRs are complete in `build/scenes/<scene>/` but its assets are missing, `render.py <scene> --pack-only` packs them without rendering.
 
-- [ ] **Patch notes 2026-11-05 (GarageBand test with the four-part piece and the test suite)** (section at the end). Resume from the first unticked line:
+- [x] **Patch notes 2026-11-05 (GarageBand test with the four-part piece and the test suite)** (section at the end) — *waiting for the developer's GarageBand listen*. Resume from the first unticked line:
   - [x] Part 1 — hung / glitching notes: found and fixed (see the section); stress test group `hung` on all twenty instruments (thousands of fast notes, overlaps, note-offs inside Timing's delay, pedal, a GarageBand-like pattern with rests, a host timeline that wavers by a sample); baseline before/after logged — push `[skip ci]`
   - [x] Part 2 — the voices remembered, not recorded: a built-in treatment (distance, tape/age, blur, de-ess/de-breath, slow drift) always part of Empty Choir, Solo Voice and the Hollow Drone's voice layer, more room in their defaults; Solo Voice further (a corridor / a wall), smoother legato, tuning and loops checked; Faded Strings and Hallway Pizzicato softer and darker (de-click); Arcade Lead heard across a closed mall; Cassette Strings +2.5 dB; measurements before/after (group `remembered`) — push `[skip ci]`
   - [x] Part 3 — Hummed Memory removed; DISTANT RADIO in its slot (old sessions load it), icon, presets; in tune, level-matched, distinct — push `[skip ci]`
-  - [ ] Part 4 — listening render of the four-part piece before/after (`--render-piece`, CI test-logs); DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] Part 4 — listening render of the four-part piece before/after (`--render-piece`, CI test-logs); DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
@@ -2391,3 +2391,30 @@ stand-in), level-matched to the piano (-0.1 dB), distinct (group `library`).
   Strings, Hallway Pizzicato, Arcade Lead and the radio's slot (Hummed Memory before), product defaults.
   The "before" comes from the old code itself: CI builds 13351aa with today's render
   (`scripts/build-before.sh`). **Not listened to** (no audio output here).
+
+Tests (this container, recordings + captures): **full suite 1251 passed, 0 failed** (`library` and
+`sessions` also pass without the recordings). Report-only lines unchanged (the rooms' closest pair against
+the strongest control, as before). Listening renders written here: `piece-after.flac` peaks at -0.5 dBFS
+(the pizzicato's pedalled chorale, as before the patch: 0.0 dBFS), the others -4.8 to -17 dBFS.
+
+### Not verified here
+
+macOS, the AU, GarageBand: CI's first run on this patch is its first macOS build. Nothing was listened to
+(no audio output in this container). Whether GarageBand's reported position really wavers was not
+observed (no GarageBand here); the fix makes LIMINAL immune to it either way, and the other causes were
+reproduced and fixed on their own.
+
+### For the developer's GarageBand check
+
+1. **The four-part piece on Faded Synth** (the bug): pattern, chorale, melody, repeats, several times
+   through a cycle region, at LIMINALITY 0, 40 and 100 %: no note should hang, nothing should glitch,
+   staccato notes stay short. Then Faded Strings and Hallway Pizzicato the same way.
+2. **Empty Choir in the Hospital**, out of the box: distant, softer consonants and breaths, a slow drift,
+   more room; still a choir. Then through a few other places: each should still sound clearly different.
+3. **Solo Voice**: a slow legato melody: one singer gliding between notes, heard down a corridor; the
+   lowest notes (G2-C3) should sound like a voice now.
+4. **Faded Strings / Hallway Pizzicato**: softer, slower onsets, the pizzicato no longer clicky.
+5. **Distant Radio** (in an old song that used Hummed Memory, the slot now holds it): a melody from a
+   radio in another room; STATION from clear to more off-station.
+6. **Cassette Strings** a little louder; **Arcade Lead** muffled, wobbly, distant, still the game lead.
+7. Compare `piece-before.flac` / `piece-after.flac` (Linux test-logs artifact, cue sheets beside them).
