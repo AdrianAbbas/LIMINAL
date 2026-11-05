@@ -2431,3 +2431,9 @@ a legato note now starts from its sustain loop (no second sung onset) and the la
 worst hole 6.9 dB; Solo Voice's level re-matched (+1.4 dB make-up, stand-in trim -0.7 dB). Local suite
 1250 of 1251; the one failure is the wall-clock "Liminality is light" CPU check, which the code before the
 patch fails here too on some runs (32.0 -> 42.4 %) and passes on re-runs; it passed on CI.
+
+**CI, `dc8e61c`: green.** `Prepared: 790 notes in all`; Linux full suite **1251 passed, 0 failed**, every
+listening render including `piece-after.flac` (peak -0.5 dBFS) and `piece-before.flac` (built from
+13351aa in the same job, peak 0.0 dBFS) with `treatment-before.txt` / `treatment-after.txt`, in the
+LIMINAL-linux-test-logs artifact; macOS: build, smoke + `recorded` on arm64, smoke on x86_64, package,
+auval and the AU harness, all passed.
