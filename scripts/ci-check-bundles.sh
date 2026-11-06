@@ -5,7 +5,7 @@
 # Usage: scripts/ci-check-bundles.sh <instrument artefacts, e.g. build/LIMINAL_artefacts/Release> <effect artefacts, e.g. build/TapewornFX_artefacts/Release>
 set -euo pipefail
 artefacts="$1"
-fx="${2:?the effect's artefacts directory}"
+fx="${2:?the artefacts directory of the effect}"
 status=0
 for bundle in "$artefacts/AU/TAPEWORN.component" "$artefacts/VST3/TAPEWORN.vst3" "$artefacts/Standalone/TAPEWORN.app"; do
     binary="$bundle/Contents/MacOS/TAPEWORN"
@@ -78,6 +78,9 @@ fxcheck manufacturer Wnwd
 fxcheck factoryFunction TapewornFXAUFactory
 fxcheck sandboxSafe true
 fxcheck name "Windward Audio: TAPEWORN FX"
-# The instrument's codes stay its own.
-if [[ "$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:subtype" "$plist" 2>/dev/null)" == "Tpfx" ]]; then echo "::error::the instrument took the effect's subtype"; status=1; fi
+# The instrument keeps its own codes.
+instrument_subtype=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:subtype" "$plist" 2>/dev/null || echo "(absent)")
+if [[ "$instrument_subtype" == "Tpfx" ]]; then
+    echo "::error::the instrument took the subtype of the effect"; status=1
+fi
 exit $status

@@ -7,7 +7,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 artefacts="$1"
 dist="$2"
-fx="${3:?the effect's artefacts directory}"
+fx="${3:?the artefacts directory of the effect}"
 stage="$dist/TAPEWORN-macOS-Universal"
 rm -rf "$stage" "$dist/TAPEWORN-macOS-Universal.zip"
 mkdir -p "$stage"
