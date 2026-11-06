@@ -2781,3 +2781,25 @@ effect. Nothing was listened to (no audio output in this container).
 5. Presets (by source), INIT, UNDO / REDO, A / B (B starts as a copy of A; A>B copies). Save a song,
    reopen it: the settings, the preset's name and both A and B come back.
 6. A mono track (mono in, stereo out) and a stereo one.
+
+### CI fixes after the final push (2026-11-06)
+
+- `b22ad01`: Linux green (instrument 1297 passed / 0 failed with `Prepared: 790 notes in all`; TAPEWORN
+  FX 122 / 0; every render, the FX listening render included). macOS: the FX parameter-defaults check
+  compared 0.7 exactly (Apple clang rounds the parameter's 0.001 step differently): now within the
+  step.
+- `b6ac55a`: the bundle gate failed to parse - an apostrophe inside `${2:?...}` (macOS bash reads it
+  as a quote; the same in `package-mac.sh`): reworded.
+- `7ff6723`: everything up to the install passed - bundle gate for both, package with both,
+  `install-mac.sh` installing both side by side, the registry listing `aufx Tpfx Wnwd` once as
+  "Windward Audio: TAPEWORN FX", `auval -v aufx Tpfx Wnwd` PASS on arm64 and x86_64. The FX
+  harness failed one check on all four runs: "Output -> minimum is audible" (-33 -> -41 dBFS for
+  -24 dB): the harness's pure 440 Hz sine sits in the hospital's flutter comb and the automatic level
+  match was still raising the gain while it measured. The harness now measures Output at Mix 0 (the
+  input times Output, exactly), the other checks unchanged.
+- **`e64cf7f`: CI green.** Linux: both suites and every render. macOS: build, smoke (instrument and
+  effect, arm64 and x86_64), the bundle gate, package, install over a planted LIMINAL copy, auval
+  for both plug-ins and both harnesses in- and out-of-process on arm64 and x86_64 (TAPEWORN 65 / 63
+  checks, TAPEWORN FX 61 / 59, no failures; the AUAudioUnit routes, diagnostic, pass too). The
+  installable zip (both plug-ins) is the `TAPEWORN-macOS-Universal` artifact of that run; the
+  listening render is in `TAPEWORN-linux-test-logs/fx-listening/`.
