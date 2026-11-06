@@ -228,3 +228,33 @@ measured by the tests (in tune, level, distinct); the developer's listening deci
 - **Recorded voices** (all sampled ones): the sample bank's `Reader` (Milestone 8), every note evened to
   one loudness (`-21 - loudnessDb`), velocity as a curve, the instrument's own envelope on top
   (Softness, Decay), looped sets released into their recorded tails.
+
+## Real woodwinds (2026-11-06): the woodwind layer (`DSP/Woodwind`)
+
+- **What:** a soft flute (Elevator Vibraphone: muzak's vibes-and-flute) or a soft clarinet (Lounge
+  E-Piano: a hotel lounge record) played along with the instrument, on its own control
+  (`<slot>_lib_wind`, MUZAK FLUTE / LOBBY CLARINET; 0 = the instrument exactly as before) and a voice
+  choice (WIND VOICE: Woodwind, or Recorder = the developer's alto recorder once it is recorded, the
+  flute until then).
+- **Samples:** VSCO 2 Community Edition (CC0, `docs/LICENSES/`): the soft takes of the sustained flute
+  without vibrato (10 notes, C4-C7, every minor third / major third) and the sustained clarinet
+  (11 notes, D3-F6). VSCO names both an octave below where they sound; the prep maps every note at its
+  measured pitch (YIN + harmonics; all within +/-6 cents, the clarinet takes 2-5 cents sharp as played,
+  tuned out by the sampler). Loops by prepare.py's search (long: 3-11 s of each note), release tails
+  where the player stops. Notes outside the range fold in by octaves (a flute has no low G).
+- **Playing:** the take's own onset under a 60 ms breath-in; a gentle vibrato on the flute only
+  (4.9 Hz, +/-9 cents, growing in after 0.35 s: the muzak player's; the clarinet and the recorder play
+  straight); release into the recorded tail plus a 0.9 s breath-out. Velocity: 0.4 + 0.6 v^1.3.
+- **Never clean:** always through its own remembered treatment (`DSP/Remembered`): the flute from an
+  elevator's ceiling speaker (260 Hz - 3 kHz, a little wall, tape saturation, wow 6 / drift 7 cents with
+  Liminality's wander, blur 0.5, reflections 0.6 after 20 ms, the direct sound at 0.65, hiss -54 dB), the
+  clarinet across a lobby (150 Hz - 2.5 kHz, wall 0.3, de-ess 0.7, blur 0.55, reflections 0.75 after
+  28 ms over a corridor's spacing, direct 0.6, hiss -56 dB). Measured: 16-18 dB less of its top
+  (4-16 kHz) than the bare sample.
+- **Stand-in** (no samples): a near-sine with weak 2nd/3rd harmonics (flute) or odd harmonics
+  1/3/5/7 (clarinet), band-passed breath around the second harmonic, a short chiff; -3.8 / -4.5 dB to
+  match the recordings (`Woodwind::standInTrimDb`).
+- **Blend:** constant power (the instrument cos(0.93 a), the woodwind sin(0.93 a) x its match: +8.4 dB
+  flute, +7.4 dB clarinet), plus a per-place-and-Character correction
+  (`Source/DSP/WoodwindLevelTable.h`, `LiminalTests --calibrate-woodwind`) scaled by the woodwind's share
+  of the sound: the instrument with its woodwind is as loud as the instrument alone in every room.

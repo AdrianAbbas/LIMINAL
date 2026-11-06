@@ -84,11 +84,11 @@ the checklist below.
   - [x] Part 2 — the effect: `Fx/FxProcessor` (latency 20 ms reported, Mix / Input / Output / Intensity / Bypass, mono, mono -> stereo, stereo), `Fx/FxLiminality` (the ten controls for audio, pitch line with matched wraps), level match (`Fx/FxLevelMatch*`, calibrated table + automatic make-up), 26 presets (`Fx/FxPresets`), A/B + undo, editor (`Fx/FxEditor`: the shared viewfinder, PLACE / LIMINALITY / PRESETS pages); click fixes in the shared DSP (S-curve cross-fades, per-sample amounts, the signature's start, the sends' fades)
   - [x] Part 3 — tests (`Tests/FxTests.cpp`: strength on guitar / vocal / mix, levels, clicks, latency, realtime, presets, state, mono, editor), listening render, CI (Linux suite + render; macOS: smoke on both slices, bundle gate, package with both, install both, auval aufx + `TapewornFXAUHarness` in- and out-of-process), install / uninstall scripts, README, manual, snapshots — push `[skip ci]`
   - [x] Part 4 — DEVLOG section + GarageBand handoff; final push **without** `[skip ci]`, wait for CI green
-- [ ] **Real woodwinds 2026-11-06 — the free CC0 library VSCO 2 Community Edition** (section at the end) — Resume from the first unticked line:
+- [x] **Real woodwinds 2026-11-06 — the free CC0 library VSCO 2 Community Edition** (section at the end) — *waiting for the developer's GarageBand listen*. Resume from the first unticked line:
   - [x] Part 0 — licence: downloaded (official source github.com/sgossner/VSCO-2-CE, tag 1.1.0 = `2809277`), `LICENSE` is CC0 1.0 Universal: text, source and version in `docs/LICENSES/`; audit of all twenty instruments and their layers for anything woodwind-like (none; see the section)
   - [x] Part 1 — prep (`tools/sample-prep/woodwinds.py`: soft sustained flute + clarinet, looped, in tune; the alto recorder slot), CI fetch from the official source (cached, licence checked, never committed) — push `[skip ci]`
   - [x] Part 2 — the wind layer (`DSP/Woodwind`): recorded + synthesised stand-in (level-matched), always heard distant and faded (its own remembered treatment); optional blend on its own control for Elevator Vibraphone (flute) and Lounge E-Piano (clarinet); Recorder voice (the developer's alto recorder when recorded, else the flute); editor, presets — push `[skip ci]`
-  - [ ] Part 3 — tests (group `woodwind`: cents report, clicks at loops / note-offs, realistic loudness, distinct, Liminality and the rooms), listening render `--render-woodwinds` (before / after, dry + three rooms), DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] Part 3 — tests (group `woodwind`: cents report, clicks at loops / note-offs, realistic loudness, distinct, Liminality and the rooms), listening render `--render-woodwinds` (before / after, dry + three rooms), DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
@@ -2808,3 +2808,148 @@ effect. Nothing was listened to (no audio output in this container).
   checks, TAPEWORN FX 61 / 59, no failures; the AUAudioUnit routes, diagnostic, pass too). The
   installable zip (both plug-ins) is the `TAPEWORN-macOS-Universal` artifact of that run; the
   listening render is in `TAPEWORN-linux-test-logs/fx-listening/`.
+
+---
+
+## Real woodwinds 2026-11-06 — VSCO 2 Community Edition (CC0)
+
+Asked: real woodwinds for TAPEWORN (and TAPEWORN FX where relevant) from the free CC0 library
+"VSCO 2 Community Edition" (Versilian Studios); its licence recorded first (stop if not CC0); samples
+fetched in CI from the official source, never committed; synthesised stand-ins, level-matched; every
+instrument and layer checked for anything woodwind-like and switched to the matching woodwind, heard
+distant and faded through its treatment; an optional soft flute / clarinet blend where it makes an
+instrument more nostalgic; no new instruments; a slot ready for the developer's own alto recorder.
+
+### 0. The licence (checked before anything else)
+
+Downloaded from the official source, `https://github.com/sgossner/VSCO-2-CE`, release tag **1.1.0**
+(commit `28092772094b2d9f1148d84cea97f4545b8c687d`; `master` has the identical `Woodwinds/` tree and
+`LICENSE`). Its `LICENSE` is **CC0 1.0 Universal** (a public domain dedication), so the work went
+ahead. The full text, source URL, version and checksum are in **`docs/LICENSES/`** (`README.md` and
+`VSCO-2-CE_CC0-1.0.txt`, the file exactly as shipped, md5 `7bae63a2...`). The library's Readme adds
+two requests that are not conditions (don't sell the samples on their own; credit Versilian Studios /
+Sam Gossner, Simon Dalzell where applicable): both honoured (credit in `docs/LICENSES`, the README and
+here; no brand name in the product: the sets are `ww-flute`, `ww-clarinet`). CI re-checks the
+licence's md5 on every run and fails if the tag or the text ever changes.
+
+### 1. Audit: all twenty instruments and their layers, for anything woodwind-like
+
+| Instrument | Its layers (recordings / synthesis) | Woodwind-like? |
+|---|---|---|
+| Forgotten Piano | piano short + long notes, resynthesised tail, hammer / damper noises | no |
+| Faded Synth | analog voice; Minilogue patches soft pad, pulse, square, cyberpunk, static bass | no (the square is a synth's, not a reed) |
+| Glass Memories | struck and rubbed glass (modes, stick-slip) | no (a friction idiophone) |
+| Empty Choir | voice sweeps, choir stacks, falsetto ghost, hum; breath | no (the breath is a singer's) |
+| Lost Music Box | kalimba tines, the piano's top, the mechanism | no |
+| Hollow Drone | voice drones, violin, pad, static bass | no |
+| Old Guitar, Faded Strings, Hallway Pizzicato | guitar, violin sustain / pizzicato / col legno (+ plucked-string and bowed stand-ins) | no |
+| Toy Piano, Mall Chimes, Bowed Glass | piano + kalimba / modal bars and bells | no |
+| Lounge E-Piano | two-operator tine | no — **clarinet blend added** (below) |
+| Elevator Vibraphone | modal bars + motor tremolo | no — **flute blend added** (below) |
+| Solo Voice | voice ooh / aah, low drone | no |
+| Distant Radio | the piano through a small radio | no (a clarinet considered: through the radio's 380 Hz - 2.9 kHz band it is hard to tell from the piano's mids, and "a melody from a radio" is the piano by design: skipped) |
+| Cassette Strings, Arcade Lead, Basement Bass | Minilogue soft pad / square + cyberpunk / static bass (+ analog stand-ins) | no (the arcade lead's square has a clarinet's odd harmonics, but it is a game console's chip lead by design) |
+| Warped Organ | combo-organ drawbars (additive, its own key click) | no (an electronic combo organ's "flute" footages are drawbars, not a pipe or a reed; a real flute would not make it a better organ) |
+
+**Nothing was woodwind-like, so nothing was switched**, and no VSCO oboe, piccolo or bassoon is used.
+**TAPEWORN FX**: it plays no instruments (it processes the track), so the woodwinds are not relevant
+there; nothing changed in it (its suite: 122 passed, 0 failed).
+
+### 2. The two blends (each optional, on its own control; default 0 = the instrument exactly as before)
+
+| Instrument | Woodwind (VSCO 2 CE set) | Control | Heard as | Why it helps |
+|---|---|---|---|---|
+| **Elevator Vibraphone** | **flute**: `Woodwinds/Flute/susNV`, the soft `_v1_` takes (10 notes, C4-C7) -> `ww-flute` | **MUZAK FLUTE** | from an elevator's ceiling speaker: small, far, an old tape, a soft vibrato | vibes doubled by a flute is the muzak sound itself |
+| **Lounge E-Piano** | **clarinet**: `Woodwinds/Clarinet/susLong`, the soft `_v1_` takes (11 notes, D3-F6) -> `ww-clarinet` | **LOBBY CLARINET** | across a hotel lobby from the lounge's old record | the e-piano and a soft clarinet: an empty hotel lobby's lounge music |
+
+Both pages also get **WIND VOICE**: *Woodwind* (the instrument's own) or *Recorder*. Presets (appended,
+host program numbers unchanged): **MUZAK WITH FLUTE** (vibraphone, flute 65 %), **LOBBY CLARINET**
+(e-piano, clarinet 60 %).
+
+- **`DSP/Woodwind`** (an `Instrument` of its own, so Liminality's note shapes and drift / wow / warble
+  reach it through the same hooks; the owning Library hands them over): recorded notes through the
+  sample bank's `Reader` (loops, release tails, every note at one loudness), a 60 ms breath-in, a 0.9 s
+  breath-out, folded into its range by octaves; a synthesised stand-in (flute: near-sine + breath;
+  clarinet: odd harmonics + breath), -3.8 / -4.5 dB to match the recordings.
+- **Never clean:** each always passes through its own remembered treatment (`DSP/Remembered`
+  profiles `woodwind::muzakFlute`, `woodwind::lobbyClarinet`: bandwidth, a little wall, tape
+  saturation, wow / drift, blur, early reflections at a distance, a faint hiss). Measured: the top
+  (4-16 kHz) 16-18 dB below the bare sample's, under -55 dB of the whole. Details:
+  `docs/INSTRUMENT_NOTES.md`, "Real woodwinds".
+- **Level:** constant power (the instrument cos 0.93a, the woodwind sin 0.93a x its match), plus a
+  per-place-and-Character correction table (`Source/DSP/WoodwindLevelTable.h`,
+  `LiminalTests --calibrate-woodwind`) scaled by the woodwind's share: the instrument with its
+  woodwind is as loud as the instrument alone in every room.
+- **Parameters** (appended; old sessions and presets load unchanged): `<slot>_lib_wind` (0..1, 0) and
+  `<slot>_lib_wind_voice` (Woodwind / Recorder) for all six slots.
+
+### 3. The alto recorder slot (ready for the developer's recording)
+
+Add a folder named **`alto-recorder`** (or `recorder`) anywhere in `AdrianAbbas/Samples` with one WAV
+(or MP3 / FLAC / AIFF) per note, the note in the file name (`F4.wav`, `alto recorder C5 soft.wav`, `F#5`
+or `Fs5`), each note held a few seconds and let go naturally. CI then prepares it as the set
+`alto-recorder` (`scripts/ci-fetch-samples.sh` -> `tools/sample-prep/woodwinds.py --recorder`: pitch
+measured, looped, release tail), and **WIND VOICE = Recorder** plays it on either instrument (through
+the same treatment, straight, no vibrato: a school recorder). Until then Recorder plays the flute, and
+the CI log says "no alto recorder recorded yet".
+
+### 4. Prep and CI
+
+- `tools/sample-prep/woodwinds.py`: mono, 25 Hz high-pass, onset trimmed (5 ms kept), pitch measured
+  (VSCO names both an octave low; every note mapped where it sounds - the clarinet's "F#5" sounds F6),
+  prepare.py's loop search and release point, one gain per set, prepare.py's `finish_set` for the map;
+  added to `index.json` (created when the developer's recordings are absent). 21 notes, 6.9 MB of FLAC.
+- `scripts/ci-fetch-woodwinds.sh` (both jobs, after the private recordings): a blob-filtered sparse
+  checkout of tag 1.1.0 (only `Woodwinds/Flute/susNV`, `Woodwinds/Clarinet/susLong`, `LICENSE`,
+  `Readme.txt`; ~27 s), commit and licence checked, kept by `actions/cache` (key
+  `vsco2ce-1.1.0-28092772-woodwinds-v1`); network failure -> a warning and the stand-ins.
+- The macOS arm64 smoke runs the `woodwind` group too; Linux runs it in the full suite and renders
+  `woodwinds.flac` (+ `woodwinds.txt` cue sheet) into the `TAPEWORN-linux-test-logs` artifact.
+
+### 5. Tests (group `woodwind`, 81 checks; this container, recordings + woodwinds as in CI: **81 passed, 0 failed**)
+
+- **In tune (cents report, every 3 semitones of each layer's range, bare and through the treatment;
+  the flute's centre over seven vibrato cycles):** flute worst 1.3 c bare / 4.1 c treated (13 notes);
+  clarinet 3.7 / 3.6 c (13 notes); stand-ins 0.2 / 5.5 c and 0.0 / 0.0 c; through the slot (A4, the
+  instrument and its woodwind together) -0.1 / -1.3 c. (A single long spectrum of a vibrato flute
+  reads up to 13 c off for a note exactly in tune - with the vibrato off every note is within 0.8 c -
+  hence the frame-wise centre.)
+- **No clicks:** seven notes held 20 s (several loop cycles) and let go, across the range; the phrase,
+  chords with the pedal, 24 quick notes, the control automated 0 -> 1 -> 0.5 -> 1 -> 0.3 -> 0 -> 0.8 -> 0
+  while a chord sounds: 0 clicks everywhere, recordings and stand-ins; no hung woodwind notes.
+- **Level (realistic loudness, BS.1770 LUFS of the phrase in the room, the bed down):** default room
+  at 60 % / 100 %: vibraphone + flute -0.31 / -0.03 LU, e-piano + clarinet -0.01 / +0.06 LU
+  (stand-ins -0.40 / -0.38 and -0.24 / -0.65); school, hotel, impossible room 0.00 LU each; stand-in vs
+  recordings -0.36 / -0.70 LU; no clipping played hard.
+- **Distinct** (the library group's features, against all twenty at their defaults): vibraphone +
+  flute's closest is Warped Organ 3.06, e-piano + clarinet's Faded Synth 2.85 (threshold 1.5).
+- **Liminality and the rooms:** a +30 c note shape moves the woodwind +30.0 / +29.9 c, a -25 c drift
+  -25.0 / -24.9 c; LIMINALITY 100 % finite, click-free, clearly changed (residual 4.2 / 2.9 dB), level
+  within 2.1 / 0.5 LU.
+- **Editor:** both pages show the controls, all inside the drawer, none overlapping
+  (`docs/snapshots/woodwind-vibraphone-flute.jpg`, `woodwind-epiano-clarinet.jpg`).
+- The whole instrument suite: **1378 passed, 0 failed** (only the long-standing report-only misses);
+  TAPEWORN FX **122 passed, 0 failed**. At woodwind 0 no woodwind voice ever starts (checked), so every
+  older group measures exactly what it did.
+
+### 6. Listening render (`LiminalTests --render-woodwinds build/test-logs/woodwinds.flac`, CI artifact)
+
+Each changed instrument on one phrase (melody, then held chords C, Am, F), **before** (its woodwind at
+0 %: exactly as it was) and **after** (60 %, the presets' amount), **dry and in the hotel, the mall
+and the school**, LIMINALITY 40 %; then after on the synthesised stand-in. 4:08 in all, peak -6.2 dBFS;
+the cue sheet `woodwinds.txt` gives every take's time.
+
+### Not verified here
+
+Nothing was listened to (no audio output in this container); macOS, auval, GarageBand: CI's macOS job.
+
+### For the developer's GarageBand check
+
+1. Load **MUZAK WITH FLUTE** (or put Elevator Vibraphone in a slot and raise **MUZAK FLUTE**): the
+   vibes with a soft flute far away, as if from an elevator's ceiling speaker - never close or bright.
+   Same for **LOBBY CLARINET** on Lounge E-Piano.
+2. Sweep the control while a chord holds: no clicks, about the same loudness from 0 to 100 %.
+3. Change rooms with it on (hotel, mall, school): each reshapes it, the level stays.
+4. LIMINALITY up: the woodwind detunes and wobbles with the instrument.
+5. **WIND VOICE = Recorder** plays the flute until your alto recorder is in `Samples/alto-recorder/`
+   (section 3).

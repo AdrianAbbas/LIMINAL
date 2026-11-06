@@ -54,16 +54,19 @@ std::unique_ptr<Rig> slotRig(int slot, int which, std::initializer_list<std::pai
 std::unique_ptr<Rig> libraryRig(int kind, std::initializer_list<std::pair<const char*, float>> settings = {}) {
     return slotRig(testSlot, kind + dsp::library::originals, settings);
 }
-std::unique_ptr<Rig> rigFor(int which) {   // any of the twenty, in its own slot for the originals
-    return which < dsp::library::originals ? slotRig(which, which) : libraryRig(which - dsp::library::originals);
+std::unique_ptr<Rig> rigFor(int which, float wind = 0.0f) {   // any of the twenty, in its own slot for the originals
+    if (which < dsp::library::originals) return slotRig(which, which);
+    auto rig = libraryRig(which - dsp::library::originals);
+    if (wind > 0.0f) { rig->set(params::libId(testSlot, params::wind::amount).toRawUTF8(), wind); rig->render(0.05); }   // (2026-11-06: the woodwind blend)
+    return rig;
 }
 
 // A single held note: attack, held part and release, for the envelope features.
 struct Features { std::vector<double> v; };
-Features featuresOf(int which) {
-    auto rig = rigFor(which);
+Features featuresOf(int which, float wind = 0.0f) {
+    auto rig = rigFor(which, wind);
     const auto phrase = rig->render(9.5, recordedPhrase(rig->time + 0.1));
-    auto one = rigFor(which);
+    auto one = rigFor(which, wind);
     const auto note = playNote(*one, 60, 100, 1.5, 1.5);
     Features f;
     const auto mono = monoOf(phrase, rate, 0.1, 9.5);

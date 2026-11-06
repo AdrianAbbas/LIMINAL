@@ -37,7 +37,7 @@ inline RememberedProfile muzakFlute() {   // a ceiling speaker in an elevator: s
 }
 inline RememberedProfile lobbyClarinet() {   // across a hotel lobby, from the lounge's old record
     RememberedProfile p;
-    p.lowCut = 150; p.highCut = 3300; p.wall = 0.15f; p.deEss = 0.5f; p.soften = 0.1f; p.saturation = 0.25f;
+    p.lowCut = 150; p.highCut = 2500; p.wall = 0.3f; p.deEss = 0.7f; p.soften = 0.1f; p.saturation = 0.25f;
     p.wow = 5.0f; p.drift = 6.0f; p.blur = 0.55f; p.reflections = 0.75f; p.preDelayMs = 28; p.spacing = 2.0f;
     p.direct = 0.6f; p.hissDb = -56; p.makeupDb = 0.0f;
     return p;

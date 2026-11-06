@@ -213,6 +213,7 @@ struct BypassRecordings {   // the stand-ins (synthesis), as a build without the
 #include "RecordedTests.h"
 #include "LibraryTests.h"
 #include "LoudnessTests.h"
+#include "WoodwindTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -1069,6 +1070,7 @@ int renderPlaces(const juce::String& path) {
 #include "SessionTests.h"
 #include "IconTests.h"
 #include "LibraryRender.h"
+#include "WoodwindRender.h"
 #include "PieceRender.h"
 #include "TreatmentProbe.h"
 #include "RememberedTests.h"
@@ -1255,6 +1257,10 @@ int main(int argc, char** argv) {
         else if (arg == "--render-library" && i + 1 < argc) return renderLibrary(argv[++i]);
         else if (arg == "--render-piece" && i + 1 < argc) return renderPiece(argv[++i]);
         else if (arg == "--probe-treatment") return probeTreatment();
+        else if (arg == "--probe-woodwind") return probeWoodwind();
+        else if (arg == "--woodwind-snapshots" && i + 1 < argc) return writeWoodwindSnapshots(argv[++i]);
+        else if (arg == "--calibrate-woodwind") { setenv("WW_CALIBRATE", "1", 1); return probeWoodwind(); }
+        else if (arg == "--render-woodwinds" && i + 1 < argc) return renderWoodwinds(argv[++i]);
         else if (arg == "--probe-voice-pitch") return probeVoicePitch();
         else if (arg == "--probe-click-pattern" && i + 1 < argc) return probeClickPattern(std::atoi(argv[++i]));
         else if (arg == "--probe-cpu-pattern" && i + 1 < argc) return probeCpuPattern(std::atoi(argv[++i]));
@@ -1300,6 +1306,14 @@ int main(int argc, char** argv) {
     if (run("library-rooms")) testLibraryRooms(s);
     if (run("instruments")) testInstruments(s);
     if (run("loudness")) testLoudness(s);
+    if (run("woodwind")) {
+        testWoodwind(s);
+        const auto pages = woodwindPages(nullptr);   // (Tests/WoodwindRender.h: the editor's woodwind controls)
+        s.check(pages.labels[0].contains("MUZAK FLUTE") && pages.labels[0].contains("WIND VOICE"), "editor: Elevator Vibraphone's page shows MUZAK FLUTE and WIND VOICE", pages.labels[0].joinIntoString(", ").toStdString());
+        s.check(pages.labels[1].contains("LOBBY CLARINET") && pages.labels[1].contains("WIND VOICE"), "editor: Lounge E-Piano's page shows LOBBY CLARINET and WIND VOICE", pages.labels[1].joinIntoString(", ").toStdString());
+        s.check(pages.overlapping == 0 && pages.outside == 0 && pages.shown >= 16, "editor: the woodwind pages' controls inside the drawer, none overlapping",
+                std::to_string(pages.shown) + " shown, " + std::to_string(pages.overlapping) + " overlapping, " + std::to_string(pages.outside) + " outside");
+    }
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);
     if (run("characters")) testCharacters(s);
