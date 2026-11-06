@@ -98,6 +98,7 @@ public:
     // The instrument library (2026-11-02): which of the twenty a slot is playing now (audio thread's view; tests).
     int playingIn(int slot) const { return slots[std::size_t(slot)].playing; }
     bool slotRecorded(int slot) const;   // whether the slot's instrument plays recordings now (tests)
+    const dsp::Library* libraryIn(int slot) const;   // the library instrument a slot plays now, or nullptr (tests)
 
     static constexpr int stateVersion = 2;   // 2: scenes A/B saved alongside the parameters
 
@@ -149,6 +150,8 @@ private:
         int playing = -1;                        // which of the twenty (params::libraryNames)
         std::atomic<float>* type = nullptr;
         std::array<std::atomic<float>*, params::lib::count> libParams {};
+        std::atomic<float>* windAmount = nullptr;   // 2026-11-06: the woodwind blend and its voice
+        std::atomic<float>* windVoice = nullptr;
         std::unique_ptr<Kit> kit = std::make_unique<Kit>();
         std::atomic<float>* on = nullptr;
         std::atomic<float>* level = nullptr;

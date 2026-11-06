@@ -235,6 +235,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
                 juce::ParameterID { libId(i, lib::keys[k]), 1 }, juce::String(instrumentLabels[i]) + " Slot " + lib::names[k],
                 juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.5f,
                 juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
+    // 2026-11-06 (appended): the woodwind blend per slot (0 = the instrument alone, as before) and its voice.
+    for (int i = 0; i < instrumentCount; ++i) {
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID { libId(i, wind::amount), 1 }, juce::String(instrumentLabels[i]) + " Slot Woodwind",
+            juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.0f,
+            juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));
+        layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { libId(i, wind::voice), 1 }, juce::String(instrumentLabels[i]) + " Slot Woodwind Voice",
+                                                                juce::StringArray(wind::voiceNames, 2), 0));
+    }
     return layout;
 }
 

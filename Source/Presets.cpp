@@ -184,6 +184,9 @@ std::vector<Preset> build() {
           holding({ { 2, 8, 0.0f }, { 1, 15, -9.0f } }) + Values { lib(2, "colour", 0.4f) });
     scene("SUNDAY ORGAN, FAR AWAY", "A warped organ and strings from the end of the car park", int(P::garage), 0,
           holding({ { 5, 18, -4.0f }, { 1, 7, -9.0f } }) + Values { lib(5, "colour", 0.55f), { farAway, 0.3f } });
+    // The woodwind blends (2026-11-06; appended, so the host's program numbers stay).
+    held("MUZAK WITH FLUTE", 2, 11, "Elevator vibes doubled by a soft flute from the ceiling speaker", { lib(2, wind::amount, 0.65f), lib(2, "colour", 0.3f) });
+    held("LOBBY CLARINET", 1, 10, "The lounge e-piano and a clarinet across the hotel lobby", { lib(1, wind::amount, 0.6f), lib(1, "colour", 0.3f) });
     return list;
 }
 } // namespace

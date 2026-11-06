@@ -58,7 +58,7 @@ set(TAPEWORN_SHARED_SOURCES
 target_sources(LIMINAL PRIVATE
     ${TAPEWORN_SHARED_SOURCES}
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
-    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Library.cpp Source/Samples/SampleBank.cpp
+    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Library.cpp Source/DSP/Woodwind.cpp Source/Samples/SampleBank.cpp
     Source/UI/InstrumentIcons.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 # Photographic scenes (Direction Update 2): light passes rendered offline by tools/scenes and

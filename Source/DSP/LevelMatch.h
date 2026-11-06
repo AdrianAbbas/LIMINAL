@@ -32,4 +32,23 @@ inline float trimDb(int instrument, int place, int character, float amount) {
     return table[instrument][p][c] * std::clamp(amount, 0.0f, 1.0f);
 }
 
+// 2026-11-06: the woodwind blends (Elevator Vibraphone's flute, Lounge E-Piano's clarinet). Each place
+// passes a flute or a clarinet differently from the instrument it plays with (the hotel's wall takes more
+// of the flute than of the vibraphone's bars), so the instrument with its woodwind at full gets its own
+// correction per place and Character, on top of the instrument's, scaled by the woodwind's share of the
+// sound (0 at 0: exactly as before). Regenerate with `LiminalTests --calibrate-woodwind`.
+#include "DSP/WoodwindLevelTable.h"   // float windTable[2][placeCount][characterCount] (dB)
+inline bool& windBypassed();
+inline float windTrimDb(int instrument, int place, int character, float amount, float share) {
+    if (bypassed() || windBypassed() || share <= 0.0f) return 0.0f;
+    const int k = instrument == 11 ? 0 : instrument == 10 ? 1 : -1;   // Elevator Vibraphone, Lounge E-Piano
+    if (k < 0) return 0.0f;
+    const int p = std::clamp(place, 0, placeCount - 1), c = std::clamp(character, 0, characterCount - 1);
+    return windTable[k][p][c] * std::clamp(amount, 0.0f, 1.0f) * std::clamp(share, 0.0f, 1.0f);
+}
+inline bool& windBypassed() {   // the calibration itself
+    static bool off = false;
+    return off;
+}
+
 } // namespace liminal::dsp::levelmatch

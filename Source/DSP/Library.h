@@ -22,6 +22,7 @@
 #include "DSP/Instrument.h"
 #include "DSP/Remembered.h"
 #include "DSP/Sampler.h"
+#include "DSP/Woodwind.h"
 #include <vector>
 
 namespace liminal::dsp {
@@ -55,6 +56,21 @@ inline float roomSend(int instrument) {
     default: return 1.0f;
     }
 }
+// 2026-11-06: the woodwind each instrument can blend in (woodwind::none: none), and what its control is called.
+inline int windOf(int instrument) {
+    switch (instrument) {
+    case originals + 5: return woodwind::flute;      // Elevator Vibraphone: muzak's flute
+    case originals + 4: return woodwind::clarinet;   // Lounge E-Piano: the lobby's clarinet
+    default: return woodwind::none;
+    }
+}
+inline const char* windLabel(int instrument) {
+    switch (windOf(instrument)) {
+    case woodwind::flute: return "MUZAK FLUTE";
+    case woodwind::clarinet: return "LOBBY CLARINET";
+    default: return "";
+    }
+}
 } // namespace library
 
 class Library final : public Instrument {
@@ -66,6 +82,10 @@ public:
         float decay = 0.5f;      // how long notes ring / release
         float width = 0.5f;      // stereo spread (and ensemble width)
         float colour = 0.5f;     // the instrument's own control (library::info().colour)
+        // 2026-11-06: the woodwind blend (DSP/Woodwind.h), on the instruments that have one
+        // (library::windOf): 0 = the instrument alone, exactly as before.
+        float wind = 0.0f;
+        bool windRecorder = false;   // the Recorder voice (the developer's alto recorder) instead
     };
     static constexpr int polyphony = 12;
     static constexpr int slots = polyphony + 4;
@@ -76,22 +96,26 @@ public:
     void prepare(double sampleRate) override;
     void reset() override;
     void noteOn(int note, float velocity) override;
-    void noteOff(int note) override { pool.noteOff(note); }
-    void sustain(bool down) override { pool.sustain(down); }
+    void noteOff(int note) override { pool.noteOff(note); wind.noteOff(note); }
+    void sustain(bool down) override { pool.sustain(down); wind.sustain(down); }
     void pitchBend(int value14bit) override { bend = bendRatio(value14bit); }
-    void allNotesOff() override { pool.allNotesOff(); }
-    void allSoundOff() override { pool.allSoundOff(sr); }
+    void allNotesOff() override { pool.allNotesOff(); wind.allNotesOff(); }
+    void allSoundOff() override { pool.allSoundOff(sr); wind.allSoundOff(); }
     void render(float* left, float* right, int n) override;
     void reseed(std::uint32_t s) override {   // (while notes sound, only the randomness: see FadedSynth)
         rng.state = s | 1u;
+        wind.reseed(s ^ 0x77u);
         if (activeVoices() > 0) return;
         wow = {};
         wowCents = 0;
         lfoPhase = float(s >> 8) * (1.0f / 16777216.0f);
         pool.counter = 0;
     }
-    int activeVoices() const override { return pool.active(); }
-    int heldVoices() const override { return pool.held(); }
+    int activeVoices() const override { return pool.active() + wind.activeVoices(); }
+    int heldVoices() const override { return pool.held() + wind.heldVoices(); }
+    // The woodwind layer (tests).
+    const Woodwind& woodwindLayer() const { return wind; }
+    bool windRecordedNow() const { return wind.recordedNow(); }
     // Whether a note now would play recordings (false: the stand-in).
     bool recordedNow() const;
     // Level trims (dB): the recordings matched to the stand-in, the stand-ins to the piano (tests: library).
@@ -168,6 +192,14 @@ private:
     // both following the playing (they die with it).
     float radioLevel = 0, radioLevelCoef = 0, radioFadePhase = 0, staticZ = 0, crackle = 0;
     Random radioNoise;
+    // 2026-11-06: the woodwind blend. The instrument gives way a little as it comes in (the two together
+    // as loud as the instrument alone); both gains glide per sample (no steps when the control moves).
+    Woodwind wind;
+    float windNow = 0, windStep = 0, windTarget = 0;
+    int windKey = -1;
+    void updateWind();
+public:
+    static float windMatchDb(int kind);   // the layer's level against the instrument's (tests: woodwind)
 };
 
 } // namespace liminal::dsp

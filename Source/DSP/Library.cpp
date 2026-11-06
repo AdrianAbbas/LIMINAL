@@ -105,7 +105,28 @@ void Library::prepare(double sampleRate) {
     echoR.assign(echoL.size(), 0.0f);
     remembered.prepare(sr);
     radioLevelCoef = float(1.0 - std::exp(-1.0 / (0.4 * sr)));
+    wind.prepare(sr);
     reset();
+}
+
+// 2026-11-06: the woodwind this instrument blends in, and how it is heard (DSP/Woodwind.h).
+void Library::updateWind() {
+    const int w = windOf(originals + kindNow);
+    if (w == woodwind::none) return;
+    const int key = w * 2 + (settings.windRecorder ? 1 : 0);
+    if (key == windKey) return;
+    windKey = key;
+    wind.setVoice(w, settings.windRecorder);
+    wind.setProfile(w == woodwind::flute ? woodwind::muzakFlute() : woodwind::lobbyClarinet());
+}
+
+float Library::windMatchDb(int kind) {
+    // The layer alone as loud as the instrument alone (same phrase, same room; tests: woodwind).
+    switch (kind) {
+    case elevatorVibraphone: return 8.4f;
+    case loungeEPiano: return 7.4f;
+    default: return 0.0f;
+    }
 }
 
 // Which instruments carry the remembered treatment, and how much (DSP/Remembered.h).
@@ -147,6 +168,11 @@ void Library::reset() {
     radioNoise.state = 0x52AD10u;
     updatePost();
     updateTreatment();
+    wind.reset();
+    windKey = -1;
+    updateWind();
+    windNow = windOf(originals + kindNow) != woodwind::none ? std::clamp(settings.wind, 0.0f, 1.0f) : 0.0f;
+    windStep = 0;
 }
 
 bool Library::recordedNow() const { return setsOf(kindNow).first != nullptr && recordings(setsOf(kindNow).first) != nullptr; }
@@ -154,6 +180,13 @@ bool Library::recordedNow() const { return setsOf(kindNow).first != nullptr && r
 void Library::noteOn(int note, float velocity) {
     if (note < 0 || note > 127) return;
     if (velocity <= 0.0f) { noteOff(note); return; }
+    // 2026-11-06: the woodwind plays along (only while its control is up: at 0 the instrument is exactly as
+    // before); the same note shape (Liminality's detune, sour notes) as the instrument's own voice.
+    if (windOf(originals + kindNow) != woodwind::none && settings.wind > 0.001f) {
+        updateWind();
+        wind.shapeNextNote(nextShape);
+        wind.noteOn(note, velocity);
+    }
     // Solo Voice is one singer (2026-11-05: smoother legato): a note sung while another is still
     // held (or still clearly ringing) takes over from it: the last note fades over 300 ms while the new
     // one, from its sustain (no second sung onset), glides in from its pitch (120 ms) and swells in over 100 ms.
@@ -753,6 +786,10 @@ void Library::render(float* left, float* right, int n) {
             for (auto& v : pool.voices)
                 if (v.active()) control(v, tick);
             updatePost();
+            // The woodwind control glides to where it is set (20 ms).
+            windTarget = windOf(originals + kindNow) != woodwind::none ? std::clamp(st.wind, 0.0f, 1.0f) : 0.0f;
+            if (windTarget != windNow) windStep = (windTarget - windNow) / float(0.02 * sr);
+            if (wind.activeVoices() == 0) updateWind();
             clock = controlPeriod;
         }
         const int m = std::min(n - done, clock);
@@ -824,6 +861,24 @@ void Library::render(float* left, float* right, int n) {
             bufR[i] = r;
         }
         if (treated) remembered.process(bufL, bufR, m, wander());
+        // 2026-11-06: the woodwind blend (never clean: its own treatment is inside the layer).
+        if (windNow > 0.0f || windStep != 0.0f || wind.activeVoices() > 0) {
+            float wl[controlPeriod] {}, wr[controlPeriod] {};
+            wind.setLiminalPitch(liminal);
+            wind.setBendRatio(bend);
+            wind.render(wl, wr, m);
+            const float match = dbGain(windMatchDb(kindNow));
+            for (int i = 0; i < m; ++i) {
+                if (windStep != 0.0f) {
+                    windNow += windStep;
+                    if ((windStep > 0.0f && windNow >= windTarget) || (windStep < 0.0f && windNow <= windTarget)) { windNow = windTarget; windStep = 0; }
+                }
+                // Constant power: at full the instrument gives way to 60 % (cos 0.93), the woodwind comes in to 80 %.
+                const float gi = std::cos(0.9273f * windNow), gw = std::sin(0.9273f * windNow) * match;
+                bufL[i] = bufL[i] * gi + wl[i] * gw;
+                bufR[i] = bufR[i] * gi + wr[i] * gw;
+            }
+        }
         for (int i = 0; i < m; ++i) {
             left[done + i] += bufL[i];
             right[done + i] += bufR[i];

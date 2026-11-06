@@ -419,6 +419,11 @@ void InstrumentDrawer::build(int slot) {
         const juce::String labels[] { "TONE", "AGE", "SOFTNESS", "DECAY", "WIDTH", dsp::library::info(type).colour };
         for (int k = 0; k < params::lib::count; ++k) add(params::libId(slot, params::lib::keys[k]).toRawUTF8(), labels[k]);
         if (slotDistance[slot] != nullptr) add(slotDistance[slot], "DISTANCE");
+        // 2026-11-06: the woodwind blend, on the instruments that have one, and its voice.
+        if (dsp::library::windOf(type) != dsp::woodwind::none) {
+            add(params::libId(slot, params::wind::amount).toRawUTF8(), dsp::library::windLabel(type));
+            add(params::libId(slot, params::wind::voice).toRawUTF8(), "WIND VOICE");
+        }
     }
 }
 

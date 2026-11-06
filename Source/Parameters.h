@@ -183,6 +183,15 @@ inline constexpr const char* keys[] { "tone", "age", "soft", "decay", "width", "
 inline constexpr const char* names[] { "Tone", "Age", "Softness", "Decay", "Width", "Colour" };
 inline constexpr int count = 6;
 } // namespace lib
+// 2026-11-06 (appended): the woodwind blend per slot, read by the instruments that have one
+// (dsp::library::windOf: Elevator Vibraphone's flute, Lounge E-Piano's clarinet). "<slot>_lib_wind" 0..1
+// (default 0: the instrument alone, as before), "<slot>_lib_wind_voice": the instrument's own woodwind
+// or the Recorder (the developer's alto recorder once recorded; until then the flute).
+namespace wind {
+inline constexpr const char* amount = "wind";
+inline constexpr const char* voice = "wind_voice";
+inline const char* voiceNames[] { "Woodwind", "Recorder" };
+} // namespace wind
 inline juce::String slotTypeId(int slot) { return juce::String(instrumentKeys[slot]) + "_type"; }
 inline juce::String libId(int slot, const char* control) { return juce::String(instrumentKeys[slot]) + "_lib_" + control; }
 inline juce::String fxId(int instrument, const char* name) { return juce::String(instrumentKeys[instrument]) + "_fx_" + name; }

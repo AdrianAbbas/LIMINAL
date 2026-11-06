@@ -50,6 +50,8 @@ LiminalProcessor::LiminalProcessor()
         slot.level = raw(levelIds[i]);
         slot.type = mirrorOf(params::slotTypeId(i));
         for (int k = 0; k < params::lib::count; ++k) slot.libParams[std::size_t(k)] = mirrorOf(params::libId(i, params::lib::keys[k]));
+        slot.windAmount = mirrorOf(params::libId(i, params::wind::amount));
+        slot.windVoice = mirrorOf(params::libId(i, params::wind::voice));
         slot.playing = i;   // its own instrument (the type's default)
         slot.instrument = slot.kit->original(i);
     }
@@ -169,7 +171,12 @@ dsp::EffectSettings LiminalProcessor::effectSettings(const Slot& slot) const {
 float LiminalProcessor::levelTrim(const Slot& slot, int place, int character) const {
     // fx[0]: Effects Mix (0 = the dry instrument), fx[1]: Environment Influence
     const float amount = std::clamp(environmentAmount->load(), 0.0f, 1.0f) * std::clamp(slot.fx[1]->load(), 0.0f, 1.0f) * std::clamp(slot.fx[0]->load(), 0.0f, 1.0f);
-    const float db = dsp::levelmatch::trimDb(slot.playing, place, character, amount);
+    float db = dsp::levelmatch::trimDb(slot.playing, place, character, amount);
+    // 2026-11-06: the woodwind blend's own correction, by the woodwind's share of the sound (Library: sin^2).
+    if (slot.windAmount != nullptr && dsp::library::windOf(slot.playing) != dsp::woodwind::none) {
+        const float s = std::sin(0.9273f * std::clamp(slot.windAmount->load(), 0.0f, 1.0f));
+        db += dsp::levelmatch::windTrimDb(slot.playing, place, character, amount, s * s / 0.64f);
+    }
     return std::pow(10.0f, db / 20.0f);
 }
 
@@ -244,6 +251,10 @@ bool LiminalProcessor::slotRecorded(int slot) const {
     const auto& s = slots[std::size_t(std::clamp(slot, 0, instrumentCount - 1))];
     if (auto* lib = dynamic_cast<const dsp::Library*>(s.instrument)) return lib->recordedNow();
     return samples::Bank::get().ready() && s.playing != 2;   // the originals: all but Glass Memories play recordings when there are any
+}
+
+const dsp::Library* LiminalProcessor::libraryIn(int slot) const {
+    return dynamic_cast<const dsp::Library*>(slots[std::size_t(std::clamp(slot, 0, instrumentCount - 1))].instrument);
 }
 
 bool LiminalProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -420,6 +431,8 @@ void LiminalProcessor::updateSettings() {
         l.decay = v(3);
         l.width = v(4);
         l.colour = v(5);
+        l.wind = slot.windAmount->load();
+        l.windRecorder = slot.windVoice->load() > 0.5f;
         for (auto& lib : slot.kit->library) lib.setSettings(l);
     }
 }
