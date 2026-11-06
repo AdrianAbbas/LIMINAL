@@ -1,4 +1,4 @@
-# LIMINAL — Development log
+# TAPEWORN (formerly LIMINAL) — Development log
 
 Read `LIMINAL_CLAUDE_BRIEF.md` first, then `LIMINAL_DIRECTION_UPDATE_1.md`, then
 `LIMINAL_DIRECTION_UPDATE_2.md` (it overrides the other two where they conflict). Resume from
@@ -74,11 +74,11 @@ the checklist below.
   - [x] Part 2 — the voices remembered, not recorded: a built-in treatment (distance, tape/age, blur, de-ess/de-breath, slow drift) always part of Empty Choir, Solo Voice and the Hollow Drone's voice layer, more room in their defaults; Solo Voice further (a corridor / a wall), smoother legato, tuning and loops checked; Faded Strings and Hallway Pizzicato softer and darker (de-click); Arcade Lead heard across a closed mall; Cassette Strings +2.5 dB; measurements before/after (group `remembered`) — push `[skip ci]`
   - [x] Part 3 — Hummed Memory removed; DISTANT RADIO in its slot (old sessions load it), icon, presets; in tune, level-matched, distinct — push `[skip ci]`
   - [x] Part 4 — listening render of the four-part piece before/after (`--render-piece`, CI test-logs); DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
-- [ ] **Hotfix + rename 2026-11-06 — Init preset, synth levels, LIMINAL becomes TAPEWORN** (section at the end). Resume from the first unticked line:
+- [x] **Hotfix + rename 2026-11-06 — Init preset, synth levels, LIMINAL becomes TAPEWORN** (section at the end) — *waiting for the developer's GarageBand check*. Resume from the first unticked line:
   - [x] Part 1 — presets: an INIT (no preset) entry at the top of every preset list + a reset button by the preset name, a clean default (state compared with a fresh instance), undoable (UNDO / REDO, Cmd+Z); the PRESETS button visible and reachable at every window size — push `[skip ci]`
   - [x] Part 2 — levels: loudness of all twenty instruments at default (same phrase, same room), the quiet synth-based ones raised so all are within +/-1.5 dB; no clipping; group `loudness` + `instruments` pass — push `[skip ci]`
-  - [ ] Part 3 — rename to TAPEWORN by Elsewhere Audio (AU/VST3 names, wordmark, window title, folders, README, manual, scripts, CI artifacts, package; bundle ID com.elsewhereaudio.tapeworn; AU codes and parameter IDs unchanged; the installer removes the old LIMINAL bundles); an old LIMINAL session loads unchanged; snapshots — push `[skip ci]`
-  - [ ] Part 4 — DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] Part 3 — rename to TAPEWORN by Elsewhere Audio (AU/VST3 names, wordmark, window title, folders, README, manual, scripts, CI artifacts, package; bundle ID com.elsewhereaudio.tapeworn; AU codes and parameter IDs unchanged; the installer removes the old LIMINAL bundles); an old LIMINAL session loads unchanged; snapshots — push `[skip ci]`
+  - [x] Part 4 — DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
@@ -2442,3 +2442,168 @@ listening render including `piece-after.flac` (peak -0.5 dBFS) and `piece-before
 13351aa in the same job, peak 0.0 dBFS) with `treatment-before.txt` / `treatment-after.txt`, in the
 LIMINAL-linux-test-logs artifact; macOS: build, smoke + `recorded` on arm64, smoke on x86_64, package,
 auval and the AU harness, all passed.
+
+## Hotfix + rename 2026-11-06 — INIT preset, synth levels, LIMINAL becomes TAPEWORN
+
+Three requests: a "no preset" (INIT) that really resets everything, the quiet synths level-matched
+with the rest, and the product renamed TAPEWORN by Elsewhere Audio (projects and presets made with
+LIMINAL must still load).
+
+### 1. Presets: INIT, RESET, undo; PRESETS reachable at every window size
+
+- **INIT** is pinned above the list in every group of the preset browser (PLACES, CHARACTERS,
+  INSTRUMENTS, SCENES, USER): it never scrolls away. **RESET** sits right after the preset's name in
+  the drawer's header ("PRESETS - NOW: ..."), **UNDO / REDO** at the end of that line.
+- `LiminalProcessor::initPreset()`: every parameter back to its default, exactly as in a new instance
+  (each slot its own instrument, LIMINALITY at its neutral 40 %, the default place and Character, the
+  default effects), and the evolution starts again. POWER and the VHS look (viewing / listening
+  preferences, as for every preset since Milestone 6) and the song's stored scenes A/B are kept. The
+  host's program 0 ("Init", GarageBand's preset menu) is the same INIT.
+- Every preset load (INIT, factory, your own, a host program) is one undoable step (a
+  `juce::UndoManager` of whole-parameter snapshots, 64 steps): UNDO returns exactly the state before
+  the load, REDO the state after. Cmd+Z / Cmd+Shift+Z do the same when the window has the keys (the
+  standalone; GarageBand and Logic keep those keys for their own undo, hence the buttons).
+- **Window sizes:** the editor used to scale its view by the window's width only; a host that gives
+  the window another shape (wider than 4:3) cut off the bottom of the view, including the lower part
+  of the presets drawer. The view is now scaled to fit the window whole and centred (the margin is
+  the viewfinder's dark green). The PRESETS button itself was inside the window at every size tested;
+  the new group `init` checks it at 11 sizes, the editor's own shape and others (816x612 to
+  1920x1080, 1000x600, 1400x720, 700x900, 640x480, 600x1000): the button is inside the window and is
+  what a click on it reaches, the drawer is whole, the INIT row reachable.
+
+Group **`init`** (29 checks): after a scene preset and every one of the 394 parameters moved at
+random, INIT's saved state equals a new instance's, parameter for parameter; the slots, LIMINALITY,
+place and Character checked by name; preferences kept; undo / redo exact; the host's Init; a phrase
+after INIT at a new instance's level; the INIT row in all five groups (list scrolled down), RESET,
+the UNDO button, Cmd+Z; the window sizes above.
+
+### 2. Levels: the twenty instruments matched in every room
+
+**Measured first** (group `loudness`, `--probe-loudness`): each instrument at its defaults (LIMINALITY
+40 % too) alone in the same slot, the same test phrase (a melody, then four chords), the same room
+(the default place, Vacant Hospital / Sterile Silence), the room's own sounds turned down so only the
+instrument and its reverberation count; ITU-R BS.1770 loudness (K-weighted, gated). The spread was
+much larger than "a few dB on the synths": 15.9 dB, from the choir at -7.7 to the pizzicato at +8.2
+against the mean of the twenty. Measured dry (no room), most were within +/-2 dB (the library's dry
+match to the piano), apart from the choir (-6.7) and the drone (-4.5). So the instruments themselves
+were not the problem: **each place's processing changes each instrument's loudness differently**.
+The hospital's sheen (+3.5 dB shelf at 3.5 kHz, +2.5 dB at 2.8 kHz), its flutter comb on everything
+above 650 Hz and its 170 Hz high-pass lift a bright, plucked instrument by up to 4.5 dB and take up
+to 5 dB off a warm pad (Environment Influence on vs off: pizzicato +4.5, Faded Synth -4.4,
+Vibraphone -5.2, Bowed Glass -5.2); the hotel does the opposite (strings -8.6, synths +2 to +6).
+A fixed trim per instrument would have made every other room worse (the pizzicato -8 dB in the
+hospital would be -12 dB in the hotel), so:
+
+- **`Source/DSP/LevelMatch.h`**: a table per instrument x place x Character (20 x 10 x 3, dB) brings
+  each instrument to the **Forgotten Piano's** loudness there. The piano (the default instrument and
+  the library's dry reference) is never changed, so every place keeps its level and its balance
+  against its own room (group `rules`: the instruments still at least 10 dB over the room in all 30).
+  The trim rides on how much the place shapes the slot (Environment Amount x Environment Influence x
+  Effects Mix): dry (any of them at 0) the instruments are exactly as before (bit-exact, checked); it
+  is smoothed (50 ms) and snaps while a slot is silent.
+- Calibrated with `LiminalTests --calibrate-loudness <first place> <last place>` (four processes,
+  ~3 min) and `tools/levelmatch/levelmatch.py Source/DSP/LevelMatchTable.h <outputs>`; re-run it
+  whenever an instrument, a room or a Character changes its sound.
+- **Cassette Strings** (raised +2.5 dB on 2026-11-05): re-checked, not raised again. It is never more
+  than 1.1 dB under the piano in any room (-1.1 in the default room, inside the window), so the table
+  only ever lowers it, where a room makes it louder (up to -7.5 dB in the hotel).
+
+Default room, the test phrase, recordings; loudness against the Forgotten Piano before, and the trim
+the table applies there (= the change):
+
+| | before | change | | before | change |
+|---|---|---|---|---|---|
+| Forgotten Piano | 0.0 | 0.0 | Lounge E-Piano | -1.7 | +1.6 |
+| Faded Synth | -2.3 | +2.3 | Elevator Vibraphone | -3.4 | +3.4 |
+| Glass Memories | -2.4 | +2.4 | Mall Chimes | +2.3 | -2.3 |
+| Empty Choir | -8.1 | +8.1 | Solo Voice | -0.8 | +0.8 |
+| Lost Music Box | -2.1 | +2.1 | Distant Radio | +3.2 | -3.2 |
+| Hollow Drone | -4.5 | +4.5 | Cassette Strings | -1.1 | 0.0 |
+| Old Guitar | -0.4 | +0.4 | Arcade Lead | +3.2 | -3.2 |
+| Faded Strings | +4.0 | -4.0 | Basement Bass | -0.7 | +0.7 |
+| Hallway Pizzicato | +7.8 | -7.8 | Warped Organ | -0.7 | +0.7 |
+| Toy Piano | +3.7 | -3.7 | Bowed Glass | -4.3 | +4.3 |
+
+The synth-based ones the developer named come up by +0.7 to +4.3 dB (Faded Synth +2.3, Glass Memories
++2.4, Lounge E-Piano +1.6, Elevator Vibraphone +3.4, Bowed Glass +4.3, Basement Bass +0.7, Warped
+Organ +0.7); **three of them measured loud, not quiet, in the default room and come down**: Mall
+Chimes -2.3, Distant Radio -3.2, Arcade Lead -3.2. The choir and the drone needed the most (+8.1,
++4.5); the strings, the pizzicato and the toy piano come down (-4.0, -7.8, -3.7).
+
+Group **`loudness`** (8 checks): all twenty within **0.05 dB** of their mean in the default room
+(before: 8.20 dB); within **0.32 dB in all thirty** places / Characters; no clipping (highest sample
+peak -1.0 dBFS on the test phrase; a loud phrase, velocity 127, six-note chords and the pedal, stays
+under 0 dBFS: the music box and the piano reach the safety limiter's soft region there, as before);
+another phrase (slow notes, staccato, a long chord; not the calibration's) within +/-3.5 dB
+(worst 3.3: Basement Bass played high, -3.3; report-only against +/-1.5: register and articulation
+change each instrument's loudness on their own); Environment Amount 0 bit-exact. The stand-ins (a
+build without the recordings) are reported only: the table is calibrated on the recordings the
+shipped build plays (stand-ins worst 9.1 dB, Basement Bass's and Old Guitar's stand-ins differ most).
+`instruments`, `library`, `recorded`, `remembered`, `effects`, `rules`, `levels` pass; the session
+fingerprints of `sessions-v2.xml` were re-taken (the sound changed on purpose; the old states still
+load with every parameter).
+
+### 3. LIMINAL is now TAPEWORN, by Elsewhere Audio
+
+- **Hosts:** AU "Elsewhere Audio: TAPEWORN" (GarageBand / Logic: AU Instruments > Elsewhere Audio >
+  TAPEWORN), VST3 name TAPEWORN, vendor Elsewhere Audio; bundles `TAPEWORN.component`, `.vst3`,
+  `.app`; bundle ID `com.elsewhereaudio.tapeworn`; AU factory `TAPEWORNAUFactory`.
+- **Unchanged on purpose:** the AU's type / subtype / manufacturer codes (aumu / Lmnl / Veil), which
+  also make the VST3's class IDs (identical before and after: `ABCDEF019182FAEB5665696C4C6D6E6C`),
+  every parameter ID, the state's XML tag (`LIMINAL`), the CMake target and the code's internal
+  names. So a GarageBand or Logic song made with LIMINAL finds TAPEWORN and opens unchanged.
+- **The editor:** the wordmark reads TAPEWORN; the standalone's window title is TAPEWORN; exported
+  ambience files are named "TAPEWORN <place> - <Character>.wav".
+- **Presets:** your own presets are now in `~/Library/Elsewhere Audio/TAPEWORN/Presets` as
+  `.tapewornpreset` files; the ones saved with LIMINAL (`~/Library/Veil Audio/LIMINAL/Presets`,
+  `.liminalpreset`) are copied over the first time TAPEWORN lists them (the old files stay), and both
+  load. The cached scene pictures moved to `.../Elsewhere Audio/TAPEWORN/Scenes` (rebuilt on first
+  use). Host parameter names: "Piano Liminal Wander" became "Piano Liminality Wander" (the IDs are
+  the same, so automation is kept).
+- **Install:** `install-mac.sh` first removes LIMINAL.component / LIMINAL.vst3 from the user's
+  plug-in folders (and the system folders when it may; otherwise it prints the `sudo rm` line), so
+  hosts do not list two copies of the same Audio Unit; `uninstall-mac.sh` removes both names (and its
+  `--purge` now points at the real preset folder, `~/Library/Elsewhere Audio/TAPEWORN`; it pointed at
+  a folder that never existed). CI plants an old LIMINAL copy before running the installer and checks
+  it is gone, that the AU registry lists aumu Lmnl Veil exactly once, as "Elsewhere Audio: TAPEWORN",
+  and nowhere "LIMINAL".
+- **AU harness** (CI, arm64 and x86_64, in- and out-of-process): checks the host-visible name, and a
+  new check restores **a song's AU state saved by LIMINAL** (ClassInfo with LIMINAL 0.4's own state
+  bytes, `tools/au-harness/liminal-session.state`) into TAPEWORN and reads its settings back.
+  `ci-check-bundles.sh` also checks the AU name, the bundle IDs and that no Info.plist names LIMINAL.
+- **Names elsewhere:** CI artifacts `TAPEWORN-macOS-Universal` (the zip of the same name),
+  `TAPEWORN-macOS-diagnostics`, `TAPEWORN-linux-test-logs`, the release title; README, the manual
+  shipped in the zip (`packaging/INSTALL.txt`, rewritten: it still described Milestone 1a), the docs,
+  the scripts, the licence's copyright line, this file's title. LIMINALITY (the knob, the feature)
+  keeps its name; the briefs (`LIMINAL_*.md`) and `legacy/` are the developer's history and keep theirs.
+- Group **`sessions`**: `Tests/fixtures/sessions-liminal.xml` holds 32 states saved by LIMINAL 0.4
+  just before the rename (written by that build: the default, a moved state, every factory scene,
+  ten of them on library instruments) with fingerprints of a phrase rendered by it: in TAPEWORN every
+  parameter comes back, every slot holds the instrument it saved, and the sound is the same (every
+  250 ms window within 0.05 dB); a `.liminalpreset` in LIMINAL's folder is carried over and loads;
+  new presets are saved as TAPEWORN presets.
+
+### Tests
+
+This container (recordings + captures): **full suite 1296 passed, 0 failed** (10 min; new groups
+`init` and `loudness` in `scripts/run-tests-parallel.sh`). Report-only lines: the loudness of another
+phrase against +/-1.5 dB (3.3 dB, see above) and the stand-ins' spread (see above).
+
+### Not verified here
+
+macOS, auval, the AU harness, GarageBand and Logic: CI's macOS job is the first macOS build of this
+work. Nothing was listened to (no audio output in this container).
+
+### For the developer's GarageBand check
+
+1. Run `install-mac.sh` from the new zip: it should say it removed LIMINAL; GarageBand lists
+   **AU Instruments > Elsewhere Audio > TAPEWORN** once, and no LIMINAL.
+2. Open a song made with LIMINAL: the instrument should come back as TAPEWORN with its settings and
+   sound.
+3. PRESETS: load a scene, then INIT (top of the list) or RESET: everything back to the defaults
+   (piano, hospital); UNDO brings the scene back. Make the plug-in window wider or taller than
+   usual: the whole interface stays visible, PRESETS included.
+4. In the hospital, switch one slot through the twenty instruments with the same phrase: they should
+   all sound about equally loud now (the choir, the drone, Bowed Glass and the vibraphone up; the
+   pizzicato, the strings, the toy piano, the radio, the arcade lead and the chimes down). Try one
+   or two other places too.
