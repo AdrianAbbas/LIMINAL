@@ -215,7 +215,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout makeLayout() {
     for (int i = 0; i < instrumentCount; ++i)
         for (int k = 0; k < dsp::lim::count; ++k) {
             const auto id = limId(i, dsp::lim::keys[k]);
-            const juce::String name = juce::String(instrumentLabels[i]) + " Liminal " + dsp::lim::names[k];
+            const juce::String name = juce::String(instrumentLabels[i]) + " Liminality " + dsp::lim::names[k];
             layout.add(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { id, 1 }, name, juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), dsp::lim::defaults[k],
                 juce::AudioParameterFloatAttributes().withLabel("%").withStringFromValueFunction([](float x, int) { return juce::String(juce::roundToInt(x * 100)); })));

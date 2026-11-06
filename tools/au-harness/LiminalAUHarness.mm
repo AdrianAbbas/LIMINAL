@@ -16,7 +16,7 @@
 //
 // Usage:
 //   LiminalAUHarness [--strict] [--no-window] [--component aumu:Lmnl:Veil]
-//                 [--only v2-oop|v2-inproc|auaudiounit]
+//                 [--only v2-oop|v2-inproc|auaudiounit] [--liminal-state file]
 //
 // Without --strict the harness reports and exits 0 (used to characterise an
 // old build). With --strict any FAIL gives exit code 1. Exit code 2 means the
@@ -158,7 +158,8 @@ const char* harnessArchitecture() {
    #endif
 }
 
-constexpr const char* pluginImageNeedle = "LIMINAL.component/Contents/MacOS/";
+std::string liminalStatePath;   // --liminal-state: a state LIMINAL saved (check 6b)
+constexpr const char* pluginImageNeedle = "TAPEWORN.component/Contents/MacOS/";
 // Direction Update 2: the beds are quiet (the pool and the hotel near -50 dBFS), so "audible"
 // means clearly above silence, not loud.
 constexpr double bedFloorDb = -60.0;
@@ -662,6 +663,37 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
         }
         if (state != nullptr) CFRelease(state);
         for (const auto& [id, original] : changed) setParameter(unit, id, original);
+
+        // 6b. A song saved with LIMINAL (TAPEWORN's old name, 2026-11-06): the plug-in's state as a host
+        // keeps it (ClassInfo: version, type, subtype, manufacturer, JUCE's state data), written by
+        // LIMINAL 0.4 ("all six, moved" in Tests/fixtures/sessions-liminal.xml), restores in TAPEWORN.
+        if (!liminalStatePath.empty()) {
+            NSData* blob = [NSData dataWithContentsOfFile: [NSString stringWithUTF8String: liminalStatePath.c_str()]];
+            if (r.check(blob != nil && blob.length > 0, "a LIMINAL song's saved state is readable", liminalStatePath)) {
+                AudioComponentDescription d {};
+                AudioComponentGetDescription(component, &d);
+                NSDictionary* classInfo = @{ @kAUPresetVersionKey: @0, @kAUPresetTypeKey: @(int(d.componentType)), @kAUPresetSubtypeKey: @(int(d.componentSubType)),
+                                             @kAUPresetManufacturerKey: @(int(d.componentManufacturer)), @kAUPresetNameKey: @"Untitled", @"jucePluginState": blob };
+                OSStatus s4 = noErr;
+                AudioComponentInstance old = instantiate(component, outOfProcess, s4);
+                if (r.check(old != nullptr, "an instance for the LIMINAL song", statusText(s4))) {
+                    CFPropertyListRef info = (__bridge CFPropertyListRef) classInfo;
+                    s4 = AudioUnitSetProperty(old, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &info, sizeof(info));
+                    pump(0.3);
+                    const auto oldParams = listParameters(old);
+                    const Param* place = findParameter(oldParams, { "Environment" });
+                    const Param* liminality = findParameter(oldParams, { "Liminality" });
+                    const float placeValue = place != nullptr ? getParameter(old, place->id) : -1.0f;
+                    const float limValue = liminality != nullptr ? getParameter(old, liminality->id) : -1.0f;
+                    // (the saved place is index 5, the hotel; LIMINALITY 60 %: real values, or 0..1 if the host scales them)
+                    const bool placeOk = std::abs(placeValue - 5.0f) < 0.01f || std::abs(placeValue - 5.0f / 9.0f) < 0.01f;
+                    const bool limOk = std::abs(limValue - 0.6f) < 0.01f;
+                    r.check(s4 == noErr && placeOk && limOk, "a song saved with LIMINAL opens in TAPEWORN with its settings",
+                            strf("set=%s Environment=%g Liminality=%g", statusText(s4).c_str(), double(placeValue), double(limValue)));
+                    AudioComponentInstanceDispose(old);
+                }
+            }
+        }
     }
     host.report = &r;
 
@@ -822,9 +854,10 @@ void auAudioUnitSuite(Report& r, AudioComponentDescription description, bool use
 }
 
 //==============================================================================
-void describeComponent(Report& r, AudioComponent component) {
+void describeComponent(Report& r, AudioComponent component, bool ours) {
     CFStringRef name = nullptr;
     AudioComponentCopyName(component, &name);
+    if (ours) r.check(toString(name) == "Elsewhere Audio: TAPEWORN", "the host sees it as 'Elsewhere Audio: TAPEWORN'", toString(name));
     UInt32 version = 0;
     AudioComponentGetVersion(component, &version);
     AudioComponentDescription d {};
@@ -850,6 +883,7 @@ int main(int argc, const char* argv[]) {
             else if (a == "--no-window") useWindow = false;
             else if (a == "--only" && i + 1 < argc) only = argv[++i];
             else if (a == "--component" && i + 1 < argc) componentText = argv[++i];
+            else if (a == "--liminal-state" && i + 1 < argc) liminalStatePath = argv[++i];
             else { std::fprintf(stderr, "unknown argument %s\n", a.c_str()); return 64; }
         }
         if (componentText.size() != 14 || componentText[4] != ':' || componentText[9] != ':') {
@@ -884,7 +918,7 @@ int main(int argc, const char* argv[]) {
         int matches = 0;
         for (AudioComponent c = nullptr; (c = AudioComponentFindNext(c, &description)) != nullptr;) ++matches;
         r.check(matches == 1, "exactly one registered component matches", strf("%d", matches));
-        describeComponent(r, component);
+        describeComponent(r, component, componentText == "aumu:Lmnl:Veil");
 
         // Out-of-process first, before the in-process load maps the plug-in into this process.
         if (only.empty() || only == "v2-oop") v2Suite(r, component, true, useWindow);

@@ -193,3 +193,47 @@ void testInit(Suite& s) {
         p.editorBeingDeleted(editor.get());
     }
 }
+
+// The renamed editor (2026-11-06) for docs/snapshots: the main view with the TAPEWORN wordmark, the
+// presets drawer with INIT / RESET / UNDO, and two window shapes a host may give (the view fitted).
+int writeRenameSnapshots(const juce::String& path) {
+    const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(path);
+    folder.createDirectory();
+    const auto save = [&](const juce::Image& image, const juce::String& name) {
+        auto file = folder.getChildFile(name + ".jpg");
+        file.deleteFile();
+        juce::FileOutputStream out(file);
+        juce::JPEGImageFormat jpeg;
+        jpeg.setQuality(0.86f);
+        jpeg.writeImageToStream(image, out);
+    };
+    LiminalProcessor p;
+    p.prepareToPlay(48000.0, 512);
+    std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditorAndMakeActive());
+    auto* lm = dynamic_cast<LiminalEditor*>(editor.get());
+    if (lm == nullptr) return 1;
+    auto& view = lm->view();
+    p.parameters.getParameter(params::vhs)->setValueNotifyingHost(0.0f);
+    view.animate();
+    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "tapeworn-main");
+    // A scene preset loaded, then the drawer: NOW shows it, RESET beside it, UNDO lit.
+    p.applyPreset(presets::factory()[std::size_t(presets::inCategory(presets::Category::scene)[2])]);
+    lm->showPresets(true);
+    lm->presetDrawer().showCategory(3);
+    view.tick();
+    view.animate();
+    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "tapeworn-presets");
+    lm->presetDrawer().loadInit();
+    view.tick();
+    view.animate();
+    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "tapeworn-presets-init");
+    for (const auto& [w, h, name] : { std::tuple { 1400, 720, "tapeworn-window-wide" }, std::tuple { 700, 900, "tapeworn-window-tall" } }) {
+        editor->setSize(w, h);
+        view.animate();
+        save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), name);
+    }
+    lm->showPresets(false);
+    p.editorBeingDeleted(editor.get());
+    std::cout << "wrote the renamed editor's snapshots to " << folder.getFullPathName() << "\n";
+    return 0;
+}

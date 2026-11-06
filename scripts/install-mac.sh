@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Install LIMINAL for the current user and make sure macOS will load it.
+# Install TAPEWORN for the current user and make sure macOS will load it.
 #
-# Run it from the unzipped LIMINAL-macOS-Universal folder:
+# Run it from the unzipped TAPEWORN-macOS-Universal folder:
 #     bash install-mac.sh
 # (Tip: type "bash " in Terminal, then drag install-mac.sh into the window.)
 #
 # What it does:
-#   1. copies LIMINAL.component to ~/Library/Audio/Plug-Ins/Components and
-#      LIMINAL.vst3 to ~/Library/Audio/Plug-Ins/VST3
+#   0. removes LIMINAL (TAPEWORN's old name): the same plug-in, so hosts would list two copies
+#   1. copies TAPEWORN.component to ~/Library/Audio/Plug-Ins/Components and
+#      TAPEWORN.vst3 to ~/Library/Audio/Plug-Ins/VST3
 #   2. removes the com.apple.quarantine flag your browser added. Without this,
 #      macOS refuses to load the plug-in and GarageBand shows a silent slot
 #   3. re-signs both bundles (ad hoc) and verifies the signatures
@@ -18,7 +19,7 @@
 # Options:
 #   --ci              non-interactive: no prompts, no check for running hosts
 #   --out-of-process  remove the sandboxSafe flag from the installed copy, so
-#                     GarageBand hosts LIMINAL in a separate process (fallback only)
+#                     GarageBand hosts TAPEWORN in a separate process (fallback only)
 # (No `set -u`: macOS bash 3.2 treats an empty "$@" as unbound.)
 set -eo pipefail
 
@@ -29,7 +30,7 @@ for arg in "$@"; do
     case "$arg" in
         --ci) ci=1 ;;
         --out-of-process) out_of_process=1 ;;
-        -h|--help) /usr/bin/sed -n '2,23p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help) /usr/bin/sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; exit 64 ;;
     esac
 done
@@ -44,20 +45,20 @@ if [[ "$(uname -s)" != Darwin ]]; then
     exit 1
 fi
 
-component_src="$here/LIMINAL.component"
-vst3_src="$here/LIMINAL.vst3"
+component_src="$here/TAPEWORN.component"
+vst3_src="$here/TAPEWORN.vst3"
 if [[ ! -d "$component_src" ]]; then
-    echo "LIMINAL.component was not found next to this script ($here)." >&2
-    echo "Unzip LIMINAL-macOS-Universal.zip first and run the script from that folder." >&2
+    echo "TAPEWORN.component was not found next to this script ($here)." >&2
+    echo "Unzip TAPEWORN-macOS-Universal.zip first and run the script from that folder." >&2
     exit 1
 fi
 
 components="$HOME/Library/Audio/Plug-Ins/Components"
 vst3="$HOME/Library/Audio/Plug-Ins/VST3"
-logs="$HOME/Library/Logs/LIMINAL"
+logs="$HOME/Library/Logs/TAPEWORN"
 mkdir -p "$components" "$vst3" "$logs"
 
-bold "LIMINAL installer"
+bold "TAPEWORN installer"
 
 # Hosts keep their own view of plug-ins while running.
 if [[ $ci == 0 ]]; then
@@ -68,8 +69,35 @@ if [[ $ci == 0 ]]; then
     fi
 fi
 
+# LIMINAL is TAPEWORN's old name: the same Audio Unit (aumu Lmnl Veil) and VST3, so leaving it would
+# show two copies in hosts (and the registry would pick one of them). Your songs and presets made
+# with LIMINAL open in TAPEWORN; its presets are carried over the first time TAPEWORN lists them.
+bold "0. Removing LIMINAL (TAPEWORN's old name)"
+old_found=0
+for old in "$components/LIMINAL.component" "$vst3/LIMINAL.vst3"; do
+    if [[ -e "$old" ]]; then
+        rm -rf "$old"
+        ok "removed $old"
+        old_found=1
+    fi
+done
+for old in "/Library/Audio/Plug-Ins/Components/LIMINAL.component" "/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3"; do
+    if [[ -e "$old" ]]; then
+        if rm -rf "$old" 2>/dev/null && [[ ! -e "$old" ]]; then
+            ok "removed $old"
+        elif [[ $ci == 0 ]] && /usr/bin/sudo -n true 2>/dev/null && /usr/bin/sudo rm -rf "$old"; then
+            ok "removed $old"
+        else
+            warn "A system-wide LIMINAL copy remains: $old"
+            warn "Remove it so hosts do not show two copies:  sudo rm -rf \"$old\""
+        fi
+        old_found=1
+    fi
+done
+[[ $old_found == 1 ]] || ok "no LIMINAL copy found"
+
 # A second, system-wide copy would compete with this one.
-for system_copy in "/Library/Audio/Plug-Ins/Components/LIMINAL.component" "/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3"; do
+for system_copy in "/Library/Audio/Plug-Ins/Components/TAPEWORN.component" "/Library/Audio/Plug-Ins/VST3/TAPEWORN.vst3"; do
     if [[ -e "$system_copy" ]]; then
         warn "An older system-wide copy exists: $system_copy"
         warn "Remove it so hosts load the new one:  sudo rm -rf \"$system_copy\""
@@ -80,7 +108,7 @@ install_bundle() {
     local src="$1" dest="$2" binary
     rm -rf "$dest"
     /usr/bin/ditto "$src" "$dest"
-    binary="$dest/Contents/MacOS/LIMINAL"
+    binary="$dest/Contents/MacOS/TAPEWORN"
     chmod +x "$binary"
     /usr/bin/xattr -dr com.apple.quarantine "$dest" 2>/dev/null || true
     if /usr/bin/xattr -lr "$dest" 2>/dev/null | /usr/bin/grep -q com.apple.quarantine; then
@@ -89,7 +117,7 @@ install_bundle() {
     fi
     if [[ "$dest" == *.component && $out_of_process == 1 ]]; then
         /usr/libexec/PlistBuddy -c "Delete :AudioComponents:0:sandboxSafe" "$dest/Contents/Info.plist" 2>/dev/null || true
-        warn "sandboxSafe removed: GarageBand will host LIMINAL out-of-process"
+        warn "sandboxSafe removed: GarageBand will host TAPEWORN out-of-process"
     fi
     # A Developer ID signed and notarised release keeps its signature; anything else
     # is re-signed ad hoc for this Mac.
@@ -108,11 +136,11 @@ install_bundle() {
 }
 
 bold "1-3. Copying, removing quarantine, signing"
-install_bundle "$component_src" "$components/LIMINAL.component"
+install_bundle "$component_src" "$components/TAPEWORN.component"
 if [[ -d "$vst3_src" ]]; then
-    install_bundle "$vst3_src" "$vst3/LIMINAL.vst3"
+    install_bundle "$vst3_src" "$vst3/TAPEWORN.vst3"
 else
-    warn "LIMINAL.vst3 not in this folder; skipped"
+    warn "TAPEWORN.vst3 not in this folder; skipped"
 fi
 
 bold "4. Resetting the Audio Unit registry"
@@ -125,7 +153,7 @@ for _ in $(seq 1 30); do
     fi
     sleep 1
 done
-if [[ $registered == 1 ]]; then ok "macOS lists aumu Lmnl Veil (Veil Audio: LIMINAL)"; else fail "LIMINAL is not listed by the Audio Unit registry after 30 s"; fi
+if [[ $registered == 1 ]]; then ok "macOS lists aumu Lmnl Veil (Elsewhere Audio: TAPEWORN)"; else fail "TAPEWORN is not listed by the Audio Unit registry after 30 s"; fi
 
 bold "5. Validating with Apple's auval"
 auval_log="$logs/install-auval.txt"
@@ -156,20 +184,20 @@ cat <<'NEXT'
     2. Quit and reopen GarageBand.
     3. Create a Software Instrument track (Track > New Track > Software Instrument).
        Open Smart Controls (B), click Plug-ins, click the Instrument slot (the top
-       slot): AU Instruments > Veil Audio > LIMINAL.
+       slot): AU Instruments > Elsewhere Audio > TAPEWORN.
     4. The room ambience plays straight away while the track is selected. Play notes
        (a MIDI keyboard, or Window > Show Musical Typing) to hear the Forgotten Piano.
-    5. If the window shows sliders instead of the LIMINAL interface, use the view menu
+    5. If the window shows sliders instead of the TAPEWORN interface, use the view menu
        at the top of the plug-in window to switch from "Controls" to "Editor".
   Logic Pro
-    1. Logic Pro > Settings > Plug-in Manager, find Veil Audio > LIMINAL.
+    1. Logic Pro > Settings > Plug-in Manager, find Elsewhere Audio > TAPEWORN.
        If it shows as failed, select it and click "Reset & Rescan Selection".
     2. On a Software Instrument track, click the Instrument slot:
-       AU Instruments > Veil Audio > LIMINAL.
+       AU Instruments > Elsewhere Audio > TAPEWORN.
 NEXT
 if [[ $result == 0 ]]; then
-    bold "LIMINAL is installed and validated."
+    bold "TAPEWORN is installed and validated."
 else
-    bold "LIMINAL is installed, but validation failed. Send $auval_log when reporting this."
+    bold "TAPEWORN is installed, but validation failed. Send $auval_log when reporting this."
 fi
 exit $result

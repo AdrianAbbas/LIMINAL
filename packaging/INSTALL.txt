@@ -1,41 +1,70 @@
-LIMINAL - Cinematic Environmental Instrument (macOS, Apple Silicon and Intel, macOS 10.15+)
-Milestone 1a: Forgotten Piano, Faded Synth and Glass Memories, one room-tone ambience. Not the final look.
+TAPEWORN by Elsewhere Audio - Cinematic Environmental Instrument
+(Audio Unit and VST3, macOS 10.15+, Apple Silicon and Intel)
+
+TAPEWORN is the new name of LIMINAL. It is the same instrument: songs and presets
+made with LIMINAL open in TAPEWORN unchanged. The installer removes the old
+LIMINAL copy so your host does not list it twice.
 
 INSTALL
   1. Quit GarageBand and Logic.
   2. Open Terminal (Applications > Utilities > Terminal).
   3. Type "bash " (with a space), drag install-mac.sh from this folder into the
      Terminal window, and press Return.
-  4. Wait for "LIMINAL is installed and validated."
+  4. Wait for "TAPEWORN is installed and validated."
 
   Why a script? This build is not signed with an Apple Developer ID. When a browser
   downloads it, macOS marks every file as quarantined and then refuses to load the
   plug-in: GarageBand shows a silent slot with plain sliders. The script removes that
-  flag, re-signs the plug-in for this Mac, refreshes the Audio Unit list and runs
-  Apple's validator.
+  flag, re-signs the plug-in for this Mac, removes LIMINAL (the old name), refreshes
+  the Audio Unit list and runs Apple's validator.
 
 GARAGEBAND
   Settings > Audio/MIDI: tick "Audio Units". Restart GarageBand.
   Track > New Track > Software Instrument. Smart Controls (B) > Plug-ins >
-  Instrument slot (top) > AU Instruments > Veil Audio > LIMINAL.
-  The room ambience plays straight away while the track is selected. Play notes
-  (MIDI keyboard, or Window > Show Musical Typing) to hear the Forgotten Piano.
-  INSTRUMENTS (bottom strip) opens a drawer: switch the Faded Synth and Glass
-  Memories on (MIDI plays every instrument that is on), set levels, edit each one.
-  If you see sliders instead of the LIMINAL interface, switch the plug-in
+  Instrument slot (top) > AU Instruments > Elsewhere Audio > TAPEWORN.
+  The room plays straight away while the track is selected. Play notes (a MIDI
+  keyboard, or Window > Show Musical Typing) to hear the Forgotten Piano.
+  If you see sliders instead of the TAPEWORN interface, switch the plug-in
   window's view menu from "Controls" to "Editor".
 
 LOGIC PRO
-  Settings > Plug-in Manager > Veil Audio > LIMINAL. If it is marked failed,
+  Settings > Plug-in Manager > Elsewhere Audio > TAPEWORN. If it is marked failed,
   select it and click "Reset & Rescan Selection". Insert it in the Instrument slot
-  of a Software Instrument track: AU Instruments > Veil Audio > LIMINAL.
+  of a Software Instrument track: AU Instruments > Elsewhere Audio > TAPEWORN.
+
+THE WINDOW
+  INSTRUMENTS  six slots; each plays any of the twenty instruments (CHOOSE)
+  PLACE        ten places, three Characters each
+  EFFECTS      each instrument's own effects (the place shapes them: Influence)
+  PERFORM      the macros, evolution, scenes A/B, the VHS look
+  PRESETS      places, Characters, instruments, scenes and your own presets
+  The big LIMINALITY knob (lower left) sets how unstable, detuned and
+  half-remembered every instrument is.
+
+PRESETS
+  INIT, at the top of every list, is "no preset": every instrument, the place,
+  the effects and LIMINALITY back to their defaults, as when TAPEWORN is first
+  opened. RESET (beside the preset's name) does the same.
+  UNDO / REDO (top right of the drawer) go back and forth between preset loads.
+  (Cmd+Z / Cmd+Shift+Z do the same in the standalone app; most hosts keep those
+  keys for their own undo.)
+  Your own presets are kept in ~/Library/Elsewhere Audio/TAPEWORN/Presets.
+  Presets you saved with LIMINAL are copied there the first time you open the
+  USER list (the old files stay where they were).
+
+LEVELS
+  All twenty instruments play at the same loudness in every place and Character
+  (with the place's influence on). With Environment Amount or an instrument's
+  Influence at 0 they play at their own dry levels.
 
 UNINSTALL
   bash uninstall-mac.sh            (add --purge to also delete saved presets)
+  It removes TAPEWORN and any LIMINAL copy.
 
 MANUAL INSTALL (if you prefer not to run the script)
-  cp -R LIMINAL.component ~/Library/Audio/Plug-Ins/Components/
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/LIMINAL.component
-  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/LIMINAL.component
+  rm -rf ~/Library/Audio/Plug-Ins/Components/LIMINAL.component
+  cp -R TAPEWORN.component ~/Library/Audio/Plug-Ins/Components/
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/TAPEWORN.component
+  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/TAPEWORN.component
   killall -9 AudioComponentRegistrar
   auval -v aumu Lmnl Veil

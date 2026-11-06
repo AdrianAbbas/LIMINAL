@@ -57,7 +57,7 @@ Character; passes of kind `failing` always do). They go into the manifest (`char
 
 ## The developer's own renders or photographs
 
-`~/Library/Application Support/Veil Audio/LIMINAL/Scenes/` (inside GarageBand's sandbox, the host's
+`~/Library/Application Support/Elsewhere Audio/TAPEWORN/Scenes/` (inside GarageBand's sandbox, the host's
 container): a folder `<place>/` with the same files as `assets/scenes/<place>/` replaces the
 bundled renders; a single photograph `<n>.png` (n = 1..10, Milestone 4) still replaces the whole
 scene, renders included.

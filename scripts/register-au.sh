@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Install a LIMINAL.component into ~/Library/Audio/Plug-Ins/Components, restart the
+# Install a TAPEWORN.component into ~/Library/Audio/Plug-Ins/Components, restart the
 # AU registrar and wait until aumu/Lmnl/Veil is listed. Used by CI experiments.
-# Usage: scripts/register-au.sh <path/to/LIMINAL.component>
+# Usage: scripts/register-au.sh <path/to/TAPEWORN.component>
 set -euo pipefail
 source_bundle="$1"
 components="$HOME/Library/Audio/Plug-Ins/Components"
-installed="$components/LIMINAL.component"
+installed="$components/TAPEWORN.component"
 mkdir -p "$components"
 rm -rf "$installed"
 /usr/bin/ditto "$source_bundle" "$installed"

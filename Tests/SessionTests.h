@@ -103,7 +103,7 @@ std::vector<std::pair<juce::String, juce::MemoryBlock>> states() {
     return list;
 }
 
-juce::File fixtureFile() { return juce::File(LIMINAL_SOURCE_DIR).getChildFile("Tests").getChildFile("fixtures").getChildFile("sessions-v2.xml"); }
+juce::File fixtureFile(const char* name = "sessions-v2.xml") { return juce::File(LIMINAL_SOURCE_DIR).getChildFile("Tests").getChildFile("fixtures").getChildFile(name); }
 
 } // namespace sessiontest
 
@@ -156,11 +156,65 @@ int refreshSessionFingerprints() {
     return xml->writeTo(fixtureFile()) ? 0 : 1;
 }
 
+void testSessionFixture(Suite& s, const char* file, const std::string& who);
+
 void testSessions(Suite& s) {
-    s.section("old sessions and presets open exactly as before (2026-11-02)");
+    s.section("old sessions and presets open exactly as before (2026-11-02; 2026-11-06: LIMINAL's, in TAPEWORN)");
+    // Saved before the instrument library (fingerprints re-taken when the sound changed on purpose).
+    testSessionFixture(s, "sessions-v2.xml", "saved before the library");
+    // Saved by LIMINAL 0.4 just before the rename: TAPEWORN must load them unchanged (the state's tag,
+    // the parameter IDs), and sound exactly the same (the rename changes no sound: fingerprints as written).
+    testSessionFixture(s, "sessions-liminal.xml", "saved by LIMINAL (before the rename to TAPEWORN)");
+    // A preset saved with LIMINAL (its own folder, tag and extension) is carried over and loads.
+    {
+        using namespace sessiontest;
+        LiminalProcessor p;
+        const auto old = LiminalProcessor::legacyUserPresetFolder();
+        const bool hadOld = old.isDirectory();
+        old.createDirectory();
+        const juce::String name = "ZZ CARRYOVER TEST";
+        const auto legacy = old.getChildFile(name + brand::legacyPresetExtension);
+        const auto carried = LiminalProcessor::userPresetFolder().getChildFile(name + brand::presetExtension);
+        carried.deleteFile();
+        {   // exactly as LIMINAL 0.4 wrote one (PluginProcessor.cpp, saveUserPreset, before the rename)
+            juce::XmlElement xml(brand::legacyPresetTag);
+            xml.setAttribute("name", name);
+            xml.setAttribute("stateVersion", 2);
+            const std::pair<const char*, double> values[] { { params::environment, 6.0 }, { params::liminality, 0.75 }, { "synth_type", 18.0 }, { params::synthOn, 1.0 } };
+            for (const auto& [id, v] : values) {
+                auto* e = xml.createNewChildElement("PARAM");
+                e->setAttribute("id", id);
+                e->setAttribute("value", v);
+            }
+            xml.writeTo(legacy);
+        }
+        const auto list = p.userPresets();
+        bool listed = false;
+        for (const auto& f : list) listed |= f == carried;
+        s.check(listed && carried.existsAsFile() && legacy.existsAsFile(), "a preset saved with LIMINAL is carried over to TAPEWORN's folder (the old file left in place)",
+                carried.getFullPathName().toStdString());
+        const bool loaded = p.loadUserPreset(carried);
+        s.check(loaded && std::lround(p.parameters.getRawParameterValue(params::environment)->load()) == 6 && std::abs(p.parameters.getRawParameterValue(params::liminality)->load() - 0.75f) < 1.0e-5f
+                    && std::lround(p.parameters.getRawParameterValue("synth_type")->load()) == 18 && p.presetName() == name,
+                "LIMINAL's preset loads in TAPEWORN with its values");
+        const auto saved = p.saveUserPreset("ZZ SAVED TEST");
+        auto back = juce::XmlDocument::parse(saved);
+        s.check(saved.getFileExtension() == brand::presetExtension && back != nullptr && back->hasTagName(brand::presetTag), "new presets are saved as TAPEWORN presets",
+                saved.getFullPathName().toStdString());
+        saved.deleteFile();
+        carried.deleteFile();
+        legacy.deleteFile();
+        if (!hadOld) {
+            old.deleteRecursively();
+            if (old.getParentDirectory().getNumberOfChildFiles(juce::File::findFilesAndDirectories) == 0) old.getParentDirectory().deleteRecursively();
+        }
+    }
+}
+
+void testSessionFixture(Suite& s, const char* file, const std::string& who) {
     using namespace sessiontest;
-    auto xml = juce::XmlDocument::parse(fixtureFile());
-    if (!s.check(xml != nullptr, "the fixture of sessions saved before the library is readable", fixtureFile().getFullPathName().toStdString())) return;
+    auto xml = juce::XmlDocument::parse(fixtureFile(file));
+    if (!s.check(xml != nullptr, "the fixture of sessions " + who + " is readable", fixtureFile(file).getFullPathName().toStdString())) return;
     int sessions = 0, paramsWrong = 0, slotsWrong = 0, fingerprintsOff = 0;
     double worst = 0;
     std::string worstName;
@@ -185,8 +239,12 @@ void testSessions(Suite& s) {
                     if (++paramsWrong < 5) std::cout << "  " << e->getStringAttribute("name") << ": " << id << " changed\n";
                 }
             }
-            for (int slot = 0; slot < params::instrumentCount; ++slot)
-                if (std::lround(p.parameters.getRawParameterValue(params::slotTypeId(slot))->load()) != slot) ++slotsWrong;
+            for (int slot = 0; slot < params::instrumentCount; ++slot) {
+                long expected = slot;   // (a session from before the library: its own instrument)
+                for (auto* param : saved->getChildWithTagNameIterator("PARAM"))
+                    if (param->getStringAttribute("id") == params::slotTypeId(slot)) expected = std::lround(param->getDoubleAttribute("value"));
+                if (std::lround(p.parameters.getRawParameterValue(params::slotTypeId(slot))->load()) != expected) ++slotsWrong;
+            }
         }
         // The same sound.
         const auto now = fingerprint(state);
@@ -200,8 +258,27 @@ void testSessions(Suite& s) {
         if (off > 0.05) ++fingerprintsOff;
         if (off > worst) { worst = off; worstName = e->getStringAttribute("name").toStdString(); }
     }
-    s.check(sessions >= 22, "the fixture holds the default, a moved state and every factory scene", std::to_string(sessions) + " sessions");
-    s.check(paramsWrong == 0, "every parameter an old session saved comes back with its value", std::to_string(paramsWrong) + " changed");
-    s.check(slotsWrong == 0, "in an old session every slot holds its own instrument (piano, synth, glass, choir, music box, drone)", std::to_string(slotsWrong) + " slots changed");
-    s.check(fingerprintsOff == 0, "old sessions render as before (every 250 ms window within 0.05 dB)", "worst " + num(worst, 3) + " dB" + (worstName.empty() ? "" : " (" + worstName + ")"));
+    const std::string tag = " (" + who + ")";
+    s.check(sessions >= 22, "the fixture holds the default, a moved state and every factory scene" + tag, std::to_string(sessions) + " sessions");
+    s.check(paramsWrong == 0, "every parameter an old session saved comes back with its value" + tag, std::to_string(paramsWrong) + " changed");
+    s.check(slotsWrong == 0, "in an old session every slot holds the instrument it saved" + tag, std::to_string(slotsWrong) + " slots changed");
+    s.check(fingerprintsOff == 0, "old sessions render as before (every 250 ms window within 0.05 dB)" + tag, "worst " + num(worst, 3) + " dB" + (worstName.empty() ? "" : " (" + worstName + ")"));
+}
+
+// The AU harness's LIMINAL song (tools/au-harness/liminal-session.state): the raw state LIMINAL 0.4 saved
+// for "all six, moved" (Tests/fixtures/sessions-liminal.xml), as an AU host keeps it in a song.
+int writeLiminalAuState(const juce::String& path) {
+    using namespace sessiontest;
+    auto xml = juce::XmlDocument::parse(fixtureFile("sessions-liminal.xml"));
+    if (xml == nullptr) return 1;
+    for (auto* e : xml->getChildWithTagNameIterator("SESSION")) {
+        if (e->getStringAttribute("name") != "all six, moved") continue;
+        juce::MemoryBlock packed, state;
+        packed.fromBase64Encoding(e->getStringAttribute("state"));
+        juce::MemoryInputStream in(packed, false);
+        juce::GZIPDecompressorInputStream unzip(in);
+        unzip.readIntoMemoryBlock(state);
+        return juce::File::getCurrentWorkingDirectory().getChildFile(path).replaceWithData(state.getData(), state.getSize()) ? 0 : 1;
+    }
+    return 1;
 }

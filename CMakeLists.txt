@@ -25,12 +25,16 @@ set(LIMINAL_FORMATS VST3 Standalone)
 if(APPLE)
     list(APPEND LIMINAL_FORMATS AU)
 endif()
+# 2026-11-06: the product is TAPEWORN by Elsewhere Audio. The CMake target keeps its internal name
+# (LIMINAL), and the AU's manufacturer / subtype codes (Veil / Lmnl) - which also make the VST3's
+# class ID - are unchanged on purpose: songs made with LIMINAL find TAPEWORN and load unchanged.
 juce_add_plugin(LIMINAL
-    COMPANY_NAME "Veil Audio"
-    BUNDLE_ID "audio.veil.liminal"
+    COMPANY_NAME "Elsewhere Audio"
+    BUNDLE_ID "com.elsewhereaudio.tapeworn"
     PLUGIN_MANUFACTURER_CODE Veil
     PLUGIN_CODE Lmnl
-    PRODUCT_NAME "LIMINAL"
+    PRODUCT_NAME "TAPEWORN"
+    PLUGIN_NAME "TAPEWORN"
     DESCRIPTION "Cinematic Environmental Instrument"
     FORMATS ${LIMINAL_FORMATS}
     # An instrument: GarageBand and Logic only reliably host generators this way.
@@ -69,10 +73,10 @@ if(EXISTS "${LIMINAL_CAPTURES_DIR}/profiles.json")
     juce_add_binary_data(LiminalCaptures HEADER_NAME CaptureData.h NAMESPACE CaptureData SOURCES ${LIMINAL_CAPTURE_FILES})
     target_link_libraries(LIMINAL PRIVATE LiminalCaptures)
     target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_CAPTURES=1)
-    message(STATUS "LIMINAL: effect captures embedded from ${LIMINAL_CAPTURES_DIR}")
+    message(STATUS "TAPEWORN: effect captures embedded from ${LIMINAL_CAPTURES_DIR}")
 else()
     target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_CAPTURES=0)
-    message(STATUS "LIMINAL: no effect captures (${LIMINAL_CAPTURES_DIR}) - the rooms keep their previous sound")
+    message(STATUS "TAPEWORN: no effect captures (${LIMINAL_CAPTURES_DIR}) - the rooms keep their previous sound")
 endif()
 # The developer's recordings (Milestone 8): notes prepared by tools/sample-prep (prepare.py +
 # liminal.py) from the PRIVATE Samples repository (CI: SAMPLES_TOKEN, scripts/ci-fetch-samples.sh).
@@ -96,10 +100,10 @@ if(EXISTS "${LIMINAL_SAMPLES_DIR}/index.json")
                 VERBATIM)
         endif()
     endforeach()
-    message(STATUS "LIMINAL: recordings shipped from ${LIMINAL_SAMPLES_DIR}")
+    message(STATUS "TAPEWORN: recordings shipped from ${LIMINAL_SAMPLES_DIR}")
 else()
     target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_SAMPLES=0)
-    message(STATUS "LIMINAL: no recordings (${LIMINAL_SAMPLES_DIR}) - the instruments play their synthesised stand-ins")
+    message(STATUS "TAPEWORN: no recordings (${LIMINAL_SAMPLES_DIR}) - the instruments play their synthesised stand-ins")
 endif()
 target_compile_definitions(LIMINAL PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0

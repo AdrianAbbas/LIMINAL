@@ -7,7 +7,7 @@ namespace liminal {
 
 LiminalProcessor::LiminalProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters(*this, nullptr, "LIMINAL", params::makeLayout()) {
+      parameters(*this, nullptr, "LIMINAL", params::makeLayout()) {   // (the state's tag: kept, so LIMINAL's songs load)
     samples::Bank::get().load();   // the developer's recordings (Milestone 8), on a background thread
     // The mirror (Milestone 5): every parameter the DSP reads, live or morphed between scenes.
     {
@@ -840,15 +840,26 @@ void LiminalProcessor::setCurrentProgram(int index) {
 
 // User presets: one XML file each, every parameter by ID (scenes A/B are part of the song,
 // not of a preset).
-juce::File LiminalProcessor::userPresetFolder() {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Veil Audio").getChildFile("LIMINAL").getChildFile("Presets");
+juce::File LiminalProcessor::userPresetFolder() { return brand::appDataFolder().getChildFile("Presets"); }
+juce::File LiminalProcessor::legacyUserPresetFolder() { return brand::legacyAppDataFolder().getChildFile("Presets"); }
+
+// The presets saved with LIMINAL are copied over once (the old files are left where they were).
+void LiminalProcessor::carryOverLegacyPresets() {
+    const auto old = legacyUserPresetFolder();
+    if (!old.isDirectory()) return;
+    const auto folder = userPresetFolder();
+    for (const auto& f : old.findChildFiles(juce::File::findFiles, false, juce::String("*") + brand::legacyPresetExtension)) {
+        const auto target = folder.getChildFile(f.getFileNameWithoutExtension() + brand::presetExtension);
+        if (target.existsAsFile() || !folder.createDirectory()) continue;
+        f.copyFileTo(target);
+    }
 }
 
 juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
     const auto clean = juce::File::createLegalFileName(name.trim().isEmpty() ? juce::String("Untitled") : name.trim());
     auto folder = userPresetFolder();
     if (!folder.createDirectory()) return {};
-    juce::XmlElement xml("LIMINAL_PRESET");
+    juce::XmlElement xml(brand::presetTag);
     xml.setAttribute("name", clean);
     xml.setAttribute("stateVersion", stateVersion);
     for (const auto& m : mirrored) {
@@ -858,7 +869,7 @@ juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
         e->setAttribute("id", id);
         e->setAttribute("value", double(m.parameter->convertFrom0to1(m.parameter->getValue())));
     }
-    const auto file = folder.getChildFile(clean + ".liminalpreset");
+    const auto file = folder.getChildFile(clean + brand::presetExtension);
     if (!xml.writeTo(file)) return {};
     currentPresetName = clean;
     return file;
@@ -866,7 +877,7 @@ juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
 
 bool LiminalProcessor::loadUserPreset(const juce::File& file) {
     auto xml = juce::XmlDocument::parse(file);
-    if (xml == nullptr || !xml->hasTagName("LIMINAL_PRESET")) return false;
+    if (xml == nullptr || !(xml->hasTagName(brand::presetTag) || xml->hasTagName(brand::legacyPresetTag))) return false;   // (LIMINAL's presets too)
     const auto name = xml->getStringAttribute("name", file.getFileNameWithoutExtension());
     undoable(name, [&] {
         resetToDefaults();   // parameters the preset does not know (added later) take their defaults
@@ -877,7 +888,8 @@ bool LiminalProcessor::loadUserPreset(const juce::File& file) {
 }
 
 juce::Array<juce::File> LiminalProcessor::userPresets() const {
-    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, "*.liminalpreset");
+    carryOverLegacyPresets();
+    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, juce::String("*") + brand::presetExtension + ";*" + brand::legacyPresetExtension);
     files.sort();
     return files;
 }

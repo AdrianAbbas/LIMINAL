@@ -5,8 +5,8 @@
 set -euo pipefail
 artefacts="$1"
 status=0
-for bundle in "$artefacts/AU/LIMINAL.component" "$artefacts/VST3/LIMINAL.vst3" "$artefacts/Standalone/LIMINAL.app"; do
-    binary="$bundle/Contents/MacOS/LIMINAL"
+for bundle in "$artefacts/AU/TAPEWORN.component" "$artefacts/VST3/TAPEWORN.vst3" "$artefacts/Standalone/TAPEWORN.app"; do
+    binary="$bundle/Contents/MacOS/TAPEWORN"
     if [[ ! -f "$binary" ]]; then
         echo "::error::missing $binary"; status=1; continue
     fi
@@ -21,7 +21,7 @@ for bundle in "$artefacts/AU/LIMINAL.component" "$artefacts/VST3/LIMINAL.vst3" "
     done
 done
 
-plist="$artefacts/AU/LIMINAL.component/Contents/Info.plist"
+plist="$artefacts/AU/TAPEWORN.component/Contents/Info.plist"
 check() {
     local key="$1" expected="$2" actual
     actual=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:$key" "$plist" 2>/dev/null || echo "(absent)")
@@ -34,6 +34,14 @@ check() {
 check type aumu
 check subtype Lmnl
 check manufacturer Veil
-check factoryFunction LIMINALAUFactory
+check factoryFunction TAPEWORNAUFactory
 check sandboxSafe true
+check name "Elsewhere Audio: TAPEWORN"
+# The bundle identifier (2026-11-06: renamed; the AU codes above are unchanged, so songs still find it).
+for bundle in "$artefacts/AU/TAPEWORN.component" "$artefacts/VST3/TAPEWORN.vst3" "$artefacts/Standalone/TAPEWORN.app"; do
+    id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$bundle/Contents/Info.plist" 2>/dev/null || echo "(absent)")
+    printf 'CFBundleIdentifier %-40s %s\n' "$(basename "$bundle")" "$id"
+    if [[ "$id" != "com.elsewhereaudio.tapeworn" ]]; then echo "::error::$(basename "$bundle") CFBundleIdentifier expected com.elsewhereaudio.tapeworn, got $id"; status=1; fi
+    if /usr/bin/grep -aq 'LIMINAL' "$bundle/Contents/Info.plist"; then echo "::error::$(basename "$bundle") Info.plist still names LIMINAL"; status=1; fi
+done
 exit $status

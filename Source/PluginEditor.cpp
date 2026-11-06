@@ -1612,7 +1612,7 @@ void PresetDrawer::startExport() {
     options.sampleRate = rates[std::clamp(rate.getSelectedId() - 1, 0, 2)];
     options.room = room.getToggleState();
     const auto& where = dsp::profile(processor.placeNow().place());
-    const auto name = juce::File::createLegalFileName(juce::String("LIMINAL ") + where.name + " - " + dsp::character(int(processor.placeNow().place()), processor.placeNow().characterIndex()).name + ".wav");
+    const auto name = juce::File::createLegalFileName(juce::String(brand::product) + " " + where.name + " - " + dsp::character(int(processor.placeNow().place()), processor.placeNow().characterIndex()).name + ".wav");
     // The host's sandbox allows a file the user picks: ask where.
     chooser = std::make_unique<juce::FileChooser>("Export the ambience", juce::File::getSpecialLocation(juce::File::userMusicDirectory).getChildFile(name), "*.wav");
     chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
@@ -2094,7 +2094,7 @@ void MainView::paint(juce::Graphics& g) {
     // The wordmark, quiet, at the top of the viewfinder.
     g.setColour(ink.withAlpha(0.5f));
     g.setFont(font(12.0f, true).withExtraKerningFactor(0.6f));
-    g.drawText("LIMINAL", juce::Rectangle<int>(getWidth() / 2 - 80, 26, 160, 20), juce::Justification::centred);
+    g.drawText(brand::product, juce::Rectangle<int>(getWidth() / 2 - 110, 26, 220, 20), juce::Justification::centred);
 
     // Viewfinder frame corners and centre mark.
     const auto frame = getLocalBounds().withTrimmedBottom(strip.getHeight()).reduced(18).toFloat();

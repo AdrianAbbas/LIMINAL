@@ -88,7 +88,7 @@ jobs:
       - name: Build AU host harness
         run: bash scripts/build-au-harness.sh build/LiminalAUHarness
       - name: Install a quarantined download with install-mac.sh, then auval and harness (arm64 + x86_64)
-        run: bash scripts/ci-user-install-test.sh dist/LIMINAL-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
+        run: bash scripts/ci-user-install-test.sh dist/TAPEWORN-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
       # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
       - name: Publish install and arm64 harness logs as annotations
         if: always()
@@ -103,14 +103,14 @@ jobs:
       - name: Upload installable package (only when every check passed)
         uses: actions/upload-artifact@v4
         with:
-          name: LIMINAL-macOS-Universal
-          path: dist/LIMINAL-macOS-Universal.zip
+          name: TAPEWORN-macOS-Universal
+          path: dist/TAPEWORN-macOS-Universal.zip
           if-no-files-found: error
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: LIMINAL-macOS-diagnostics
+          name: TAPEWORN-macOS-diagnostics
           path: |
             build/ci-logs/
           if-no-files-found: warn
@@ -187,7 +187,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: LIMINAL-linux-test-logs
+          name: TAPEWORN-linux-test-logs
           path: build/test-logs/
           if-no-files-found: warn
   release:
@@ -200,8 +200,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: LIMINAL-macOS-Universal
+          name: TAPEWORN-macOS-Universal
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" LIMINAL-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "LIMINAL $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" TAPEWORN-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "TAPEWORN $GITHUB_REF_NAME" --generate-notes

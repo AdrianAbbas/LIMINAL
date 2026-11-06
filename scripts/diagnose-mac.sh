@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Read-only diagnostics for "LIMINAL is silent / shows generic sliders in GarageBand".
+# Read-only diagnostics for "TAPEWORN is silent / shows generic sliders in GarageBand".
 #
 # It changes nothing on your Mac. It only reads files, asks Apple's tools
-# questions and writes one report file, by default ~/Desktop/LIMINAL-diagnostics.txt.
+# questions and writes one report file, by default ~/Desktop/TAPEWORN-diagnostics.txt.
 #
 # For the most useful report:
-#   1. Open GarageBand, insert LIMINAL on a software-instrument track and play a note,
+#   1. Open GarageBand, insert TAPEWORN on a software-instrument track and play a note,
 #      so the failing state is live.
 #   2. Leave GarageBand open and run in Terminal:
 #        bash ~/Downloads/diagnose-mac.sh
 #   3. Send the report file back.
 # (No `set -u`: macOS bash 3.2 treats an empty array as unbound.)
 
-report="${1:-$HOME/Desktop/LIMINAL-diagnostics.txt}"
+report="${1:-$HOME/Desktop/TAPEWORN-diagnostics.txt}"
 : > "$report" || { echo "Cannot write $report" >&2; exit 1; }
 exec > >(tee -a "$report") 2>&1
 
@@ -39,21 +39,21 @@ done
 echo "Running host / plug-in hosting processes (pid, name):"
 /usr/bin/pgrep -l -i -f 'GarageBand|Logic Pro|AUHostingService' 2>/dev/null || echo "  none running"
 
-section "Where is LIMINAL loaded right now?"
-# If GarageBand is open with LIMINAL inserted, this shows which process has the LIMINAL
+section "Where is TAPEWORN loaded right now?"
+# If GarageBand is open with TAPEWORN inserted, this shows which process has the TAPEWORN
 # binary mapped: GarageBand itself (in-process) or an AUHostingService (out-of-process).
 found_loaded=0
 for pid in $(/usr/bin/pgrep -i -f 'GarageBand|Logic Pro|AUHostingService' 2>/dev/null); do
     name=$(/bin/ps -o comm= -p "$pid" 2>/dev/null)
-    hits=$(/usr/sbin/lsof -p "$pid" 2>/dev/null | /usr/bin/grep -i 'LIMINAL.component' | /usr/bin/awk '{print $NF}' | /usr/bin/sort -u)
+    hits=$(/usr/sbin/lsof -p "$pid" 2>/dev/null | /usr/bin/grep -i 'TAPEWORN.component' | /usr/bin/awk '{print $NF}' | /usr/bin/sort -u)
     if [[ -n "$hits" ]]; then
         found_loaded=1
-        printf 'pid %s (%s) has LIMINAL loaded from:\n%s\n' "$pid" "$name" "$hits"
+        printf 'pid %s (%s) has TAPEWORN loaded from:\n%s\n' "$pid" "$name" "$hits"
     fi
 done
-[[ $found_loaded == 1 ]] || echo "LIMINAL is not mapped into any running GarageBand/Logic/AUHostingService process."
+[[ $found_loaded == 1 ]] || echo "TAPEWORN is not mapped into any running GarageBand/Logic/AUHostingService process."
 
-section "Installed LIMINAL bundles"
+section "Installed TAPEWORN bundles"
 components=()
 for dir in "$HOME/Library/Audio/Plug-Ins/Components" "/Library/Audio/Plug-Ins/Components" \
            "$HOME/Library/Audio/Plug-Ins/VST3" "/Library/Audio/Plug-Ins/VST3"; do
@@ -61,15 +61,15 @@ for dir in "$HOME/Library/Audio/Plug-Ins/Components" "/Library/Audio/Plug-Ins/Co
     while IFS= read -r -d '' bundle; do
         printf '%s  (modified %s)\n' "$bundle" "$(/usr/bin/stat -f '%Sm' "$bundle")"
         [[ "$bundle" == *.component ]] && components+=("$bundle")
-    done < <(/usr/bin/find "$dir" -maxdepth 1 -iname 'liminal*' -print0 2>/dev/null)
+    done < <(/usr/bin/find "$dir" -maxdepth 1 \( -iname 'tapeworn*' -o -iname 'liminal*' \) -print0 2>/dev/null)
 done
-[[ ${#components[@]} -gt 0 ]] || echo "No LIMINAL.component found in either Components folder."
+[[ ${#components[@]} -gt 0 ]] || echo "No TAPEWORN.component found in either Components folder."
 echo "Other copies Spotlight knows about (e.g. in Downloads):"
-/usr/bin/mdfind "kMDItemFSName == 'LIMINAL.component'" 2>/dev/null | /usr/bin/head -20
+/usr/bin/mdfind "kMDItemFSName == 'TAPEWORN.component'" 2>/dev/null | /usr/bin/head -20
 
 for bundle in "${components[@]}"; do
     section "Bundle: $bundle"
-    binary="$bundle/Contents/MacOS/LIMINAL"
+    binary="$bundle/Contents/MacOS/TAPEWORN"
     run /usr/bin/file "$binary"
     run /usr/bin/shasum -a 256 "$binary"
     run /usr/libexec/PlistBuddy -c 'Print :AudioComponents' "$bundle/Contents/Info.plist"
@@ -81,22 +81,22 @@ for bundle in "${components[@]}"; do
 done
 
 section "Audio Unit registry"
-echo "Native ($(uname -m)) registry entries for LIMINAL:"
-/usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'liminal|lmnl' || echo "  not listed"
+echo "Native ($(uname -m)) registry entries for TAPEWORN:"
+/usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'tapeworn|liminal|lmnl' || echo "  not listed"
 if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
-    echo "x86_64 (Rosetta) registry entries for LIMINAL:"
-    /usr/bin/arch -x86_64 /usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'liminal|lmnl' || echo "  not listed"
+    echo "x86_64 (Rosetta) registry entries for TAPEWORN:"
+    /usr/bin/arch -x86_64 /usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'tapeworn|liminal|lmnl' || echo "  not listed"
 fi
 
 section "auval (native)"
-/usr/bin/auval -v aumu Lmnl Veil > /tmp/liminal-auval-native.txt 2>&1
+/usr/bin/auval -v aumu Lmnl Veil > /tmp/tapeworn-auval-native.txt 2>&1
 echo "exit $?"
-/usr/bin/grep -E 'Cocoa|FATAL|ERROR|WARNING|Channel Capabilities|\[[0-9-]+, [0-9-]+\]|VALIDATION|Time to open' /tmp/liminal-auval-native.txt | /usr/bin/head -40
+/usr/bin/grep -E 'Cocoa|FATAL|ERROR|WARNING|Channel Capabilities|\[[0-9-]+, [0-9-]+\]|VALIDATION|Time to open' /tmp/tapeworn-auval-native.txt | /usr/bin/head -40
 if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
     section "auval (x86_64 under Rosetta)"
-    /usr/bin/arch -x86_64 /usr/bin/auval -v aumu Lmnl Veil > /tmp/liminal-auval-x86.txt 2>&1
+    /usr/bin/arch -x86_64 /usr/bin/auval -v aumu Lmnl Veil > /tmp/tapeworn-auval-x86.txt 2>&1
     echo "exit $?"
-    /usr/bin/grep -E 'FATAL|ERROR|VALIDATION|architecture|Time to open' /tmp/liminal-auval-x86.txt | /usr/bin/head -15
+    /usr/bin/grep -E 'FATAL|ERROR|VALIDATION|architecture|Time to open' /tmp/tapeworn-auval-x86.txt | /usr/bin/head -15
 fi
 
 section "Audio Unit caches"
@@ -105,28 +105,28 @@ section "Audio Unit caches"
 
 section "Crash reports from the last 7 days"
 crashes=$(/usr/bin/find "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports -mtime -7 -type f \
-    \( -iname '*AUHosting*' -o -iname '*GarageBand*' -o -iname '*Logic*' -o -iname '*LIMINAL*' -o -iname '*auval*' -o -iname '*AudioComponent*' \) 2>/dev/null \
+    \( -iname '*AUHosting*' -o -iname '*GarageBand*' -o -iname '*Logic*' -o -iname '*TAPEWORN*' -o -iname '*auval*' -o -iname '*AudioComponent*' \) 2>/dev/null \
     | /usr/bin/xargs -I{} /usr/bin/stat -f '%m %N' {} 2>/dev/null | /usr/bin/sort -rn | /usr/bin/cut -d' ' -f2- | /usr/bin/head -6)
 if [[ -z "$crashes" ]]; then
     echo "none"
 else
     while IFS= read -r crash; do
         printf '\n--- %s\n' "$crash"
-        /usr/bin/grep -n -i -E '"procName"|"exception"|"type"|"signal"|termination|Exception Type|Crashed Thread|LIMINAL|juce' "$crash" | /usr/bin/head -40
+        /usr/bin/grep -n -i -E '"procName"|"exception"|"type"|"signal"|termination|Exception Type|Crashed Thread|TAPEWORN|juce' "$crash" | /usr/bin/head -40
     done <<< "$crashes"
 fi
 
-section "System log, last 2 hours (LIMINAL, Audio Unit hosting, Gatekeeper)"
+section "System log, last 2 hours (TAPEWORN, Audio Unit hosting, Gatekeeper)"
 /usr/bin/log show --last 2h --style compact --predicate \
-    '(eventMessage CONTAINS[c] "liminal") OR (eventMessage CONTAINS[c] "Lmnl") OR (process BEGINSWITH "AUHostingService" AND messageType >= 16) OR (process == "AudioComponentRegistrar" AND messageType >= 16)' \
+    '(eventMessage CONTAINS[c] "tapeworn") OR (eventMessage CONTAINS[c] "liminal") OR (eventMessage CONTAINS[c] "Lmnl") OR (process BEGINSWITH "AUHostingService" AND messageType >= 16) OR (process == "AudioComponentRegistrar" AND messageType >= 16)' \
     2>&1 | /usr/bin/tail -250
 
 section "Questions only you can answer (please add the answers when you send this)"
 cat <<'QUESTIONS'
 1. In Finder > Applications, select GarageBand, File > Get Info: is "Open using Rosetta" ticked?
-2. Which file did you download (artifact name and date), and how did you install LIMINAL.component?
-3. In the LIMINAL plug-in window, is there a "Controls / Editor" view menu at the top? Which one is selected?
-4. On the LIMINAL track, is the track selected (or record-enabled) and is the Power button on?
+2. Which file did you download (artifact name and date), and how did you install TAPEWORN.component?
+3. In the TAPEWORN plug-in window, is there a "Controls / Editor" view menu at the top? Which one is selected?
+4. On the TAPEWORN track, is the track selected (or record-enabled) and is the Power button on?
 5. Did macOS show any warning such as "cannot be opened because the developer cannot be verified"?
 QUESTIONS
 

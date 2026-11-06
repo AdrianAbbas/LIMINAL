@@ -1,5 +1,6 @@
 #include "UI/SceneArt.h"
 #include "DSP/Characters.h"
+#include "Brand.h"
 #include <algorithm>
 #include <cmath>
 
@@ -610,7 +611,7 @@ void develop(juce::Image& image, unsigned seed) {
 } // namespace
 
 juce::File photographFolder() {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Veil Audio").getChildFile("LIMINAL").getChildFile("Scenes");
+    return brand::appDataFolder().getChildFile("Scenes");
 }
 
 Scene renderPlace(int place, int character, int width, int height, float scale, bool quick) {

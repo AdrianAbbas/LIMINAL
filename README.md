@@ -1,20 +1,24 @@
-# LIMINAL
+# TAPEWORN
 
-A cinematic environmental **instrument** (AU / VST3, macOS; GarageBand and Logic Pro):
-playable, unsettling instruments placed inside liminal spaces.
+A cinematic environmental **instrument** by **Elsewhere Audio** (AU / VST3, macOS; GarageBand and
+Logic Pro): playable, unsettling instruments placed inside liminal spaces.
+
+*TAPEWORN was called LIMINAL until 2026-11-06. Songs and presets made with LIMINAL open in TAPEWORN
+unchanged (same Audio Unit codes, same parameters); the installer removes the old copy.*
 
 **Status: Milestones 0–6 and 8 done (7 to come), plus the instrument library.** Twenty
 instruments in six slots (each slot plays any of them, with its own Liminality, effects and room):
 Forgotten Piano, Faded Synth, Glass Memories, Empty Choir, Lost Music Box, Hollow Drone, Old Guitar,
 Faded Strings, Hallway Pizzicato, Toy Piano, Lounge E-Piano, Elevator Vibraphone, Mall Chimes, Solo
-Voice, Hummed Memory, Cassette Strings, Arcade Lead, Basement Bass, Warped Organ, Bowed Glass — most
+Voice, Distant Radio, Cassette Strings, Arcade Lead, Basement Bass, Warped Organ, Bowed Glass — most
 playing the developer's own recordings (prepared in CI from a private repository; synthesised
-stand-ins without them)
+stand-ins without them), level-matched in every place
 ([`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — in ten places that each reshape
 every instrument and have their own room and sounds ([`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md)),
 each with three Characters, evolution, four macros and Scene A/B morphing
 ([`docs/CHARACTERS.md`](docs/CHARACTERS.md)); per-instrument effects with the place's defaults
-([`docs/EFFECTS.md`](docs/EFFECTS.md)); 114 factory presets, ambience export to WAV,
+([`docs/EFFECTS.md`](docs/EFFECTS.md)); 114 factory presets plus INIT (no preset), undoable
+preset loads, ambience export to WAV,
 Eco/Standard/High quality. The interface is the "viewfinder": every place as its own scene,
 graded per Character, lights that answer the music ([`docs/snapshots/`](docs/snapshots/)).
 
@@ -24,7 +28,7 @@ the office are photographic: scripted Blender/Cycles scenes rendered as separate
 and composited live, so the lights flicker with the hum and swell with the notes
 ([`tools/scenes/`](tools/scenes/README.md)); the other seven are still painted.
 
-- Brief: [`LIMINAL_CLAUDE_BRIEF.md`](LIMINAL_CLAUDE_BRIEF.md), spec:
+- Brief (written under the old name): [`LIMINAL_CLAUDE_BRIEF.md`](LIMINAL_CLAUDE_BRIEF.md), spec:
   [`LIMINAL_DIRECTION_UPDATE_1.md`](LIMINAL_DIRECTION_UPDATE_1.md),
   [`LIMINAL_DIRECTION_UPDATE_2.md`](LIMINAL_DIRECTION_UPDATE_2.md) (overrides the others)
 - Progress, audit and decisions: [`docs/DEVLOG.md`](docs/DEVLOG.md)
@@ -32,7 +36,7 @@ and composited live, so the lights flicker with the hum and swell with the notes
 
 ## Install (macOS)
 
-Download `LIMINAL-macOS-Universal` from the latest successful **Native build**
+Download `TAPEWORN-macOS-Universal` from the latest successful **Native build**
 Actions run, unzip it, and follow `INSTALL.txt` (run `bash install-mac.sh`).
 
 ## Build

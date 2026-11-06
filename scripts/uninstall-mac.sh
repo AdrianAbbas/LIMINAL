@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-# Remove LIMINAL for the current user.
+# Remove TAPEWORN for the current user.
 #   bash uninstall-mac.sh           remove the plug-ins, keep your saved presets
-#   bash uninstall-mac.sh --purge   also remove ~/Library/Audio/Presets/Veil Audio/LIMINAL
+#   bash uninstall-mac.sh --purge   also remove your presets and cached scenes (~/Library/Elsewhere Audio/TAPEWORN)
+# Copies under the old name (LIMINAL) are removed too.
 set -euo pipefail
 purge=0
 [[ "${1:-}" == --purge ]] && purge=1
 
 removed=0
-for bundle in "$HOME/Library/Audio/Plug-Ins/Components/LIMINAL.component" "$HOME/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3"; do
+for bundle in "$HOME/Library/Audio/Plug-Ins/Components/TAPEWORN.component" "$HOME/Library/Audio/Plug-Ins/VST3/TAPEWORN.vst3" \
+              "$HOME/Library/Audio/Plug-Ins/Components/LIMINAL.component" "$HOME/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3"; do
     if [[ -e "$bundle" ]]; then
         rm -rf "$bundle"
         echo "Removed $bundle"
         removed=1
     fi
 done
-[[ $removed == 1 ]] || echo "No LIMINAL plug-ins found in ~/Library/Audio/Plug-Ins."
+[[ $removed == 1 ]] || echo "No TAPEWORN plug-ins found in ~/Library/Audio/Plug-Ins."
 
-presets="$HOME/Library/Audio/Presets/Veil Audio/LIMINAL"
+# (JUCE's user application data folder on macOS is ~/Library.)
+presets="$HOME/Library/Elsewhere Audio/TAPEWORN"
 if [[ $purge == 1 && -d "$presets" ]]; then
     rm -rf "$presets"
     echo "Removed $presets"
@@ -24,7 +27,8 @@ elif [[ -d "$presets" ]]; then
     echo "Kept your presets in $presets (use --purge to remove them)."
 fi
 
-for system_copy in "/Library/Audio/Plug-Ins/Components/LIMINAL.component" "/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3"; do
+for system_copy in "/Library/Audio/Plug-Ins/Components/TAPEWORN.component" "/Library/Audio/Plug-Ins/VST3/TAPEWORN.vst3" \
+                   "/Library/Audio/Plug-Ins/Components/LIMINAL.component" "/Library/Audio/Plug-Ins/VST3/LIMINAL.vst3"; do
     [[ -e "$system_copy" ]] && echo "A system-wide copy remains: sudo rm -rf \"$system_copy\""
 done
 

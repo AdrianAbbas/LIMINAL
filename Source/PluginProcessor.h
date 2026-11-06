@@ -14,6 +14,7 @@
 #include "DSP/LevelMatch.h"
 #include "Parameters.h"
 #include "Presets.h"
+#include "Brand.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
 #include <functional>
@@ -93,7 +94,9 @@ public:
     juce::String undoPresetName() const { return presetUndo.getUndoDescription(); }   // what UNDO goes back from
     juce::String redoPresetName() const { return presetUndo.getRedoDescription(); }
     juce::String presetName() const { return currentPresetName; }
-    static juce::File userPresetFolder();
+    static juce::File userPresetFolder();          // Elsewhere Audio/TAPEWORN/Presets
+    static juce::File legacyUserPresetFolder();    // Veil Audio/LIMINAL/Presets (read: carried over)
+    static void carryOverLegacyPresets();
     juce::File saveUserPreset(const juce::String& name);   // returns the file (or {} on failure)
     bool loadUserPreset(const juce::File&);
     juce::Array<juce::File> userPresets() const;

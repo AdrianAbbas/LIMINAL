@@ -31,10 +31,11 @@
 #include <string>
 #include <set>
 #include <map>
-#include <optional>
+#include <tuple>
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 // Count C++ allocations on the calling thread while enabled (from WORLDBUILDER's tests).
@@ -1242,6 +1243,7 @@ int main(int argc, char** argv) {
         else if (arg == "--render-liminality" && i + 1 < argc) return renderLiminality(argv[++i]);
         else if (arg == "--write-session-fixtures" && i + 1 < argc) return writeSessionFixtures(argv[++i]);
         else if (arg == "--refresh-session-fingerprints") return refreshSessionFingerprints();
+        else if (arg == "--write-liminal-au-state" && i + 1 < argc) return writeLiminalAuState(argv[++i]);
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
             const auto cwd = juce::File::getCurrentWorkingDirectory();
@@ -1249,6 +1251,7 @@ int main(int argc, char** argv) {
         }
         else if (arg == "--snapshots" && i + 1 < argc) return writeSnapshots(argv[++i]);
         else if (arg == "--library-snapshots" && i + 1 < argc) return writeLibrarySnapshots(argv[++i]);
+        else if (arg == "--rename-snapshots" && i + 1 < argc) return writeRenameSnapshots(argv[++i]);
         else if (arg == "--render-library" && i + 1 < argc) return renderLibrary(argv[++i]);
         else if (arg == "--render-piece" && i + 1 < argc) return renderPiece(argv[++i]);
         else if (arg == "--probe-treatment") return probeTreatment();
