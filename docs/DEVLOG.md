@@ -2612,6 +2612,12 @@ stand-ins (about 95 checks fewer than here). `recordingsReady()` now waits up to
 without recordings still returns at once), `loudness` fails if a build that ships recordings cannot
 load them, and its parallel part uses two threads instead of four. Local suite 1297 passed, 0 failed.
 
+**CI, `ee3c076`: green.** `Prepared: 790 notes in all`; Linux full suite **1297 passed, 0 failed**
+(the same count as here: every shard on the recordings) and every listening render; macOS: build,
+smoke + `recorded` on arm64, smoke on x86_64, the bundle gate, package, the installer over a planted
+LIMINAL copy, auval and the AU harness (arm64 + x86_64, both routes), all passed. The installable zip
+is the `TAPEWORN-macOS-Universal` artifact of that run.
+
 ### For the developer's GarageBand check
 
 1. Run `install-mac.sh` from the new zip: it should say it removed LIMINAL; GarageBand lists
