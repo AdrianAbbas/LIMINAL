@@ -629,13 +629,20 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
         const auto params = listParameters(unit);
         r.check(!params.empty(), "parameter list is published", strf("%zu parameters", params.size()));
         if (const auto* output = findParameter(params, { "Output", "Output Gain" })) {
+            // Measured at Mix 0 (the input itself, times Output): with the place in, a pure sine can sit
+            // in a room's notch and the automatic level match keeps moving while it is measured.
+            const auto* mixForOutput = findParameter(params, { "Mix" });
+            const float mixWas = mixForOutput != nullptr ? getParameter(unit, mixForOutput->id) : 0.0f;
+            if (mixForOutput != nullptr) setParameter(unit, mixForOutput->id, mixForOutput->info.minValue);
             const float original = getParameter(unit, output->id);
             auto before = host.render(1.5, 0.5);
             s = setParameter(unit, output->id, output->info.minValue);
             auto after = host.render(1.5, 0.5);
             r.check(s == noErr && before.rmsDb() - after.rmsDb() > 12.0, "AudioUnitSetParameter(Output -> minimum) is audible",
-                    strf("%.1f dBFS -> %.1f dBFS", before.rmsDb(), after.rmsDb()));
+                    strf("%.1f dBFS -> %.1f dBFS (at Mix 0)", before.rmsDb(), after.rmsDb()));
             setParameter(unit, output->id, original);
+            if (mixForOutput != nullptr) setParameter(unit, mixForOutput->id, mixWas);
+            host.render(1.0, 0.0);
         } else {
             r.skip("AudioUnitSetParameter(Output) is audible", "no parameter named Output");
         }
@@ -896,10 +903,14 @@ void auAudioUnitSuite(Report& r, AudioComponentDescription description, bool use
     };
     r.info("parameter tree", strf("%lu parameters", (unsigned long) unit.parameterTree.allParameters.count));
     if (AUParameter* output = named(@"Output")) {
+        AUParameter* mixForOutput = named(@"Mix");   // (at Mix 0, as in the AUv2 suite)
+        const AUValue mixWas = mixForOutput != nil ? mixForOutput.value : 0;
+        if (mixForOutput != nil) mixForOutput.value = mixForOutput.minValue;
         const AUValue original = output.value;
         auto before = render(1.5, 0.5);
         output.value = output.minValue;
         auto after = render(1.5, 0.5);
+        if (mixForOutput != nil) mixForOutput.value = mixWas;
         r.check(before.rmsDb() - after.rmsDb() > 12.0, "AUParameter(Output -> minimum) is audible",
                 strf("%.1f dBFS -> %.1f dBFS", before.rmsDb(), after.rmsDb()));
         output.value = original;
