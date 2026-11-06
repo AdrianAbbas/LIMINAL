@@ -79,11 +79,11 @@ the checklist below.
   - [x] Part 2 — levels: loudness of all twenty instruments at default (same phrase, same room), the quiet synth-based ones raised so all are within +/-1.5 dB; no clipping; group `loudness` + `instruments` pass — push `[skip ci]`
   - [x] Part 3 — rename to TAPEWORN by Elsewhere Audio (AU/VST3 names, wordmark, window title, folders, README, manual, scripts, CI artifacts, package; bundle ID com.elsewhereaudio.tapeworn; AU codes and parameter IDs unchanged; the installer removes the old LIMINAL bundles); an old LIMINAL session loads unchanged; snapshots — push `[skip ci]`
   - [x] Part 4 — DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
-- [ ] **TAPEWORN FX 2026-11-06 — the audio effect, from this repository** (section at the end; manual `docs/TAPEWORN_FX.md`). Resume from the first unticked line:
+- [x] **TAPEWORN FX 2026-11-06 — the audio effect, from this repository** (section at the end; manual `docs/TAPEWORN_FX.md`) — *waiting for the developer's GarageBand listen*. Resume from the first unticked line:
   - [x] Part 1 — shared code: the editor's viewfinder and parts out of `PluginEditor` into `UI/Viewfinder` + `UI/Widgets` (MainView derives from it); `SceneMeters`; `Brand.h` per target (`TAPEWORN_FX`); Liminality's audio side callable without an instrument (`controlAudio`, `onset`, `setAudioInput`); CMake: shared source list, target `TapewornFX` (aufx / Tpfx / Wnwd, "Windward Audio: TAPEWORN FX", com.windwardaudio.tapewornfx, VST3 Fx), test binary `TapewornFXTests`; the instrument's suite still green
   - [x] Part 2 — the effect: `Fx/FxProcessor` (latency 20 ms reported, Mix / Input / Output / Intensity / Bypass, mono, mono -> stereo, stereo), `Fx/FxLiminality` (the ten controls for audio, pitch line with matched wraps), level match (`Fx/FxLevelMatch*`, calibrated table + automatic make-up), 26 presets (`Fx/FxPresets`), A/B + undo, editor (`Fx/FxEditor`: the shared viewfinder, PLACE / LIMINALITY / PRESETS pages); click fixes in the shared DSP (S-curve cross-fades, per-sample amounts, the signature's start, the sends' fades)
   - [x] Part 3 — tests (`Tests/FxTests.cpp`: strength on guitar / vocal / mix, levels, clicks, latency, realtime, presets, state, mono, editor), listening render, CI (Linux suite + render; macOS: smoke on both slices, bundle gate, package with both, install both, auval aufx + `TapewornFXAUHarness` in- and out-of-process), install / uninstall scripts, README, manual, snapshots — push `[skip ci]`
-  - [ ] Part 4 — DEVLOG section + GarageBand handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] Part 4 — DEVLOG section + GarageBand handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
@@ -2636,3 +2636,148 @@ is the `TAPEWORN-macOS-Universal` artifact of that run.
    all sound about equally loud now (the choir, the drone, Bowed Glass and the vibraphone up; the
    pizzicato, the strings, the toy piano, the radio, the arcade lead and the chimes down). Try one
    or two other places too.
+
+## TAPEWORN FX 2026-11-06 — the audio effect, from this repository
+
+The request: an audio-effect version of TAPEWORN built from the same repository (as DUNGEON
+CRAWLER / LIGHT SEEKER: one repository, two plug-ins). Any input - guitar, vocals, synths, a full
+mix, drums - through TAPEWORN's world, everything except the instruments: the rooms (captured
+spaces, convolution), the Characters, moving between rooms, the whole Liminality stage adapted for
+audio, the VHS look and the editor, presets, A/B and undo. Manual: [`docs/TAPEWORN_FX.md`](TAPEWORN_FX.md).
+
+### Identity
+
+AU "Windward Audio: TAPEWORN FX", `aufx` / `Tpfx` / `Wnwd`, factory `TapewornFXAUFactory`; VST3
+"TAPEWORN FX" (Fx / Reverb); bundle ID `com.windwardaudio.tapewornfx`; bundles `TAPEWORN FX.component`
+and `TAPEWORN FX.vst3`; presets `~/Library/Windward Audio/TAPEWORN FX/Presets` (`.tapewornfxpreset`).
+The instrument's codes, names, bundle ID and parameters are untouched (the bundle gate checks it).
+
+### Shared code, not a copy
+
+- **`UI/Viewfinder`** (new): the instrument's MainView scene part - photographic / painted scene,
+  VHS look, camcorder overlay, film strip, Character chips, lights, clean place changes - moved out
+  of `PluginEditor.cpp` (~700 lines) into a base class both views derive from. It reads only the
+  shared parameter IDs and a `SceneMeters` block (`Source/SceneMeters.h`; the instrument's Meters
+  extends it). **`UI/Widgets`**: ViewfinderLook, LevelControl, PlaceStrip, CharacterStrip,
+  MacroKnob, DrawerButton, the place table. The instrument's editor is the same as before (its
+  `editor`, `frames`, `vhs`, `cpu`, `scroll`, `init` groups pass).
+- **`DSP/Liminality`**: its audio side can run without an instrument (`controlAudio`, `onset`,
+  `setAudioInput`) and its hash / smooth-noise helpers are public; the instrument's path is the
+  same code in the same order (its `liminality` group and the session fingerprints pass).
+- **CMake**: one list of shared sources (places, effects rack, captures, Liminality, the editor's
+  scene parts) compiled into both targets; `TAPEWORN_FX=1` on the effect gives `Brand.h` its name;
+  the effect's own files are in `Source/Fx/`; a second test binary, `TapewornFXTests`.
+
+### The effect (`Source/Fx/`)
+
+- **`FxProcessor`**: input -> Input -> LIMINALITY -> the place's processing (the effects rack with
+  the place's own layer: Colour, its default effects, sends with Timing) -> the place
+  (`dsp::Environments`: signature, echo, room, captures, room sound) -> level match -> Mix with the
+  input -> Output -> Bypass. **20 ms latency, reported** (the pitch line's centre); Mix 0 and Bypass
+  are the input bit for bit, delayed by exactly that (also the host's own bypass,
+  `processBlockBypassed`). Stereo, mono, and mono in / stereo out. The room's own sounds (Room
+  Sound) play only while something comes in (silence in, silence out). Real-time safe (no
+  allocation, checked), block-size independent, deterministic; ~2.4 % of one core.
+- **`FxLiminality`**: the ten controls done to audio (see the manual): one pitch line per side for
+  Detune, Drift, Wow & Flutter, Warble's waver, Sour Notes' sags and the optional VHS warble; the
+  instrument's own audio side for Ghost, Warble's swell / chorus and Wear; Unevenness (slow level
+  and tilt), Fade (fades away, darker, and returns); Timing jitters and smears the sends. When the
+  line reaches the edge of its range it jumps back to the point near the centre whose recent sound
+  matches best (correlation search), cross-faded.
+- **Level match** (`FxLevelMatch.h`, `FxLevelMatchTable.h`): a calibrated trim per place and
+  Character (`TapewornFXTests --calibrate-levels`, `tools/levelmatch/fx_levelmatch.py`) and an
+  automatic make-up (K-weighted loudness of the input against the room's output; from a start the
+  running totals, then ~8 s; within +/-12 dB; only while something plays; after a change of room it
+  answers within a fifth of a second). It goes on the near sound and on what the place being heard
+  adds (`Environments::process(..., gains)`): a place fading out keeps its level, so its tail is
+  not turned up by the next room (a pool tail +8.5 dB into the hotel overloaded at first). A
+  gain-riding peak limiter (-1.5 dBFS) keeps the processed sound's peaks down; the soft safety only
+  rounds what passes.
+- **`FxPresets`**: 26 presets by source (vocals 5, guitar 4, keys 4, drums 3, mix 4, any 6),
+  including the eight named in the request. INIT / RESET / UNDO / REDO, your own presets, A/B
+  (B starts as a copy of A; switching is undoable; A>B copies; the song keeps both).
+- **`FxEditor`**: the shared viewfinder with MIX, INTENSITY, INPUT, OUTPUT, SPACE, ROOM SOUND and
+  BYPASS on the strip (bypassed, the scene dims), the big LIMINALITY knob, A / B / A>B, and pages
+  PLACE (rooms, Characters, Space, Room Sound, Far Away, macros, evolution, VHS), LIMINALITY (its
+  ten controls) and PRESETS. Snapshots: `docs/snapshots/tapeworn-fx*.jpg`. Frame ~9 ms average
+  (software renderer, whole window).
+
+### Clicks found and fixed in the shared DSP (the instrument benefits too)
+
+A held tone through a room change showed every discontinuity; each fixed at its source:
+- the effects rack switched its tape / drift / filter modules in and out abruptly (stale filter
+  state, a sample's delay): now 20 ms S-curve ramps, the tape's filters kept on the signal;
+- the rack's amounts changed in 32-sample steps (a staircase in the sends): per-sample one-pole
+  copies (`follow`);
+- the cross-fades (colour, drift, echo) were sine quarters with a kink at their start: S-curves; a
+  new place's processing now runs 40 ms unheard before it fades in;
+- the environment chain's sends faded with a one-pole and a quick linear kill: S-curves;
+- a new place's signature started its echoes with a step when it started mid-sound: what it takes
+  in during its first 20 ms fades in (only when it starts mid-sound, so impulse responses and the
+  instrument's start-up are unchanged - a first version that faded the reads moved `distinct`'s
+  garage slap-back check, fixed);
+- the evolution values (Unreal / evolution into the rack) jumped at a change of place: the effect
+  glides them (0.3 s).
+
+### Tests (`Tests/FxTests.cpp`, 122 checks; this container: **122 passed, 0 failed**)
+
+The three test sources are synthesised (Karplus-Strong guitar with body, a formant-sung vocal
+phrase, a full mix with drums, bass, pad and lead; `--write-sources` writes them), so the suite
+needs no files.
+- **strength** ("strong, not subtle"): every room at the defaults against the dry, on guitar,
+  vocal and mix: band difference (frame-wise, third-octave, level-normalised) >= 3 dB and new sound
+  (residual after the best alignment and gain) >= -6 dB - weakest 7.5 / 7.2 / 6.1 dB band
+  difference, new sound about 0 dB everywhere; all 30 Characters on the mix; LIMINALITY 50 % and
+  100 % against 0 % in three rooms on all three sources (band difference 5.6-8.0 dB at 50 %); each
+  Liminality control alone audibly does something.
+- **levels**: all 30 rooms / Characters within +/-2 dB of the input on every source (guitar
+  -1.3..0.3, vocal -0.4..1.6, mix -1.3..0.8 dB, measured while the source plays on); **report-only**:
+  the +/-1.5 dB target is met on guitar and mix, the vocal is 0.1 dB outside it (hotel / Room 404)
+  after several attempts at the follower (energy, gated loudness, pauses during Fade - see the git
+  history); from a cold start (first 8.5 s) within +/-3 dB.
+- **clicks** (sharpness = second difference against the window's peak, so a level change is not a
+  click): Bypass on / off in three rooms, all ten rooms one after another while a tone plays (worst
+  1.18x the sound's own), Character changes, the pitch line's wraps (1.47x the median).
+- **latency**, **realtime** (no allocation with every control moving; block sizes 37 / 512 / 2048
+  within -90 dBFS; deterministic; CPU), **presets**, **state**, **mono**, **smoke**, **parameters**,
+  **editor**.
+- The instrument's suite: **1297 passed, 0 failed** here after the refactor and the DSP fixes.
+
+### CI
+
+- Linux: builds both; the instrument's suite as before; `TapewornFXTests` whole; the listening
+  render `TapewornFXTests --render build/test-logs/fx-listening` (artifact `TAPEWORN-linux-test-logs`:
+  `guitar.flac`, `vocal.flac`, `mix.flac`, `cues.txt` - each the phrase dry, then the hospital,
+  mall, school, pool, hotel and impossible room at LIMINALITY 0 / 50 / 100 %). Timeout 90 min.
+- macOS: the FX smoke groups on arm64 and x86_64; the bundle gate for both plug-ins; package with
+  both; the quarantined package installed with `install-mac.sh` (both, side by side); the registry
+  lists `aufx Tpfx Wnwd` once as "Windward Audio: TAPEWORN FX"; `auval -v aufx Tpfx Wnwd` and
+  `tools/au-harness/TapewornFXAUHarness` (adapted from DUNGEON CRAWLER FX's effect harness:
+  latency-compensated comparison, host bypass, Mix 0, Output, Room, presets, state, the view)
+  out-of-process and in-process, arm64 and x86_64 (its AUAudioUnit route diagnostic, as the
+  instrument's).
+
+### Not verified here
+
+macOS, auval, both harnesses, GarageBand and Logic: CI's macOS job is the first macOS build of the
+effect. Nothing was listened to (no audio output in this container).
+
+### For the developer's GarageBand check (TAPEWORN FX)
+
+1. Run `install-mac.sh` from the new zip: it installs TAPEWORN and TAPEWORN FX side by side and
+   validates both. In GarageBand, on an audio track: Smart Controls > Plug-ins > an empty slot >
+   **Audio Units > Windward Audio > TAPEWORN FX**. TAPEWORN stays under AU Instruments.
+2. Play a vocal, a guitar and a whole mix through it at the defaults: each place should transform
+   it clearly (the hospital's cold corridor, the mall's endless atrium, the school's slap-back and
+   worn tape, the pool's tiles, the hotel's wall, the impossible room's shifted tail) and every
+   place should be about as loud as the dry track. Click through the film strip while it plays:
+   no clicks, no jumps in level (a second or so of settling after a change).
+3. LIMINALITY: 0 % clean, 50 % already clearly worn and unstable (detuned, wow, warble, ghosts,
+   hiss and dropouts, the odd sour sag, now and then the sound fades away and returns), 100 %
+   deeply unsettling. Its page has the ten controls.
+4. Mix: 100 % (the default) is the place alone; lower it to blend the dry track back. BYPASS: a
+   short fade, the track stays in time (the plug-in reports its 20 ms latency; GarageBand
+   compensates it). Input / Output.
+5. Presets (by source), INIT, UNDO / REDO, A / B (B starts as a copy of A; A>B copies). Save a song,
+   reopen it: the settings, the preset's name and both A and B come back.
+6. A mono track (mono in, stereo out) and a stereo one.
