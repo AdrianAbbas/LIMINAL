@@ -2953,3 +2953,13 @@ Nothing was listened to (no audio output in this container); macOS, auval, Garag
 4. LIMINALITY up: the woodwind detunes and wobbles with the instrument.
 5. **WIND VOICE = Recorder** plays the flute until your alto recorder is in `Samples/alto-recorder/`
    (section 3).
+
+### CI after the final push (2026-11-06)
+
+- **`06b8387`: CI green on the first run** (run 42295996955). Both jobs fetched tag 1.1.0 from the official
+  source, licence CC0 1.0 (md5 checked), prepared `ww-flute` (10 notes, C4-C7) and `ww-clarinet`
+  (11 notes, D3-F6), every note looped; "no alto recorder recorded yet". Linux: the instrument suite
+  1378 passed / 0 failed (the `woodwind` group included), TAPEWORN FX 122 / 0, every listening render
+  including `woodwinds.flac` (artifact `TAPEWORN-linux-test-logs`). macOS: build, smoke on arm64 (with
+  `woodwind`) and x86_64, bundle gate, package, install, auval and both harnesses; the installable zip is
+  the run's `TAPEWORN-macOS-Universal` artifact.
