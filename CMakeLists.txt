@@ -49,10 +49,17 @@ juce_add_plugin(LIMINAL
     # out-of-process, which the AU host harness checks.
     AU_SANDBOX_SAFE TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE)
+# The sources both plug-ins share (2026-11-06): the places (rooms, signatures, captures,
+# Characters, evolution, the effects rack), LIMINALITY, and the editor's viewfinder and parts.
+set(TAPEWORN_SHARED_SOURCES
+    Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp
+    Source/DSP/Space.cpp Source/DSP/Convolver.cpp Source/DSP/Captures.cpp Source/DSP/Liminality.cpp
+    Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp Source/UI/Vhs.cpp Source/UI/Widgets.cpp Source/UI/Viewfinder.cpp)
 target_sources(LIMINAL PRIVATE
+    ${TAPEWORN_SHARED_SOURCES}
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Parameters.cpp
-    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/DSP/Ambience.cpp Source/DSP/Environment.cpp Source/DSP/Signature.cpp Source/DSP/Effects.cpp Source/DSP/Characters.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Space.cpp Source/DSP/Convolver.cpp Source/DSP/Captures.cpp Source/DSP/Liminality.cpp Source/DSP/Library.cpp Source/Samples/SampleBank.cpp
-    Source/UI/SceneArt.cpp Source/UI/PhotoScene.cpp Source/UI/Vhs.cpp Source/UI/InstrumentIcons.cpp)
+    Source/DSP/ForgottenPiano.cpp Source/DSP/FadedSynth.cpp Source/DSP/GlassMemories.cpp Source/DSP/EmptyChoir.cpp Source/DSP/LostMusicBox.cpp Source/DSP/HollowDrone.cpp Source/Presets.cpp Source/Export.cpp Source/DSP/Library.cpp Source/Samples/SampleBank.cpp
+    Source/UI/InstrumentIcons.cpp)
 target_include_directories(LIMINAL PUBLIC Source)
 # Photographic scenes (Direction Update 2): light passes rendered offline by tools/scenes and
 # committed in assets/scenes/<place>/, so building the plug-in never needs Blender.
@@ -110,6 +117,54 @@ target_compile_definitions(LIMINAL PUBLIC
     JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
 target_link_libraries(LIMINAL PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
+
+# TAPEWORN FX (2026-11-06): the audio effect from the same sources - TAPEWORN's places and LIMINALITY
+# on any input. Its own identity: AU aufx / Tpfx / Wnwd ("Windward Audio: TAPEWORN FX"), bundle ID
+# com.windwardaudio.tapewornfx, a VST3 effect. The instrument's codes above are untouched.
+set(TAPEWORN_FX_FORMATS VST3)
+if(APPLE)
+    list(APPEND TAPEWORN_FX_FORMATS AU)
+endif()
+juce_add_plugin(TapewornFX
+    COMPANY_NAME "Windward Audio"
+    BUNDLE_ID "com.windwardaudio.tapewornfx"
+    PLUGIN_MANUFACTURER_CODE Wnwd
+    PLUGIN_CODE Tpfx
+    PRODUCT_NAME "TAPEWORN FX"
+    PLUGIN_NAME "TAPEWORN FX"
+    AU_EXPORT_PREFIX TapewornFXAU
+    DESCRIPTION "Liminal spaces and worn tape for any sound"
+    FORMATS ${TAPEWORN_FX_FORMATS}
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    VST3_CATEGORIES Fx Reverb
+    AU_MAIN_TYPE kAudioUnitType_Effect
+    AU_SANDBOX_SAFE TRUE
+    COPY_PLUGIN_AFTER_BUILD FALSE)
+target_sources(TapewornFX PRIVATE
+    ${TAPEWORN_SHARED_SOURCES}
+    Source/Fx/FxProcessor.cpp Source/Fx/FxEditor.cpp Source/Fx/FxParameters.cpp Source/Fx/FxLiminality.cpp Source/Fx/FxPresets.cpp)
+target_include_directories(TapewornFX PUBLIC Source)
+target_compile_definitions(TapewornFX PUBLIC TAPEWORN_FX=1
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
+if(LIMINAL_SCENE_FILES)
+    target_link_libraries(TapewornFX PRIVATE LiminalScenes)
+    target_compile_definitions(TapewornFX PRIVATE LIMINAL_HAS_SCENES=1)
+else()
+    target_compile_definitions(TapewornFX PRIVATE LIMINAL_HAS_SCENES=0)
+endif()
+if(TARGET LiminalCaptures)
+    target_link_libraries(TapewornFX PRIVATE LiminalCaptures)
+    target_compile_definitions(TapewornFX PUBLIC LIMINAL_HAS_CAPTURES=1)
+else()
+    target_compile_definitions(TapewornFX PUBLIC LIMINAL_HAS_CAPTURES=0)
+endif()
+target_link_libraries(TapewornFX PRIVATE juce::juce_audio_utils juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
 if(LIMINAL_BUILD_TESTS)
     enable_testing()
     juce_add_console_app(LiminalTests PRODUCT_NAME "LIMINAL Tests")
@@ -122,4 +177,16 @@ if(LIMINAL_BUILD_TESTS)
     target_compile_definitions(LiminalTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
         LIMINAL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")   # (fixtures: __FILE__ is relative under ccache's base dir)
     add_test(NAME liminal_tests COMMAND LiminalTests)
+    # TAPEWORN FX's own suite (it links the effect; the instrument's suite links the instrument).
+    juce_add_console_app(TapewornFXTests PRODUCT_NAME "TAPEWORN FX Tests")
+    get_target_property(fx_test_definitions TapewornFXTests COMPILE_DEFINITIONS)
+    if(fx_test_definitions)
+        list(REMOVE_ITEM fx_test_definitions JUCE_STANDALONE_APPLICATION=1)
+        set_target_properties(TapewornFXTests PROPERTIES COMPILE_DEFINITIONS "${fx_test_definitions}")
+    endif()
+    target_sources(TapewornFXTests PRIVATE Tests/FxTests.cpp)
+    target_link_libraries(TapewornFXTests PRIVATE TapewornFX juce::juce_audio_utils)
+    target_compile_definitions(TapewornFXTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+        LIMINAL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME tapeworn_fx_tests COMMAND TapewornFXTests)
 endif()

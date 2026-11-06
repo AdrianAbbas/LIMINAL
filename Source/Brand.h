@@ -7,10 +7,19 @@
 
 namespace liminal::brand {
 
+// TAPEWORN FX (2026-11-06), the effect built from the same sources: its own name, company, preset
+// files and folders (TAPEWORN_FX is defined for its target only).
+#if TAPEWORN_FX
+inline constexpr const char* product = "TAPEWORN FX";
+inline constexpr const char* company = "Windward Audio";
+inline constexpr const char* presetExtension = ".tapewornfxpreset";
+inline constexpr const char* presetTag = "TAPEWORN_FX_PRESET";
+#else
 inline constexpr const char* product = "TAPEWORN";
 inline constexpr const char* company = "Elsewhere Audio";
 inline constexpr const char* presetExtension = ".tapewornpreset";
 inline constexpr const char* presetTag = "TAPEWORN_PRESET";
+#endif
 // What LIMINAL used (read, never written): its presets are carried over.
 inline constexpr const char* legacyPresetExtension = ".liminalpreset";
 inline constexpr const char* legacyPresetTag = "LIMINAL_PRESET";

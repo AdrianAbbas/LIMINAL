@@ -76,6 +76,10 @@ constexpr CharacterNudge characterNudges[] {
 };
 } // namespace
 
+std::uint32_t lim::hash(std::uint32_t a, std::uint32_t b) { return mix(a, b); }
+float lim::unit(std::uint32_t h) { return dsp::unit(h); }
+float lim::smoothNoise(std::uint32_t seed, double x) { return valueNoise(seed, x); }
+
 LiminalAmounts liminalNudge(int place, int character) {
     LiminalAmounts n {};
     const int p = std::clamp(place, 0, 9);
@@ -220,7 +224,7 @@ void Liminality::relocate(std::uint64_t clock, bool sounding) {
     dropTarget = 1.0f;
 }
 
-void Liminality::control(Instrument& in, std::uint64_t clock) {
+void Liminality::advance(std::uint64_t clock) {
     // The amounts, smoothed over ~30 ms (automation never jumps the pitch).
     const float k = float(1.0 - std::exp(-64.0 / (0.03 * sr)));
     for (std::size_t i = 0; i < now.size(); ++i) {
@@ -229,17 +233,28 @@ void Liminality::control(Instrument& in, std::uint64_t clock) {
     }
     clockKnown = true;
     lastClock = clock;
-    const float tick = float(64.0 / sr);
-    const double t = double(clock) / sr;
-
     // The note side's pitch.
     relocateOffset *= relocateDecay;
     if (std::abs(relocateOffset) < 1.0e-4f) relocateOffset = 0;
-    pitch.cents = modulators(t) + relocateOffset;
+    pitch.cents = modulators(double(clock) / sr) + relocateOffset;
     pitch.warble = 16.0f * now[lim::warble];
     pitch.wander = std::clamp(std::max(now[lim::drift], now[lim::wow]) / 0.3f, 0.0f, 1.0f);
-    in.setLiminalPitch(pitch);
+}
 
+void Liminality::control(Instrument& in, std::uint64_t clock) {
+    advance(clock);
+    in.setLiminalPitch(pitch);
+    audioSide(clock);
+}
+
+void Liminality::controlAudio(std::uint64_t clock) {
+    advance(clock);
+    audioSide(clock);
+}
+
+void Liminality::audioSide(std::uint64_t clock) {
+    const float tick = float(64.0 / sr);
+    const double t = double(clock) / sr;
     // The audio side. Warble and Fade grow while notes are held (since the last note-on); a new
     // note brings them back down quickly but smoothly.
     sinceNote = std::min(sinceNote + tick, 1000.0f);
@@ -268,8 +283,9 @@ void Liminality::control(Instrument& in, std::uint64_t clock) {
     }
 
     // Fade: the highs close in over seconds of holding, plus a slight blur.
-    fadeMixTarget = std::min(1.0f, 5.0f * ef);
-    blurMixTarget = 0.5f * std::min(ef, 1.3f) * sustainFade;
+    // (Audio input, TAPEWORN FX: no held notes to fade; its own Fade makes the sound fade away and return.)
+    fadeMixTarget = audioInput ? 0.0f : std::min(1.0f, 5.0f * ef);
+    blurMixTarget = audioInput ? 0.0f : 0.5f * std::min(ef, 1.3f) * sustainFade;
     {
         const float octaves = 3.5f * ef * sustainFade;
         fadeOctaves += (octaves < fadeOctaves ? 0.3f : 1.0f) * (octaves - fadeOctaves);
@@ -289,7 +305,8 @@ void Liminality::control(Instrument& in, std::uint64_t clock) {
     if (ea <= 0.0f) wearGainTarget = 1.0f;
     // Unevenness takes some notes down: the instrument as a whole is brought back up by its average
     // loss (about 2.2 dB at 100 %), so only the uneven notes are quieter than before.
-    outGainTarget = dbGain(2.2f * std::min(now[lim::uneven], lim::maxEffective));
+    // (Audio input: Unevenness is the FX's own slow level and tone fluctuation, no make-up here.)
+    outGainTarget = audioInput ? 1.0f : dbGain(2.2f * std::min(now[lim::uneven], lim::maxEffective));
     hissLevel = ea > 0.0f ? dbGain(-64.0f + 14.0f * std::min(ea, 1.25f)) : 0.0f;
     crackleRate = ea > 0.08f ? 5.0f * ea : 0.0f;
     crackleLevel = 0.006f * std::min(ea, 1.5f);

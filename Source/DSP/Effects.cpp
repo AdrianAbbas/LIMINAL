@@ -98,6 +98,8 @@ void EffectRack::prepare(double sampleRate, int instrumentIndex) {
     echoLineR.assign(echoLineL.size(), 0.0f);
     smoothCoef = float(1.0 - std::exp(-double(controlPeriod) / (0.025 * sr)));
     colourFadeStep = float(1.0 / (0.06 * sr));
+    mixStep = float(1.0 / (0.02 * sr));
+    zipCoef = float(1.0 - std::exp(-1.0 / 32.0));
     followerRelease = float(1.0 - std::exp(-1.0 / (0.3 * sr)));
     echoDelayCoef = float(1.0 - std::exp(-1.0 / (0.1 * sr)));
     echoBlendStep = float(1.0 / (0.08 * sr));
@@ -137,6 +139,14 @@ void EffectRack::reset() {
     echoDelay = echoFrom = echoDelayTarget;
     echoBlend = 1;
     driftBlend = 1;
+    driftMix = now.drift > 1.0e-4f ? 1.0f : 0.0f;   // (from rest: in at once, as before)
+    tapeMix = now.tape > 1.0e-4f ? 1.0f : 0.0f;
+    filterMix = -1.0f;
+    tapeNow = now.tape;
+    chorusNow = now.chorus;
+    grainNow = now.grain;
+    reverbNow = now.reverb;
+    colourNow = now.colour;
 }
 
 void EffectRack::setPlace(Place p, int ch) {
@@ -163,7 +173,10 @@ void EffectRack::setPlace(Place p, int ch) {
     next.configure(shaped.colour, seed);
     next.setAmount(now.colour);
     next.snapAmount();
-    colourFade = 0;
+    // The new place's processing starts from rest (empty delay lines, filters at zero): it runs unheard
+    // for 40 ms before it fades in, so its start-up never shows in the sound (2026-11-06, TAPEWORN FX:
+    // a click on a held tone).
+    colourFade = -colourFadeStep * float(0.04 * sr);
     setSettings(user, envAmount, bpm, liveNow);
 }
 
@@ -289,16 +302,32 @@ void EffectRack::control() {
     }
 }
 
+// (2026-11-06) The amounts the modules use sample by sample follow the 32-sample control values
+// through a ~0.7 ms one-pole, so a change (a new place) is a ramp, not a staircase of small steps
+// (a zipper / click on a held tone). Steady, they are exactly the control values.
+// Cross-fades along an S-curve (2026-11-06): equal power, and no kink where they start or end
+// (a held tone through the hospital's flutter comb showed every kink as a tick).
+inline float ease(float t) { return t * t * (3.0f - 2.0f * t); }
+inline void follow(float& v, float target, float c) {
+    v += c * (target - v);
+    if (std::abs(target - v) < 1.0e-6f) v = target;
+}
+
 void EffectRack::moduleTick(Module m, float& l, float& r) {
     const float fs = float(sr);
     switch (m) {
     case drift: {
-        if (now.drift <= 1.0e-4f && driftBlend >= 1.0f) {   // keep the line fed so turning it up is seamless
+        // (2026-11-06) Switching in or out ramps over ~20 ms (the line reads a sample late even at the
+        // smallest depth: a straight switch was a click on a held tone).
+        const bool wanted = now.drift > 1.0e-4f || driftBlend < 1.0f;
+        if (!wanted && driftMix <= 0.0f) {   // keep the line fed so turning it up is seamless
             driftLineL[std::size_t(driftWrite)] = l;
             driftLineR[std::size_t(driftWrite)] = r;
             if (++driftWrite >= int(driftLineL.size())) driftWrite = 0;
             return;
         }
+        driftMix = wanted ? std::min(1.0f, driftMix + mixStep) : std::max(0.0f, driftMix - mixStep);
+        const float dryL0 = l, dryR0 = r;
         const float hz = 0.05f * std::pow(40.0f, user.driftRate);
         const float depth = swingSamples(40.0f * now.drift, hz, sr);
         driftLineL[std::size_t(driftWrite)] = l;
@@ -308,22 +337,36 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
         if (driftBlend < 1.0f) {
             driftBlend = std::min(1.0f, driftBlend + driftBlendStep);
             const float before = swingSamples(40.0f * driftFrom, hz, sr);
-            const float in = sinCycle(0.25f * driftBlend), out = sinCycle(0.25f * (1.0f - driftBlend));
+            const float e = ease(driftBlend);
+            const float in = sinCycle(0.25f * e), out = sinCycle(0.25f * (1.0f - e));
             l = l * in + readLine(driftLineL, driftWrite, before * (1.0f + driftNowL) + 1.0f) * out;
             r = r * in + readLine(driftLineR, driftWrite, before * (1.0f + driftNowR) + 1.0f) * out;
+        }
+        if (driftMix < 1.0f) {   // (an S-curve: no kink where it starts or ends)
+            const float g = driftMix * driftMix * (3.0f - 2.0f * driftMix);
+            l = dryL0 + g * (l - dryL0);
+            r = dryR0 + g * (r - dryR0);
         }
         if (++driftWrite >= int(driftLineL.size())) driftWrite = 0;
         return;
     }
     case tape: {
-        const float a = now.tape;
+        follow(tapeNow, now.tape, zipCoef);
+        const float a = tapeNow;
         follower = std::max(std::abs(l) + std::abs(r), follower + followerRelease * (0.0f - follower));
-        if (a <= 1.0e-4f) {
+        // (2026-11-06) In and out over ~20 ms, its filters kept on the signal while it rests: a straight
+        // switch (stale filters, a sample's delay) was a click on a held tone at a change of place.
+        const bool wanted = a > 1.0e-4f;
+        if (!wanted && tapeMix <= 0.0f) {
             tapeLineL[std::size_t(tapeWrite)] = l;
             tapeLineR[std::size_t(tapeWrite)] = r;
             if (++tapeWrite >= int(tapeLineL.size())) tapeWrite = 0;
+            tapeLp1L.z = tapeLp2L.z = l;
+            tapeLp1R.z = tapeLp2R.z = r;
             return;
         }
+        tapeMix = wanted ? std::min(1.0f, tapeMix + mixStep) : std::max(0.0f, tapeMix - mixStep);
+        const float dryL0 = l, dryR0 = r;
         wowPhase += 0.55f / fs;
         if (wowPhase >= 1.0f) wowPhase -= 1.0f;
         flutterPhase += 6.8f / fs;
@@ -351,32 +394,49 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
         dropGain += 0.004f * (dropTarget - dropGain);
         l *= dropGain;
         r *= dropGain;
+        if (tapeMix < 1.0f) {
+            const float g = tapeMix * tapeMix * (3.0f - 2.0f * tapeMix);
+            l = dryL0 + g * (l - dryL0);
+            r = dryR0 + g * (r - dryR0);
+        }
         return;
     }
     case filter: {
-        if (!filterActive) return;
+        // (2026-11-06) In and out over ~20 ms, from a clean state: switched straight in (a new place's
+        // band) its old state was a click on a held tone.
+        if (filterMix < 0.0f) filterMix = filterActive ? 1.0f : 0.0f;   // (after a reset: as it is)
+        if (!filterActive && filterMix <= 0.0f) return;
+        if (filterActive && filterMix <= 0.0f) {
+            lowL.clear();
+            lowR.clear();
+            highL.clear();
+            highR.clear();
+        }
+        filterMix = filterActive ? std::min(1.0f, filterMix + mixStep) : std::max(0.0f, filterMix - mixStep);
         lowL.tick(l);
         lowR.tick(r);
         const float fl = highL.tick(lowL.low), fr = highR.tick(lowR.low);
-        l += user.filter * (fl - l);
-        r += user.filter * (fr - r);
+        const float amount = user.filter * filterMix * filterMix * (3.0f - 2.0f * filterMix);
+        l += amount * (fl - l);
+        r += amount * (fr - r);
         return;
     }
     case chorus: {
         chorusLineL[std::size_t(chorusWrite)] = l;
         chorusLineR[std::size_t(chorusWrite)] = r;
-        if (now.chorus > 1.0e-4f) {
+        follow(chorusNow, now.chorus, zipCoef);
+        if (chorusNow > 1.0e-4f) {
             chorusPhase += 0.1f * std::pow(30.0f, user.chorusRate) / fs;
             if (chorusPhase >= 1.0f) chorusPhase -= 1.0f;
             float other = chorusPhase + 0.5f;
             if (other >= 1.0f) other -= 1.0f;
             float third = chorusPhase + 0.25f;
             if (third >= 1.0f) third -= 1.0f;
-            const float base = 0.009f * fs, depth = 0.0025f * fs * now.chorus;
+            const float base = 0.009f * fs, depth = 0.0025f * fs * chorusNow;
             const float cl = readLine(chorusLineL, chorusWrite, base + depth * (1.0f + sinCycle(chorusPhase)));
             const float cr = readLine(chorusLineR, chorusWrite, base * 1.3f + depth * (1.0f + sinCycle(other)));
             const float cx = readLine(chorusLineL, chorusWrite, base * 1.7f + depth * (1.0f + sinCycle(third)));
-            const float m = 0.7f * now.chorus;
+            const float m = 0.7f * chorusNow;
             // Stereo voices for the player's chorus; the same voice on both sides for the place's.
             const float vl = cl - 0.3f * chorusStereo * cx, vr = cr + 0.3f * chorusStereo * cx;
             const float mono = 0.5f * (vl + vr);
@@ -392,7 +452,8 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
             grainLine[std::size_t(grainWrite)] = 0.5f * (l + r);
             if (++grainWrite >= size) grainWrite = 0;
         }
-        if (now.grain <= 1.0e-4f) return;
+        follow(grainNow, now.grain, zipCoef);
+        if (grainNow <= 1.0e-4f) return;
         const float length = fs * 0.03f * std::pow(10.0f, user.grainSize * 0.7f + 0.3f * placeGrainSize);
         if (--grainCountdown <= 0) {   // a new grain somewhere in the last second or two
             int busy = 0;
@@ -431,7 +492,7 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
             if (g.position >= float(size)) g.position -= float(size);
             if (++g.age >= g.length) g.active = false;
         }
-        const float a = now.grain;
+        const float a = grainNow;
         l = l * (1.0f - 0.6f * a) + 1.1f * a * gl;
         r = r * (1.0f - 0.6f * a) + 1.1f * a * gr;
         return;
@@ -449,7 +510,8 @@ void EffectRack::moduleTick(Module m, float& l, float& r) {
         float yr = readLine(echoLineR, echoWrite, echoDelay);
         if (echoBlend < 1.0f) {
             echoBlend = std::min(1.0f, echoBlend + echoBlendStep);
-            const float in = sinCycle(0.25f * echoBlend), out = sinCycle(0.25f * (1.0f - echoBlend));
+            const float e = ease(echoBlend);
+            const float in = sinCycle(0.25f * e), out = sinCycle(0.25f * (1.0f - e));
             yl = yl * in + readLine(echoLineL, echoWrite, echoFrom) * out;
             yr = yr * in + readLine(echoLineR, echoWrite, echoFrom) * out;
         }
@@ -509,7 +571,9 @@ void EffectRack::process(float* left, float* right, float* roomL, float* roomR, 
     if (colourFade < 1.0f)
         for (int i = 0; i < n; ++i) {
             colourFade = std::min(1.0f, colourFade + colourFadeStep);
-            const float in = sinCycle(0.25f * colourFade), out = sinCycle(0.25f * (1.0f - colourFade));
+            const float f = std::max(0.0f, colourFade);
+            const float e = ease(f);
+            const float in = sinCycle(0.25f * e), out = sinCycle(0.25f * (1.0f - e));
             left[i] = left[i] * in + fadeL[std::size_t(i)] * out;
             right[i] = right[i] * in + fadeR[std::size_t(i)] * out;
         }
@@ -520,11 +584,13 @@ void EffectRack::process(float* left, float* right, float* roomL, float* roomR, 
         const float r = dryR[std::size_t(i)] + mix * (right[i] - dryR[std::size_t(i)]);
         left[i] = l;
         right[i] = r;
-        const float send = now.reverb * sendFactor;
+        follow(reverbNow, now.reverb, zipCoef);
+        follow(colourNow, now.colour, zipCoef);
+        const float send = reverbNow * sendFactor;
         roomL[i] += l * send;
         roomR[i] += r * send;
-        echoL[i] += l * now.colour * mix;   // the place's echo is an effect too: Mix 0 is dry
-        echoR[i] += r * now.colour * mix;
+        echoL[i] += l * colourNow * mix;   // the place's echo is an effect too: Mix 0 is dry
+        echoR[i] += r * colourNow * mix;
     }
 }
 

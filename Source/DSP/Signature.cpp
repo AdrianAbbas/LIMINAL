@@ -278,6 +278,8 @@ void Signature::reset() {
     for (auto& a : ap) std::fill(a.begin(), a.end(), 0.0f);
     apPos = {};
     write = combWrite = 0;
+    startRamp = -1.0f;
+    rampScale = float(1.0 / (0.02 * sr));
     for (auto& b : bq) b.clear();
     for (auto& o : op) o.z = 0;
     for (auto& r : res) r.clear();
@@ -300,6 +302,7 @@ void Signature::process(const float* inL, const float* inR, float* outL, float* 
     const float fs = float(sr);
     for (int i = 0; i < n; ++i) {
         const float xl = inL[i], xr = inR[i];
+        if (startRamp < 0.0f) startRamp = std::abs(xl) + std::abs(xr) > 1.0e-6f ? 0.0f : 1.0f;   // (see the end of the loop)
         float l = xl, r = xr, sl = 0, sr_ = 0;
         switch (where) {
         case Place::hospital: {
@@ -549,6 +552,18 @@ void Signature::process(const float* inL, const float* inR, float* outL, float* 
             r = xr * dryGain + rr + shifted * pb + fr;
             break;
         }
+        }
+        // (2026-11-06) Started in the middle of a sound (a new place while it plays), the lines hold
+        // nothing before the start: every echo would begin with a step. What is written in the first
+        // 20 ms fades in instead, so each echo starts smoothly. Started in silence, nothing changes.
+        if (startRamp < 1.0f) {
+            const float g = startRamp * startRamp * (3.0f - 2.0f * startRamp);
+            lineL[std::size_t(write)] *= g;
+            lineR[std::size_t(write)] *= g;
+            const int cs = int(combL.size()), last = (combWrite - 1 + cs) % cs;
+            combL[std::size_t(last)] *= g;
+            combR[std::size_t(last)] *= g;
+            startRamp = std::min(1.0f, startRamp + rampScale);
         }
         if (++write >= size) write = 0;
         outL[i] = l * (where == Place::mall ? 1.0f : makeup);

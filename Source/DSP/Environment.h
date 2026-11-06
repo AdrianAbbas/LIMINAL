@@ -225,12 +225,17 @@ public:
     // echo; this chain fades its inputs in and out for cross-fades between places.
     // dryL/R: the instruments' dry bus; the place's signature (DSP/Signature) replaces it in out.
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
-                 const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n);
+                 const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n, const float* gains = nullptr);
+    // (2026-11-06, TAPEWORN FX) A gain on everything the chain adds (its level match): per sample while
+    // it is the place being heard; a chain that is fading out keeps the last one (its tail rings out at
+    // the level it had).
+    float outputGain() const { return heldGain; }
+    void holdGain(float g) { heldGain = g; }
     void setAmount(float a) { amountTarget = a; }
     void snapAmount() { amount = amountTarget; }
     // Fading: 1 = this is the current place; 0 = fading out.
     void setLive(bool on) { liveTarget = on ? 1.0f : 0.0f; }
-    void snapLive() { live = ambienceFade = signatureFade = liveTarget; }
+    void snapLive() { live = livePhase = ambienceFade = signatureFade = liveTarget; }
     // A quick fade of everything (before it is reused for another place).
     void kill() { killing = true; }
     bool killed() const { return killing && outFade <= 0.0f; }
@@ -256,9 +261,11 @@ private:
     float wetGain = 1, amount = 1, amountTarget = 1, amountCoef = 0.001f;
     float signatureFade = 1, signatureCoef = 0.0001f;   // the signature cross-fades slower (~0.75 s) than the sends
     float live = 1, liveTarget = 1, liveCoef = 0.001f, ambienceFade = 1, ambienceCoef = 0.0001f;
+    float livePhase = 1, liveStep = 0.0005f;   // the sends' fade along an S-curve (live = its shape)
     int quietFor = 0, quietLimit = 48000;
     bool killing = false;
-    float outFade = 1, killStep = 0.001f;
+    float outFade = 1, killPhase = 1, killStep = 0.001f;
+    float heldGain = 1;
     std::vector<float> sbufL, sbufR, ebufL, ebufR, sigL, sigR, sigSendL, sigSendR;
     std::unique_ptr<Signature> signature;
     // Captures (pedal-capture milestone).
@@ -290,8 +297,9 @@ public:
     void setEvolutionSeed(unsigned s) { evolutionSeed = s; }
     const EnvironmentChain& current() const { return chains[std::size_t(active)]; }
     void setAmount(float a);
+    // `gains` (optional, per sample): the level match of the place being heard (TAPEWORN FX).
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
-                 const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n);
+                 const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n, const float* gains = nullptr);
     Place place() const { return chains[std::size_t(active)].place(); }
     bool fading() const { return !chains[std::size_t(1 - active)].silent(); }
 

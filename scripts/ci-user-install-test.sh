@@ -4,11 +4,14 @@
 #      (com.apple.quarantine), which is what broke VEIL in GarageBand
 #   2. record whether macOS on this runner refuses the quarantined copy
 #   3. install with install-mac.sh --ci, over a copy under the old name (LIMINAL) it must remove
-#   4. auval and the AU host harness (--strict), arm64 and x86_64 (Rosetta)
-# Usage: scripts/ci-user-install-test.sh <TAPEWORN-macOS-Universal.zip> <harness binary> <log dir>
+#   4. auval and the AU host harnesses (--strict), arm64 and x86_64 (Rosetta), for both plug-ins:
+#      TAPEWORN (aumu Lmnl Veil) and TAPEWORN FX (aufx Tpfx Wnwd, its harness TapewornFXAUHarness
+#      next to the instrument's), each in-process and out-of-process
+# Usage: scripts/ci-user-install-test.sh <TAPEWORN-macOS-Universal.zip> <instrument harness binary> <log dir>
 set -euo pipefail
 package="$1"
 harness="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+fx_harness="$(dirname "$harness")/TapewornFXAUHarness"
 logs="$3"
 mkdir -p "$logs"
 work="$(mktemp -d)"
@@ -52,9 +55,12 @@ install_exit=${PIPESTATUS[0]}
 set -e
 echo "install-mac.sh exit $install_exit"
 if [[ $install_exit != 0 ]]; then echo "::error::install-mac.sh failed (exit $install_exit)"; status=1; fi
-if /usr/bin/xattr -lr "$components/TAPEWORN.component" | /usr/bin/grep -q com.apple.quarantine; then
-    echo "::error::installed TAPEWORN.component is still quarantined"; status=1
-fi
+for installed in "$components/TAPEWORN.component" "$components/TAPEWORN FX.component" "$vst3_dir/TAPEWORN.vst3" "$vst3_dir/TAPEWORN FX.vst3"; do
+    if [[ ! -d "$installed" ]]; then echo "::error::install-mac.sh did not install $installed"; status=1; continue; fi
+    if /usr/bin/xattr -lr "$installed" | /usr/bin/grep -q com.apple.quarantine; then
+        echo "::error::installed $(basename "$installed") is still quarantined"; status=1
+    fi
+done
 for old in "$components/LIMINAL.component" "$vst3_dir/LIMINAL.vst3"; do
     if [[ -e "$old" ]]; then echo "::error::install-mac.sh left the old $old in place"; status=1; else echo "old copy removed: $old"; fi
 done
@@ -64,6 +70,11 @@ entries=$(/usr/bin/grep -c -E '^[[:space:]]*aumu[[:space:]]+Lmnl[[:space:]]+Veil
 if [[ "$entries" != 1 ]]; then echo "::error::the AU registry lists aumu Lmnl Veil $entries times (expected once)"; status=1; fi
 if ! /usr/bin/grep -q 'Elsewhere Audio: TAPEWORN' "$logs/registry.txt"; then echo "::error::the AU registry does not name it 'Elsewhere Audio: TAPEWORN'"; status=1; fi
 if /usr/bin/grep -qi 'liminal' "$logs/registry.txt"; then echo "::error::the AU registry still shows the old name"; status=1; fi
+# ... and the effect once, as itself, side by side.
+/usr/bin/auval -a 2>&1 | /usr/bin/grep -E 'Tpfx' | tee "$logs/registry-fx.txt"
+fx_entries=$(/usr/bin/grep -c -E '^[[:space:]]*aufx[[:space:]]+Tpfx[[:space:]]+Wnwd' "$logs/registry-fx.txt" || true)
+if [[ "$fx_entries" != 1 ]]; then echo "::error::the AU registry lists aufx Tpfx Wnwd $fx_entries times (expected once)"; status=1; fi
+if ! /usr/bin/grep -q 'Windward Audio: TAPEWORN FX' "$logs/registry-fx.txt"; then echo "::error::the AU registry does not name it 'Windward Audio: TAPEWORN FX'"; status=1; fi
 
 # 4. Validators on the installed copy.
 run_check() {
@@ -97,11 +108,20 @@ suites="v2-oop v2-inproc"
 liminal_state="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tools/au-harness/liminal-session.state"
 for suite in $suites; do run_check "harness-arm64-$suite" /usr/bin/arch -arm64 "$harness" --strict --only "$suite" --liminal-state "$liminal_state"; done
 run_diagnostic harness-arm64-auaudiounit /usr/bin/arch -arm64 "$harness" --only auaudiounit
+# TAPEWORN FX: auval for an effect (aufx) and its harness, out-of-process and in-process (gates).
+# shellcheck disable=SC2086
+run_check auval-fx-arm64 /usr/bin/arch -arm64 /usr/bin/auval $strict -v aufx Tpfx Wnwd
+for suite in $suites; do run_check "harness-fx-arm64-$suite" /usr/bin/arch -arm64 "$fx_harness" --strict --only "$suite"; done
+run_diagnostic harness-fx-arm64-auaudiounit /usr/bin/arch -arm64 "$fx_harness" --only auaudiounit
 if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
     # shellcheck disable=SC2086
     run_check auval-x86_64 /usr/bin/arch -x86_64 /usr/bin/auval $strict -v aumu Lmnl Veil
     for suite in $suites; do run_check "harness-x86_64-$suite" /usr/bin/arch -x86_64 "$harness" --strict --only "$suite" --liminal-state "$liminal_state"; done
     run_diagnostic harness-x86_64-auaudiounit /usr/bin/arch -x86_64 "$harness" --only auaudiounit
+    # shellcheck disable=SC2086
+    run_check auval-fx-x86_64 /usr/bin/arch -x86_64 /usr/bin/auval $strict -v aufx Tpfx Wnwd
+    for suite in $suites; do run_check "harness-fx-x86_64-$suite" /usr/bin/arch -x86_64 "$fx_harness" --strict --only "$suite"; done
+    run_diagnostic harness-fx-x86_64-auaudiounit /usr/bin/arch -x86_64 "$fx_harness" --only auaudiounit
 else
     echo "::error::Rosetta unavailable: the x86_64 slice was not validated"; status=1
 fi
@@ -112,6 +132,6 @@ limit 300 "$harness" --only auaudiounit --no-window --component "aumu:dls :appl"
 echo "control (Apple DLSMusicDevice, AUAudioUnit route): exit $?"
 set -e
 grep -h -E "^(FAIL|SUMMARY)" "$logs"/harness-*.txt || true
-python3 "$(dirname "${BASH_SOURCE[0]}")/ci-crash-summary.py" 60 LiminalAUHarness AUHostingService auval TAPEWORN > "$logs/crashes.txt" 2>&1 || true
+python3 "$(dirname "${BASH_SOURCE[0]}")/ci-crash-summary.py" 60 LiminalAUHarness TapewornFXAUHarness AUHostingService auval TAPEWORN > "$logs/crashes.txt" 2>&1 || true
 cat "$logs/crashes.txt"
 exit $status

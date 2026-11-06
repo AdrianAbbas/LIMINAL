@@ -643,9 +643,10 @@ void EnvironmentChain::prepare(double sampleRate) {
     signature->prepare(sr);
     amountCoef = float(1.0 - std::exp(-1.0 / (0.02 * sr)));
     liveCoef = float(1.0 - std::exp(-1.0 / (0.03 * sr)));
+    liveStep = float(1.0 / (0.04 * sr));
     signatureCoef = float(1.0 - std::exp(-1.0 / (0.25 * sr)));
     ambienceCoef = float(1.0 - std::exp(-1.0 / (0.6 * sr)));   // about 2 s to fade across
-    killStep = float(1.0 / (0.03 * sr));
+    killStep = float(1.0 / (0.04 * sr));
     quietLimit = int(sr);
     evo.prepare(sr);
     if (bank != nullptr && bank->available()) {   // the captures' state (the spectra are the bank's, shared)
@@ -765,7 +766,7 @@ void EnvironmentChain::configure(Place place, int characterIndex, unsigned seed,
     wetGain = dbGain(p->wetDb);
     quietFor = 0;
     killing = false;
-    outFade = 1;
+    outFade = killPhase = 1;
 }
 
 void EnvironmentChain::resetEvolution() {
@@ -795,7 +796,7 @@ void EnvironmentChain::setLive(const Live& l) {
 }
 
 void EnvironmentChain::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
-                               const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n) {
+                               const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n, const float* gains) {
     n = std::min(n, int(sbufL.size()));
     // The place's signature on the instruments' share of the dry sound (each instrument's place
     // amount: Influence x Environment Amount x Mix); it replaces that share by `live`, so the two
@@ -803,7 +804,10 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
     signature->setLamp(ambience.lamp());
     signature->process(dryL, dryR, sigL.data(), sigR.data(), sigSendL.data(), sigSendR.data(), n);
     for (int i = 0; i < n; ++i) {
-        live += liveCoef * (liveTarget - live);
+        // (2026-11-06) The sends fade in and out along an S-curve (~40 ms) instead of a one-pole: its
+        // sudden start was a small click through the room and the echo on a held tone.
+        livePhase = liveTarget > livePhase ? std::min(liveTarget, livePhase + liveStep) : std::max(liveTarget, livePhase - liveStep);
+        live = 0.5f - 0.5f * std::cos(3.14159265f * livePhase);
         sbufL[std::size_t(i)] = sendL[i] * live;
         sbufR[std::size_t(i)] = sendR[i] * live;
         ebufL[std::size_t(i)] = echoInL[i] * live;
@@ -822,7 +826,10 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         if (std::abs(amountTarget - amount) < 1.0e-3f) amount = amountTarget;
         ambienceFade += ambienceCoef * (liveTarget - ambienceFade);
         signatureFade += signatureCoef * (liveTarget - signatureFade);
-        if (killing) outFade = std::max(0.0f, outFade - killStep);
+        if (killing) {   // (2026-11-06: along an S-curve, no kink at its start)
+            killPhase = std::max(0.0f, killPhase - killStep);
+            outFade = killPhase * killPhase * (3.0f - 2.0f * killPhase);
+        }
         const float ag = ambienceGain[i] * ambienceFade * ambienceLive * (1.0f + 0.2f * evo.spectral());
         const auto amb = ambience.tick();
         Stereo send { sbufL[std::size_t(i)] + sigSendL[std::size_t(i)] * signatureFade, sbufR[std::size_t(i)] + sigSendR[std::size_t(i)] * signatureFade };
@@ -863,11 +870,13 @@ void EnvironmentChain::process(const float* sendL, const float* sendR, const flo
         const float ambL = amb.dry.l * ag, ambR = amb.dry.r * ag;
         const float l = (keep * ambL + echoed.l + tape.l + sp * wetGain * wetLive * wet.l) * outFade;
         const float r = (keep * ambR + echoed.r + tape.r + sp * wetGain * wetLive * wet.r) * outFade;
-        outL[i] += l + signatureFade * outFade * (sigL[std::size_t(i)] - dryL[i]);
-        outR[i] += r + signatureFade * outFade * (sigR[std::size_t(i)] - dryR[i]);
+        const float og = gains != nullptr ? gains[i] : heldGain;
+        outL[i] += og * (l + signatureFade * outFade * (sigL[std::size_t(i)] - dryL[i]));
+        outR[i] += og * (r + signatureFade * outFade * (sigR[std::size_t(i)] - dryR[i]));
         ambienceOut[i] += 0.5f * (ambL * ambL + ambR * ambR);
         quietFor = std::abs(l) + std::abs(r) < 3.0e-5f ? quietFor + 1 : 0;
     }
+    if (gains != nullptr && n > 0) heldGain = gains[n - 1];
 }
 
 //==============================================================================
@@ -917,6 +926,7 @@ void Environments::start(Place place, int character) {
     const int other = 1 - active;
     auto& next = chains[std::size_t(other)];
     next.configure(place, character, ++changes + 1, evolutionSeed);
+    next.holdGain(chains[std::size_t(active)].outputGain());
     next.setAmount(amount);
     next.snapAmount();
     next.setLive(false);
@@ -929,9 +939,10 @@ void Environments::start(Place place, int character) {
 }
 
 void Environments::process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
-                           const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n) {
+                           const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n, const float* gains) {
     for (int c = 0; c < 2; ++c)
-        if (running[std::size_t(c)]) chains[std::size_t(c)].process(sendL, sendR, echoInL, echoInR, dryL, dryR, ambienceGain, space, outL, outR, ambienceOut, n);
+        if (running[std::size_t(c)])
+            chains[std::size_t(c)].process(sendL, sendR, echoInL, echoInR, dryL, dryR, ambienceGain, space, outL, outR, ambienceOut, n, c == active ? gains : nullptr);
 }
 
 // Retiring a faded chain and starting a waiting place happen only here, on the processor's

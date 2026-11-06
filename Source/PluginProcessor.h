@@ -15,6 +15,7 @@
 #include "Parameters.h"
 #include "Presets.h"
 #include "Brand.h"
+#include "SceneMeters.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
 #include <functional>
@@ -53,18 +54,10 @@ public:
     juce::AudioProcessorValueTreeState parameters;
 
     // Read by the editor (message thread); written once per block by the audio thread.
-    struct Meters {
-        std::atomic<float> instrument { 0 }, ambience { 0 }, output { 0 }; // RMS, linear
+    // (The viewfinder's part, SceneMeters, is shared with TAPEWORN FX.)
+    struct Meters : SceneMeters {
         std::atomic<int> voices { 0 };
         std::atomic<int> held { 0 };    // voices a key or the pedal still holds (hung-note tests)
-        std::atomic<int> place { 0 };   // the environment being heard
-        std::atomic<int> character { 0 };
-        std::atomic<float> activity { 0 };   // evolution movement + events (0..1), for the interface
-        std::atomic<int> events { 0 };      // the place's incidental sounds so far (the lights answer them)
-        std::atomic<int> notes { 0 };       // note-ons so far (the lights answer them)
-        std::atomic<float> velocity { 0 };  // the latest note-on's velocity (0..1): how much the lights swell
-        std::atomic<float> lamp { 1 };      // the failing tube's lowest brightness since the editor took it (1 = steady)
-        std::atomic<int> flickers { 0 };    // its stutters so far: the picture's tube flickers with the hum
     } meters;
 
     // Scenes A/B (Milestone 5). Storing is done on the message thread; the audio thread

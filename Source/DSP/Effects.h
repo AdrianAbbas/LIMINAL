@@ -132,6 +132,8 @@ private:
     float echoDelay = 1, echoDelayTarget = 1, echoDelayCoef = 0.0005f;
     float echoFrom = 1, echoBlend = 1, echoBlendStep = 0.0005f;   // a big jump in time: two heads cross-fade
     float driftFrom = 0, driftBlend = 1, driftBlendStep = 0.0005f;   // the same for a big change of drift depth
+    float driftMix = 0, tapeMix = 0, filterMix = -1, mixStep = 0.001f;
+    float tapeNow = 0, chorusNow = 0, grainNow = 0, reverbNow = 0, colourNow = 0, zipCoef = 0.03f;   // per-sample copies of `now`   // the drift and the tape coming in / going out (never switched)
     OnePole echoToneL, echoToneR, echoLowL, echoLowR;
 };
 

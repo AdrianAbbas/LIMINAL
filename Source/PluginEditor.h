@@ -16,6 +16,8 @@
 #include "UI/SceneArt.h"
 #include "UI/ScrollList.h"
 #include "UI/InstrumentIcons.h"
+#include "UI/Viewfinder.h"
+#include "UI/Widgets.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <array>
@@ -23,78 +25,6 @@
 #include <vector>
 
 namespace liminal {
-
-class ViewfinderLook final : public juce::LookAndFeel_V4 {
-public:
-    void drawLinearSlider(juce::Graphics&, int x, int y, int width, int height, float sliderPos, float minSliderPos,
-                          float maxSliderPos, juce::Slider::SliderStyle, juce::Slider&) override;
-    void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
-    void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
-    void drawButtonText(juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
-    juce::Font getComboBoxFont(juce::ComboBox&) override;
-    void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height, float position, float startAngle, float endAngle, juce::Slider&) override;
-    juce::Font getPopupMenuFont() override;
-};
-
-// A thin slider with a small institutional label and its value.
-class LevelControl final : public juce::Component {
-public:
-    LevelControl(juce::AudioProcessorValueTreeState&, const char* id, juce::String label);
-    void paint(juce::Graphics&) override;
-    void resized() override;
-    juce::Slider slider;
-
-private:
-    juce::String label;
-    juce::RangedAudioParameter* parameter;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-};
-
-// Milestone 4 main view parts ===============================================================
-
-// The ten places as a strip of film frames (their own artwork in miniature): click to go.
-class PlaceStrip final : public juce::Component {
-public:
-    explicit PlaceStrip(juce::AudioProcessorValueTreeState&);
-    void paint(juce::Graphics&) override;
-    void mouseMove(const juce::MouseEvent&) override;
-    void mouseExit(const juce::MouseEvent&) override;
-    void mouseUp(const juce::MouseEvent&) override;
-    bool refresh();
-    juce::Rectangle<int> frame(int place) const;
-    void choose(int place);
-    std::function<void()> onChoose;
-    std::function<void(int)> onHover;   // the place under the mouse (-1: none), so it can be decoded ahead
-
-private:
-    juce::AudioProcessorValueTreeState& state;
-    std::array<juce::Image, 10> thumbs;
-    float thumbScale = 0;
-    int selected = -1, hover = -1;
-};
-
-// The place's three Characters as words under the caption: click to choose.
-class CharacterStrip final : public juce::Component {
-public:
-    explicit CharacterStrip(juce::AudioProcessorValueTreeState&);
-    void paint(juce::Graphics&) override;
-    void mouseMove(const juce::MouseEvent&) override;
-    void mouseExit(const juce::MouseEvent&) override;
-    void mouseUp(const juce::MouseEvent&) override;
-    bool refresh();
-    void choose(int character);
-    std::function<void()> onChoose;
-    // The chips name the Characters of the place on screen and light the one on screen: they
-    // change in the same frame as the picture (MainView's transition), not when the parameter does.
-    void show(int place, int character);
-    int shownPlace() const { return place; }
-    int shownCharacter() const { return selected; }
-
-private:
-    juce::Rectangle<float> chip(int character) const;
-    juce::AudioProcessorValueTreeState& state;
-    int place = -1, selected = -1, hover = -1;
-};
 
 // The six slots as objects: each the icon of the instrument it holds (2026-11-02: any of twenty),
 // lit when on, click to switch.
@@ -114,34 +44,6 @@ private:
     std::array<bool, 6> on {};
     std::array<int, 6> types { -1, -1, -1, -1, -1, -1 };
     int hover = -1;
-};
-
-// A large ring knob with its name and value under it (the four macros).
-class MacroKnob final : public juce::Component {
-public:
-    MacroKnob(juce::AudioProcessorValueTreeState&, const char* id, juce::String label);
-    bool big = false;   // the LIMINALITY knob: larger lettering
-    void paint(juce::Graphics&) override;
-    void resized() override;
-    juce::Slider slider;
-
-private:
-    juce::String label;
-    juce::RangedAudioParameter* parameter;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-};
-
-// A strip button that opens a drawer: an icon and a word in a frosted pill, brighter on
-// hover, filled while its drawer is open, with a pointing-hand cursor.
-class DrawerButton final : public juce::Button {
-public:
-    enum class Icon { instruments, environment, effects, perform, presets };
-    DrawerButton(const juce::String& text, Icon);
-    void paintButton(juce::Graphics&, bool highlighted, bool down) override;
-    bool compact = true;   // a page tab: the word alone (no icon, no chevron)
-
-private:
-    Icon icon;
 };
 
 // The instruments that are on, as clickable names ("PIANO + GLASS"): clicking a name
@@ -386,15 +288,15 @@ private:
     static constexpr int visibleRows = 9;
 };
 
-class MainView final : public juce::Component, private juce::Timer {
+// The instrument's window (Milestone 4 .. 2026-11-06): the shared viewfinder (UI/Viewfinder) with
+// the instrument's controls on its strip and its pages (instruments, place, effects, perform,
+// presets).
+class MainView final : public Viewfinder {
 public:
     explicit MainView(LiminalProcessor&);
     ~MainView() override;
-    void paint(juce::Graphics&) override;
-    void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 
-    static constexpr int defaultWidth = 960, defaultHeight = 720;   // logical size; the editor scales it
     void showInstruments(bool show);
     InstrumentDrawer& instrumentDrawer() { return drawer; }
     ActiveInstruments& activeInstruments() { return active; }
@@ -411,136 +313,19 @@ public:
     juce::Button& performToggle() { return performButton; }
     EffectsDrawer& effectsDrawer() { return effects; }
     juce::Button& effectsToggle() { return effectsButton; }
-    const ui::FrameGovernor& governor() const { return frames; }
-    // One animation tick now (tests, snapshots): the first picture of a photographic place or
-    // Character is composited on the spot; later ones go through its thread as usual.
-    void animate() { frames = {}; settle = true; timerCallback(); settle = false; }
-    // One real timer tick (tests): the frame governor and the scene's own thread as in a host.
-    // lastRepaint() is what that tick asked to be repainted (empty: nothing changed or skipped).
-    void tick() { lastDirty.clear(); timerCallback(); }
-    const juce::RectangleList<int>& lastRepaint() const { return lastDirty; }
-    juce::Rectangle<int> sceneArea() const { return getLocalBounds().withBottom(stripArea().getY()); }
-    // The scene picture the last paint drew (tests: valid until the next tick).
-    const juce::Image& paintedPicture() const { return lastPicture; }
-    int photoComposites() const { return photo != nullptr ? photo->composites() : 0; }
-    double photoCompositeMs() const { return photo != nullptr ? photo->compositeMs() : 0.0; }
-    bool showingPhoto() const { return photo != nullptr && photoImage.isValid() && photo->place() == placeShown; }
-    // Place and Character changes (2026-10-31): the new scene is prepared off screen, then swapped
-    // in whole in one frame - picture, frosted glass, caption, Character chips, light levels -
-    // and cross-faded from a frozen copy of the last frame. What the last paint drew:
-    struct FrameInfo {
-        int fromPlace = -1, fromCharacter = -1;   // the frame fading out (-1: none)
-        int place = -1, character = -1;           // the scene fading in / on screen
-        float alpha = 1;                          // how far the fade is (1: only the new scene)
-        int captionPlace = -1, captionCharacter = -1, chipsPlace = -1, chipsCharacter = -1;
-        bool thumbnail = false;                   // a stretched thumbnail stood in for the scene
-    };
-    const FrameInfo& lastFrame() const { return frameInfo; }
-    int shownPlace() const { return placeShown; }
-    int shownCharacter() const { return characterShown; }
-    bool switching() const { return pendingSwitch() || fadeStartMs >= 0; }
-    static constexpr double fadeSeconds = 0.32;
-    PlaceStrip& placeSelector() { return placeStrip; }
-    CharacterStrip& characterSelector() { return characterStrip; }
     InstrumentShelf& instrumentShelf() { return shelf; }
-    // The VHS look (2026-10-31): its animated half and what the composite bakes in.
-    const ui::vhs::Tape& tape() const { return vhsTape; }
-    ui::vhs::Tape& tapeForTests() { return vhsTape; }
-    float vhsAmount() const { return vhsAmountNow; }
-    ui::vhs::Static vhsStatic() const;
-    // Tests and snapshots: the current look composited now, on this thread (no waiting for the
-    // scene's own thread).
-    void settlePicture();
 
 private:
-    void timerCallback() override;
-    juce::Rectangle<int> recArea() const { return { 30, 26, 70, 22 }; }
-    juce::Rectangle<int> tabsArea() const { return { getWidth() - 470, 76, 452, 26 }; }
-    bool syncPlace();
-    bool pendingSwitch() const { return targetPlace >= 0 && (targetPlace != placeShown || targetCharacter != characterShown); }
-    juce::Rectangle<int> captionArea() const { return { 52, 48, 600, 20 }; }
-    juce::Rectangle<int> clockArea() const { return { getWidth() - 270, 26, 240, 22 }; }
-    juce::Rectangle<int> meterArea() const { return { getWidth() - 270, 50, 240, 20 }; }
-    juce::Rectangle<int> stripArea() const { return getLocalBounds().removeFromBottom(156); }
-    juce::Rectangle<int> drawerArea() const { return { getWidth() - 418, 110, 400, stripArea().getY() - 110 - 10 }; }
-
+    bool drawerOpen() const override;
+    void sceneCommitted() override;
+    void refreshControls() override;
     LiminalProcessor& processor;
-    ViewfinderLook look;
-    ui::Scene scene;
-    float sceneScale = 0;
     juce::ToggleButton power;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttachment;
     LevelControl master, instrument, ambience, space;
-    PlaceStrip placeStrip;
-    CharacterStrip characterStrip;
     InstrumentShelf shelf;
     MacroKnob presenceKnob, scaleKnob, activityKnob, unrealKnob;
     MacroKnob liminalityKnob;   // Liminality (2026-11-01): big, on the scene's lower left
-    juce::Rectangle<int> liminalityArea() const { return { 52, stripArea().getY() - 140, 116, 124 }; }
-    // Lights that answer the music and the place (Milestone 4).
-    std::array<float, 12> pulse {}, shownPulse {};
-    int notesSeen = 0, eventsSeen = 0;
-    double nextFlicker = 3, shimmerUntil = 0, nextShimmer = 6;
-    float shimmerY = 0, shimmerH = 0, shimmerShift = 0;
-    juce::Point<float> mouse { -1000, -1000 };
-    void mouseMove(const juce::MouseEvent&) override;
-    void paintLights(juce::Graphics&);
-    // The photographic scene (Direction Update 2): light passes composited live (UI/PhotoScene).
-    void animatePhoto(bool still, juce::RectangleList<int>& dirty);
-    std::unique_ptr<ui::PhotoScene> photo;
-    juce::RectangleList<int> lastDirty;
-    juce::Image lastPicture;
-    juce::Image photoImage, photoFrosted;
-    std::vector<float> photoSwell;
-    std::vector<float> photoLevelsSent;
-    float photoLamp = 1, photoPhaseSent = -1;
-    int photoCharacterSent = -1, photoNotesSeen = 0, photoEventsSeen = 0;
-    bool photoNeedsFrost = true, settle = false;
-    std::array<int, 10> photoKnown { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };   // has a photographic scene (cached)
-    bool photoPlace(int place);
-    // The transition (see FrameInfo).
-    int targetPlace = -1, targetCharacter = -1;          // what the parameters ask for
-    std::unique_ptr<ui::PhotoScene> incoming, spare;     // the scene being prepared; the last one left (or one hovered), kept decoded
-    unsigned lookSerial = 0, targetSerial = 0;           // targetSerial: the composite that shows the target look
-    int requestedPlace = -1, requestedCharacter = -1;
-    std::vector<float> targetLevels;
-    float targetPhase = 0;
-    juce::Image fromPicture, fromFrosted;                // the frame fading out (a private copy: nothing writes to it)
-    int fromPlace = -1, fromCharacter = -1;
-    double fadeStartMs = -1;   // wall time (the animation clock slows when frames are skipped)
-    float fadeNow = 1;          // this frame's fade, set once per tick (1: only the new scene)
-    void startFade();
-    int hoverPlace = -1, hoverTicks = 0;
-    bool lightsStill = false;   // Eco or slow frames: the lights hold still
-    FrameInfo frameInfo;
-    float fadeAlpha() const;
-    void advanceSwitch(juce::RectangleList<int>& dirty);
-    void freezeCurrentFrame();
-    void commitSwitch(int place, int character, juce::RectangleList<int>& dirty);
-    void makeFrost();
-    ui::PhotoScene::Look photoLook(const ui::PhotoScene&, int place, int character, bool live) const;
-    static juce::Colour gradeFor(int place, int character);
-    juce::Image photoPlaceholder;   // the film strip's small picture, stretched, until the scene is decoded
-    int placeholderFor = -1;
-    // The VHS look: the tape's animated layers, the static half sent with each look.
-    ui::vhs::Tape vhsTape;
-    ui::vhs::Grain vhsGrain;
-    int vhsLevel = -1;
-    float vhsAmountNow = 0, vhsWrongNow = 0;
-    ui::vhs::Static photoVhsSent;
-    float sceneVhs = -1;   // the tape amount the painted scene was baked with
-    double playUntil = 3.5;   // the deck's "PLAY" shows for a few seconds (opening, a new place)
-    juce::String osdClock;
-    struct Osd { juce::String text; float scale = 0; juce::uint32 colour = 0; juce::Image image; };
-    std::array<Osd, 5> osd;
-    const juce::Image& osdImage(int slot, const juce::String& text, juce::Colour colour, float scale);
-    void paintOsd(juce::Graphics&, float scale);
-    void renderPainted(int place, int character, float scale);
-    // The picture at screen resolution (with the tape look the viewfinder repaints every tape frame).
-    int pictureSerial = 0, screenSerial = -1;
-    const void* screenSource = nullptr;
-    juce::Image screenPicture;
-    const juce::Image& screenCopy(const juce::Image& picture, float scale);
     DrawerButton instrumentsButton { "INSTRUMENTS", DrawerButton::Icon::instruments };
     DrawerButton environmentButton { "ENVIRONMENT", DrawerButton::Icon::environment };
     DrawerButton effectsButton { "EFFECTS", DrawerButton::Icon::effects };
@@ -553,22 +338,6 @@ private:
     PerformDrawer perform;
     PresetDrawer presetsPanel;
     void closeDrawersExcept(juce::Component* keep);
-    int characterShown = -1;
-    int activityLit = -1;
-    juce::Rectangle<int> activityArea() const { return { 52, 70, 240, 14 }; }
-    int placeShown = -1;
-    juce::Colour grade;   // the place's colour cast over the scene (Milestone 4 paints each place)
-
-    ui::FrameGovernor frames;
-    double paintStarted = 0, clock = 0;
-    bool recOn = true;
-    juce::String clockText;
-    int instrumentSegments = 0, ambienceSegments = 0;
-    float instrumentShown = 0, ambienceShown = 0;
-    // One ceiling light is failing: mostly on, sometimes it stutters.
-    float flickerDim = 0;
-    double flickerNext = 5, flickerUntil = 0, flickerToggle = 0;
-    juce::Random random { 1979 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainView)
 };

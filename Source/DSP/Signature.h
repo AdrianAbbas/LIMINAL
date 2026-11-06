@@ -69,6 +69,7 @@ private:
     // Shared building blocks (each place uses the ones it needs).
     std::vector<float> lineL, lineR;    // up to 1.6 s
     int write = 0;
+    float startRamp = 1, rampScale = 1.0f / 960.0f;   // what the lines take in just after a reset (see process)
     std::vector<float> combL, combR;    // short feedback lines (flutter, rails): up to 60 ms
     int combWrite = 0;
     float combDL = 1, combDR = 1, combFb = 0;

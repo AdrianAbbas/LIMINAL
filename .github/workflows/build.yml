@@ -71,8 +71,13 @@ jobs:
         run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters,recorded
       - name: Smoke test (x86_64 under Rosetta)
         run: /usr/bin/arch -x86_64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
-      - name: Universal binary and Info.plist gate
-        run: bash scripts/ci-check-bundles.sh build/LIMINAL_artefacts/Release
+      # TAPEWORN FX (2026-11-06), the effect built from the same sources: its own suite.
+      - name: TAPEWORN FX smoke test (arm64 and x86_64 under Rosetta)
+        run: |
+          /usr/bin/arch -arm64 build/TapewornFXTests_artefacts/Release/TapewornFXTests --only smoke,parameters,latency,mono
+          /usr/bin/arch -x86_64 build/TapewornFXTests_artefacts/Release/TapewornFXTests --only smoke,parameters,latency
+      - name: Universal binary and Info.plist gate (instrument and effect)
+        run: bash scripts/ci-check-bundles.sh build/LIMINAL_artefacts/Release build/TapewornFX_artefacts/Release
       - name: Developer ID signing and notarisation (optional, untested)
         if: env.HAS_DEVELOPER_ID == 'true'
         env:
@@ -82,24 +87,24 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-        run: bash scripts/ci-developer-id.sh build/LIMINAL_artefacts/Release
-      - name: Sign, verify and package
-        run: bash scripts/package-mac.sh build/LIMINAL_artefacts/Release dist
-      - name: Build AU host harness
+        run: bash scripts/ci-developer-id.sh build/LIMINAL_artefacts/Release build/TapewornFX_artefacts/Release
+      - name: Sign, verify and package (both plug-ins)
+        run: bash scripts/package-mac.sh build/LIMINAL_artefacts/Release dist build/TapewornFX_artefacts/Release
+      - name: Build AU host harnesses (instrument and effect)
         run: bash scripts/build-au-harness.sh build/LiminalAUHarness
-      - name: Install a quarantined download with install-mac.sh, then auval and harness (arm64 + x86_64)
+      - name: Install a quarantined download with install-mac.sh, then auval and harnesses for both plug-ins (arm64 + x86_64)
         run: bash scripts/ci-user-install-test.sh dist/TAPEWORN-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
       # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
       - name: Publish install and arm64 harness logs as annotations
         if: always()
-        run: bash scripts/ci-annotate.sh --condense build/ci-logs/quarantine.txt build/ci-logs/install-mac.txt build/ci-logs/harness-arm64-*.txt
+        run: bash scripts/ci-annotate.sh --condense build/ci-logs/quarantine.txt build/ci-logs/install-mac.txt build/ci-logs/harness-arm64-*.txt build/ci-logs/harness-fx-arm64-*.txt
       - name: Publish x86_64 harness and auval logs as annotations
         if: always()
         run: |
           for f in build/ci-logs/auval-*.txt; do
             if [[ -f "$f" ]]; then tail -25 "$f" > "$f.tail"; fi
           done
-          bash scripts/ci-annotate.sh --condense build/ci-logs/harness-x86_64-*.txt build/ci-logs/control-*.txt build/ci-logs/crashes.txt build/ci-logs/auval-*.txt.tail
+          bash scripts/ci-annotate.sh --condense build/ci-logs/harness-x86_64-*.txt build/ci-logs/harness-fx-x86_64-*.txt build/ci-logs/control-*.txt build/ci-logs/crashes.txt build/ci-logs/auval-*.txt.tail
       - name: Upload installable package (only when every check passed)
         uses: actions/upload-artifact@v4
         with:
@@ -116,7 +121,8 @@ jobs:
           if-no-files-found: warn
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # 2026-11-06: 90 (as the macOS job): TAPEWORN FX's suite and listening render join the instrument's.
+    timeout-minutes: 90
     env:
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
@@ -160,6 +166,14 @@ jobs:
       # The full processor suite in parallel shards, then the CPU-measuring group alone.
       - name: Processor tests (full suite)
         run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs
+      # TAPEWORN FX: its full suite (strength on guitar, vocal and a full mix in every room, level match,
+      # clicks, latency, real-time safety, presets, the editor), then its listening render.
+      - name: TAPEWORN FX processor tests (full suite)
+        run: |
+          set -o pipefail
+          build/TapewornFXTests_artefacts/Release/TapewornFXTests --snapshot build/test-logs/fx-editor.png | tee build/test-logs/fx-tests.txt
+      - name: TAPEWORN FX listening render (the same guitar, vocal and mix phrase dry and through six rooms at LIMINALITY 0, 50 and 100 percent, with cue sheet)
+        run: build/TapewornFXTests_artefacts/Release/TapewornFXTests --render build/test-logs/fx-listening
       - name: Listening render (each instrument, in the corridor, then dry)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m1b-instruments.wav
       - name: "Listening render (one piano phrase through all ten rooms, a shuffled blind version with cue sheet, each room bed alone for 60 s, all 30 Characters)"

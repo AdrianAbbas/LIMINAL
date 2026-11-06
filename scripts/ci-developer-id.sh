@@ -9,9 +9,10 @@
 #   MACOS_CERTIFICATE_PASSWORD  password of that .p12
 #   MACOS_SIGNING_IDENTITY      e.g. "Developer ID Application: Your Name (TEAMID)"
 #   NOTARY_APPLE_ID, NOTARY_TEAM_ID, NOTARY_PASSWORD (app-specific password)
-# Usage: scripts/ci-developer-id.sh <artefacts dir>
+# Usage: scripts/ci-developer-id.sh <instrument artefacts dir> [<effect artefacts dir>]
 set -euo pipefail
 artefacts="$1"
+fx="${2:-}"
 keychain="$RUNNER_TEMP/tapeworn-signing.keychain-db"
 keychain_password="$(/usr/bin/uuidgen)"
 /usr/bin/security create-keychain -p "$keychain_password" "$keychain"
@@ -24,7 +25,9 @@ rm -f "$RUNNER_TEMP/tapeworn-cert.p12"
 /usr/bin/security list-keychains -d user -s "$keychain" $(/usr/bin/security list-keychains -d user | tr -d '"')
 /usr/bin/security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
 
-for bundle in "$artefacts/AU/TAPEWORN.component" "$artefacts/VST3/TAPEWORN.vst3" "$artefacts/Standalone/TAPEWORN.app"; do
+bundles=("$artefacts/AU/TAPEWORN.component" "$artefacts/VST3/TAPEWORN.vst3" "$artefacts/Standalone/TAPEWORN.app")
+[[ -n "$fx" ]] && bundles+=("$fx/AU/TAPEWORN FX.component" "$fx/VST3/TAPEWORN FX.vst3")
+for bundle in "${bundles[@]}"; do
     /usr/bin/codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$bundle"
     /usr/bin/codesign --verify --strict --verbose=2 "$bundle"
     archive="$RUNNER_TEMP/$(basename "$bundle").zip"
