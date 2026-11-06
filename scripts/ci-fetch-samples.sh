@@ -52,6 +52,12 @@ else
     rm -rf "$out"
 fi
 
+# 1b. The developer's alto recorder (2026-11-06: the woodwind layers' Recorder voice), once recorded: an
+# `alto-recorder` folder of one-note files (tools/sample-prep/woodwinds.py). Not recorded yet is normal.
+if [[ -d "$out" ]]; then
+    python3 -I "$here/tools/sample-prep/woodwinds.py" --recorder "$checkout" --out "$out" 2>&1 | grep -E '^(Prepared|woodwinds| problem| warning)' || true
+fi
+
 # 2. The effect captures (as scripts/ci-fetch-captures.sh did before).
 python3 -I "$here/tools/captures/prepare.py" "$checkout" "$captures" > "$captures.log" 2>&1 || { tail -40 "$captures.log"; echo "::error title=Capture preparation failed::tools/captures/prepare.py failed (log above)"; exit 1; }
 ls -la "$captures"

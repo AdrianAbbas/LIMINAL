@@ -55,6 +55,16 @@ jobs:
         env:
           SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
         run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" build/samples build/captures
+      # 2026-11-06: the woodwind layers' samples, from the free CC0 library VSCO 2 Community Edition
+      # (docs/LICENSES), fetched from its official source at tag 1.1.0 and cached; never committed.
+      # Without them the woodwind layers play their synthesised stand-ins (a warning says so).
+      - name: Woodwind samples cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vsco-woodwinds
+          key: vsco2ce-1.1.0-28092772-woodwinds-v1
+      - name: Fetch and prepare the CC0 woodwind samples (official source, licence checked, cached)
+        run: bash scripts/ci-fetch-woodwinds.sh "${{ runner.temp }}/vsco-woodwinds" build/samples
       - name: Configure (universal arm64 + x86_64, macOS 10.15+)
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -68,7 +78,7 @@ jobs:
       # The full processor suite runs in the Linux job. Here a short smoke group checks
       # each slice of the universal binary.
       - name: Smoke test (arm64)
-        run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters,recorded
+        run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters,recorded,woodwind
       - name: Smoke test (x86_64 under Rosetta)
         run: /usr/bin/arch -x86_64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
       # TAPEWORN FX (2026-11-06), the effect built from the same sources: its own suite.
@@ -155,6 +165,16 @@ jobs:
         env:
           SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
         run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" build/samples build/captures
+      # 2026-11-06: the woodwind layers' samples, from the free CC0 library VSCO 2 Community Edition
+      # (docs/LICENSES), fetched from its official source at tag 1.1.0 and cached; never committed.
+      # Without them the woodwind layers play their synthesised stand-ins (a warning says so).
+      - name: Woodwind samples cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vsco-woodwinds
+          key: vsco2ce-1.1.0-28092772-woodwinds-v1
+      - name: Fetch and prepare the CC0 woodwind samples (official source, licence checked, cached)
+        run: bash scripts/ci-fetch-woodwinds.sh "${{ runner.temp }}/vsco-woodwinds" build/samples
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_PATH="${{ runner.temp }}/juce"
@@ -186,6 +206,8 @@ jobs:
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-recorded build/test-logs/recorded-instruments.wav
       - name: Listening render (the instrument library, the same phrase on all twenty instruments, dry and in three rooms, with cue sheet)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render-library build/test-logs/library-instruments.flac
+      - name: Listening render (real woodwinds, each changed instrument before and after, dry and in three rooms, with cue sheet)
+        run: build/LiminalTests_artefacts/Release/LiminalTests --render-woodwinds build/test-logs/woodwinds.flac
       # 2026-11-05 patch notes: the four-part test piece on the seven instruments they name, after the patch
       # and before it (the code before, 13351aa, built with today's render: scripts/build-before.sh).
       - name: Listening render (the four-part test piece on seven instruments, after the patch notes)

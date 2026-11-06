@@ -34,6 +34,8 @@ mkdir -p "$logs"
 "$tests" --only init > "$logs/26-init.txt" 2>&1 &
 # 2026-11-06: all twenty instruments level-matched in the rooms (Source/DSP/LevelMatch.h), no clipping.
 "$tests" --only loudness > "$logs/27-loudness.txt" 2>&1 &
+# 2026-11-06: real woodwinds (the flute and clarinet layers; Elevator Vibraphone, Lounge E-Piano).
+"$tests" --only woodwind > "$logs/28-woodwind.txt" 2>&1 &
 wait
 # Presets, MIDI, quality, export (it times Eco against Standard: alone, so the other shards do not disturb it).
 "$tests" --only workflow > "$logs/9-workflow.txt" 2>&1

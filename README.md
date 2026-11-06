@@ -21,11 +21,14 @@ Faded Strings, Hallway Pizzicato, Toy Piano, Lounge E-Piano, Elevator Vibraphone
 Voice, Distant Radio, Cassette Strings, Arcade Lead, Basement Bass, Warped Organ, Bowed Glass — most
 playing the developer's own recordings (prepared in CI from a private repository; synthesised
 stand-ins without them), level-matched in every place
-([`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)) — in ten places that each reshape
+([`docs/INSTRUMENT_NOTES.md`](docs/INSTRUMENT_NOTES.md)); Elevator Vibraphone and Lounge E-Piano can
+blend in a soft, distant flute or clarinet (samples from the free CC0 library VSCO 2 Community
+Edition by Versilian Studios, http://vis.versilstudios.net/vsco-community.html, fetched in CI from
+its official source: [`docs/LICENSES/`](docs/LICENSES/README.md)) — in ten places that each reshape
 every instrument and have their own room and sounds ([`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md)),
 each with three Characters, evolution, four macros and Scene A/B morphing
 ([`docs/CHARACTERS.md`](docs/CHARACTERS.md)); per-instrument effects with the place's defaults
-([`docs/EFFECTS.md`](docs/EFFECTS.md)); 114 factory presets plus INIT (no preset), undoable
+([`docs/EFFECTS.md`](docs/EFFECTS.md)); 116 factory presets plus INIT (no preset), undoable
 preset loads, ambience export to WAV,
 Eco/Standard/High quality. The interface is the "viewfinder": every place as its own scene,
 graded per Character, lights that answer the music ([`docs/snapshots/`](docs/snapshots/)).
