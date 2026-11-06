@@ -11,6 +11,7 @@
 #include "DSP/Library.h"
 #include "DSP/TapeWarble.h"
 #include "DSP/Liminality.h"
+#include "DSP/LevelMatch.h"
 #include "Parameters.h"
 #include "Presets.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -167,6 +168,7 @@ private:
         std::atomic<float>* velocityVolume = nullptr;
         std::atomic<float>* velocityFilter = nullptr;
         Smooth gain;
+        Smooth trim;    // the room's level match for the instrument it plays (DSP/LevelMatch.h), slower
         Smooth share;   // how much of it the place's signature takes (smoothed: no jumps when its effects change)
         bool running = false;
         bool muted = false;   // another instrument is soloed
@@ -178,6 +180,7 @@ private:
     void handleMidi(const juce::MidiMessage&);
     void updateSettings();
     dsp::EffectSettings effectSettings(const Slot&) const;
+    float levelTrim(const Slot&, int place, int character) const;
     double hostBpm = 120.0;
     void renderSegment(float* left, float* right, int n);
     void controlTick();

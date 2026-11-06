@@ -165,6 +165,14 @@ dsp::EffectSettings LiminalProcessor::effectSettings(const Slot& slot) const {
     return s;
 }
 
+// The room's level match for what the slot plays (linear), riding on how much the place shapes it.
+float LiminalProcessor::levelTrim(const Slot& slot, int place, int character) const {
+    // fx[0]: Effects Mix (0 = the dry instrument), fx[1]: Environment Influence
+    const float amount = std::clamp(environmentAmount->load(), 0.0f, 1.0f) * std::clamp(slot.fx[1]->load(), 0.0f, 1.0f) * std::clamp(slot.fx[0]->load(), 0.0f, 1.0f);
+    const float db = dsp::levelmatch::trimDb(slot.playing, place, character, amount);
+    return std::pow(10.0f, db / 20.0f);
+}
+
 dsp::Place LiminalProcessor::selectedPlace() const {
     return dsp::Place(std::clamp(int(std::lround(environmentChoice->load())), 0, dsp::placeCount - 1));
 }
@@ -268,6 +276,8 @@ void LiminalProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
         slot.share.coef = float(1.0 - std::exp(-1.0 / (0.02 * sampleRate)));
         slot.share.reset(slot.rack.placeShare());
         slot.gain.reset(slot.targetGain());
+        slot.trim.coef = float(1.0 - std::exp(-1.0 / (0.05 * sampleRate)));
+        slot.trim.reset(levelTrim(slot, int(selectedPlace()), selectedCharacter()));
         slot.running = slot.enabled();
         slot.lim.setSeed(std::uint32_t(evolutionSeed->load()) * 2654435761u + 1u);
         slot.lim.prepare(sampleRate, i);
@@ -494,7 +504,7 @@ void LiminalProcessor::renderSegment(float* left, float* right, int n) {
         slot.rack.process(slotL, slotR, slotSendL, slotSendR, slotEchoL, slotEchoR, sendFactor, n);
         slot.share.target = slot.rack.placeShare();
         for (int i = 0; i < n; ++i) {
-            const float g = slot.gain.next(), share = slot.share.next();
+            const float g = slot.gain.next() * slot.trim.next(), share = slot.share.next();
             il[i] += slotL[i] * g;
             ir[i] += slotR[i] * g;
             dryL[i] += slotL[i] * g * share;
@@ -629,6 +639,8 @@ void LiminalProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         slot.rack.setSettings(slot.settings, environmentAmount->load(), hostBpm, effectLive);
         slot.rack.setPlace(place, characterIndex);
         slot.gain.target = slot.targetGain();
+        slot.trim.target = levelTrim(slot, int(place), characterIndex);
+        if (!slot.running) slot.trim.reset(slot.trim.target);   // (silent: it starts at the right level)
         if (slot.distance != nullptr) slot.stage.setAmount(slot.distance->load());
         if (slot.enabled() && !slot.running) {
             slot.rack.reset();

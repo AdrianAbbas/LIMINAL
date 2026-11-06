@@ -31,6 +31,10 @@
 #include <string>
 #include <set>
 #include <map>
+#include <optional>
+#include <thread>
+#include <atomic>
+#include <mutex>
 #include <vector>
 
 // Count C++ allocations on the calling thread while enabled (from WORLDBUILDER's tests).
@@ -207,6 +211,7 @@ struct BypassRecordings {   // the stand-ins (synthesis), as a build without the
 #include "LiminalityTests.h"
 #include "RecordedTests.h"
 #include "LibraryTests.h"
+#include "LoudnessTests.h"
 
 //==============================================================================
 void testParameters(Suite& s) {
@@ -1228,6 +1233,8 @@ int main(int argc, char** argv) {
         else if (arg == "--render-recorded" && i + 1 < argc) return renderRecorded(argv[++i]);
         else if (arg == "--probe-chord") return probeChord();
         else if (arg == "--probe-library") return probeLibrary();
+        else if (arg == "--probe-loudness") return probeLoudness();
+        else if (arg == "--calibrate-loudness" && i + 2 < argc) return calibrateLoudness(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]));
         else if (arg == "--probe-extremes") return probeExtremes();
         else if (arg == "--probe-library-clicks" && i + 2 < argc) return probeLibraryClicks(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]) != 0);
         else if (arg == "--probe-jump") return probeJump();
@@ -1289,6 +1296,7 @@ int main(int argc, char** argv) {
     if (run("library")) testLibrary(s);
     if (run("library-rooms")) testLibraryRooms(s);
     if (run("instruments")) testInstruments(s);
+    if (run("loudness")) testLoudness(s);
     if (run("environments")) testEnvironments(s);
     if (run("effects")) testEffects(s);
     if (run("characters")) testCharacters(s);
