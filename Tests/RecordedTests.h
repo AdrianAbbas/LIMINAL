@@ -6,7 +6,9 @@
 
 bool recordingsReady() {
     samples::Bank::get().load();
-    return samples::Bank::get().waitUntilLoaded(8000);
+    // (2026-11-06: 8 s was too short on CI with every shard loading the bank at once: some groups
+    // silently ran on the stand-ins. A build without recordings still returns at once.)
+    return samples::Bank::get().waitUntilLoaded(60000);
 }
 
 // Pitch of a note in cents from `expectHz`: what its first six harmonics agree on (each harmonic's

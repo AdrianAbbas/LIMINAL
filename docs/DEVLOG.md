@@ -2530,12 +2530,17 @@ Organ +0.7); **three of them measured loud, not quiet, in the default room and c
 Chimes -2.3, Distant Radio -3.2, Arcade Lead -3.2. The choir and the drone needed the most (+8.1,
 +4.5); the strings, the pizzicato and the toy piano come down (-4.0, -7.8, -3.7).
 
-Group **`loudness`** (8 checks): all twenty within **0.05 dB** of their mean in the default room
-(before: 8.20 dB); within **0.32 dB in all thirty** places / Characters; no clipping (highest sample
+Group **`loudness`** (9 checks): all twenty within **1.06 dB** of their mean in the default room
+(before: 8.20 dB): Cassette Strings, deliberately not raised, sits at -1.06; the other nineteen are
+within 0.05 dB of the piano. Within **1.06 dB in all thirty** places / Characters (the same
+Cassette Strings line; everything else within 0.32); the recordings a build ships must be loaded
+(a check: on CI the bank took longer than the 8 s `recordingsReady()` waited, with every shard
+loading it at once, and some groups had quietly measured the stand-ins; it now waits up to 60 s,
+and a build without recordings still returns at once); no clipping (highest sample
 peak -1.0 dBFS on the test phrase; a loud phrase, velocity 127, six-note chords and the pedal, stays
 under 0 dBFS: the music box and the piano reach the safety limiter's soft region there, as before);
 another phrase (slow notes, staccato, a long chord; not the calibration's) within +/-3.5 dB
-(worst 3.3: Basement Bass played high, -3.3; report-only against +/-1.5: register and articulation
+(worst 3.2, Basement Bass played high; report-only against +/-1.5: register and articulation
 change each instrument's loudness on their own); Environment Amount 0 bit-exact. The stand-ins (a
 build without the recordings) are reported only: the table is calibrated on the recordings the
 shipped build plays (stand-ins worst 9.1 dB, Basement Bass's and Old Guitar's stand-ins differ most).
@@ -2585,14 +2590,27 @@ load with every parameter).
 
 ### Tests
 
-This container (recordings + captures): **full suite 1296 passed, 0 failed** (10 min; new groups
+This container (recordings + captures): **full suite 1297 passed, 0 failed** (10 min; new groups
 `init` and `loudness` in `scripts/run-tests-parallel.sh`). Report-only lines: the loudness of another
-phrase against +/-1.5 dB (3.3 dB, see above) and the stand-ins' spread (see above).
+phrase against +/-1.5 dB (3.2 dB, see above) and the stand-ins' spread (see above).
 
 ### Not verified here
 
 macOS, auval, the AU harness, GarageBand and Logic: CI's macOS job is the first macOS build of this
 work. Nothing was listened to (no audio output in this container).
+
+### CI fixes after the final push (2026-11-06)
+
+First CI run (`42d2eee`): macOS all green (build, smoke + `recorded`, the bundle gate with the new
+name / bundle ID checks, package, the installer removing a planted LIMINAL copy, the registry listing
+the AU once as "Elsewhere Audio: TAPEWORN", auval and the AU harness arm64 + x86_64 with the new
+checks: the host-visible name and the LIMINAL song's state restored, 4 more checks per suite).
+Linux: 1198 passed, 3 failed: the `loudness` group had found no recordings and held the stand-ins
+to the window. The bank had not finished loading within `recordingsReady()`'s 8 s with every shard
+loading it at once (and the new groups adding to the load), so several groups had quietly run on the
+stand-ins (about 95 checks fewer than here). `recordingsReady()` now waits up to 60 s (a build
+without recordings still returns at once), `loudness` fails if a build that ships recordings cannot
+load them, and its parallel part uses two threads instead of four. Local suite 1297 passed, 0 failed.
 
 ### For the developer's GarageBand check
 

@@ -165,6 +165,10 @@ void testLoudness(Suite& s) {
     using namespace loudnesstest;
     s.section("loudness: all twenty instruments level-matched (same phrase, same room, defaults), no clipping");
     const bool ready = recordingsReady();
+#if LIMINAL_HAS_SAMPLES
+    // A build that ships the recordings must measure them (not fall back to the stand-ins unnoticed).
+    s.check(ready, "the recordings this build ships are loaded", samples::Bank::get().message().toStdString());
+#endif
     // The twenty in one place / Character: their loudness (LUFS) and peaks.
     const auto measureAll = [&](bool loudToo) {
         std::vector<Level> all;
@@ -236,11 +240,12 @@ void testLoudness(Suite& s) {
         }
         // 3. Every place and Character (the test phrase): the table covers them all.
         if (recorded || !ready) {
-            // (four threads, one processor each: every place / Character is independent)
+            // (two threads, one processor each: every place / Character is independent; two, so the
+            // other shards running at the same time on CI are not starved)
             std::vector<std::vector<Level>> results(std::size_t(dsp::placeCount * dsp::characterCount));
             std::atomic<int> next { 0 };
             std::vector<std::thread> workers;
-            for (int t = 0; t < 4; ++t)
+            for (int t = 0; t < 2; ++t)
                 workers.emplace_back([&] {
                     for (int k = next++; k < int(results.size()); k = next++)
                         for (int w = 0; w < params::libraryCount; ++w) results[std::size_t(k)].push_back(measure(w, false, false, k / dsp::characterCount, k % dsp::characterCount));
