@@ -577,9 +577,11 @@ void testParameters(Suite& s) {
     for (int k = 0; k < dsp::lim::count; ++k) s.check(p.parameters.getParameter(fxp::limId(k)) != nullptr, "has the Liminality control " + std::string(dsp::lim::names[k]));
     s.check(p.getBypassParameter() == p.parameters.getParameter(fxp::bypass), "the host's bypass is the plug-in's own (click-free) Bypass");
     const auto value = [&](const char* id) { return p.parameters.getRawParameterValue(id)->load(); };
-    s.check(value(fxp::mix) == 1.0f && std::abs(value(fxp::intensity) - 0.7f) < 1e-6f && value(fxp::input) == 0.0f && value(fxp::output) == 0.0f,
-            "defaults: Mix 100 % (an insert), Intensity 70 %, Input / Output 0 dB");
-    s.check(std::abs(value(fxp::liminality) - 0.4f) < 1e-6f, "LIMINALITY's default: 40 % (the amounts as set)");
+    const auto near = [](float a, float b) { return std::abs(a - b) < 1.0e-3f; };   // (the parameters' 0.001 steps round differently per compiler)
+    s.check(near(value(fxp::mix), 1.0f) && near(value(fxp::intensity), 0.7f) && near(value(fxp::input), 0.0f) && near(value(fxp::output), 0.0f),
+            "defaults: Mix 100 % (an insert), Intensity 70 %, Input / Output 0 dB",
+            "Mix " + fmt(value(fxp::mix), 4) + ", Intensity " + fmt(value(fxp::intensity), 4) + ", Input " + fmt(value(fxp::input), 3) + ", Output " + fmt(value(fxp::output), 3));
+    s.check(near(value(fxp::liminality), 0.4f), "LIMINALITY's default: 40 % (the amounts as set)");
 }
 
 void testLatency(Suite& s) {
