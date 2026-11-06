@@ -15,6 +15,7 @@
 #include "Presets.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
+#include <functional>
 
 namespace liminal {
 
@@ -77,6 +78,19 @@ public:
     // Presets (Milestone 6). Message thread only.
     void applyPreset(const presets::Preset&);
     void resetToDefaults();
+    // INIT (2026-11-06): no preset - every parameter of the sound at its default, as in a new
+    // instance (each slot its own instrument, LIMINALITY at its default, the default place and
+    // Character, the default effects); the evolution starts again. The viewing / listening
+    // preferences (POWER, the VHS look and its warble) and the song's stored scenes A/B are kept.
+    void initPreset();
+    static constexpr const char* initName = "INIT";
+    // Every preset load (INIT, factory, your own, a host program) can be undone and redone.
+    bool undoPreset();
+    bool redoPreset();
+    bool canUndoPreset() const { return presetUndo.canUndo(); }
+    bool canRedoPreset() const { return presetUndo.canRedo(); }
+    juce::String undoPresetName() const { return presetUndo.getUndoDescription(); }   // what UNDO goes back from
+    juce::String redoPresetName() const { return presetUndo.getRedoDescription(); }
     juce::String presetName() const { return currentPresetName; }
     static juce::File userPresetFolder();
     juce::File saveUserPreset(const juce::String& name);   // returns the file (or {} on failure)
@@ -228,6 +242,13 @@ private:
     int currentProgram = 0;
     juce::String currentPresetName { "INIT" };
     void setParameter(const juce::String& id, float value);
+    // A preset load as one undoable step: every parameter's value (0..1) and the preset's name.
+    struct Snapshot { std::vector<float> values; juce::String name; };
+    Snapshot snapshot() const;
+    void restore(const Snapshot&);
+    void undoable(const juce::String& name, const std::function<void()>& load);
+    void applyPresetNow(const presets::Preset&);
+    juce::UndoManager presetUndo { 0, 64 };
     Smooth presenceDry, presenceRoom;
     Smooth powerGain, masterGain, instrumentGain, ambienceGain, spaceMix;
     float scratchL[chunk] {}, scratchR[chunk] {}, sendL[chunk] {}, sendR[chunk] {};

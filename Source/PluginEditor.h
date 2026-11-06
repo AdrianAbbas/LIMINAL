@@ -345,6 +345,14 @@ public:
     int shownCategory() const { return category; }
     void load(int row);              // as a click on that row (tests)
     int rows() const;
+    // INIT (2026-11-06): "no preset", pinned above every group's list (it never scrolls away),
+    // and RESET / UNDO / REDO beside the preset's name.
+    void loadInit();                 // as a click on the INIT row (or RESET)
+    juce::Rectangle<int> initRowArea() const { return { 16, 58, getWidth() - 32, 22 }; }
+    juce::Button& resetButton() { return reset; }
+    juce::Button& undoButton() { return undo; }
+    juce::Button& redoButton() { return redo; }
+    void refreshUndo();              // the buttons follow what can be undone / redone
     bool poll();                     // export progress; true if something changed
     std::function<void()> onLoad;
     // The list's scrolling (2026-11-02: wheel / trackpad, the bar, keys; see UI/ScrollList.h).
@@ -352,7 +360,11 @@ public:
     int rowAt(juce::Point<int> p) const { return scroller.rowAt(p); }   // (tests: what a click there loads)
 
 private:
-    juce::Rectangle<int> listArea() const { return { 16, 60, getWidth() - 32, visibleRows * 22 }; }
+    juce::Rectangle<int> listArea() const { return { 16, 84, getWidth() - 32, visibleRows * 22 }; }
+    bool hoverInit = false;
+    juce::String headerText() const;
+    juce::String shownName;   // the name the header was laid out for (RESET sits right after it)
+    juce::TextButton reset { "RESET" }, undo { "UNDO" }, redo { "REDO" };
     ui::ScrollList scroller;
     juce::String rowName(int row) const;
     juce::String rowDescription(int row) const;
@@ -371,7 +383,7 @@ private:
     std::unique_ptr<exporter::Job> job;
     juce::String status;
     float shownProgress = -1;
-    static constexpr int visibleRows = 10;
+    static constexpr int visibleRows = 9;
 };
 
 class MainView final : public juce::Component, private juce::Timer {
@@ -567,6 +579,9 @@ class LiminalEditor final : public juce::AudioProcessorEditor {
 public:
     explicit LiminalEditor(LiminalProcessor&);
     void resized() override;
+    void paint(juce::Graphics&) override;
+    bool keyPressed(const juce::KeyPress&) override;
+    static float fitScale(int width, int height);   // the view's scale in a window of that size (whole, centred)
     static constexpr int defaultWidth = MainView::defaultWidth, defaultHeight = MainView::defaultHeight;
     MainView& view() { return main; }
     // For tests and callers: the view's parts.

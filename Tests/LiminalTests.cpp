@@ -30,6 +30,7 @@
 #include <new>
 #include <string>
 #include <set>
+#include <map>
 #include <vector>
 
 // Count C++ allocations on the calling thread while enabled (from WORLDBUILDER's tests).
@@ -1066,6 +1067,7 @@ int renderPlaces(const juce::String& path) {
 #include "TreatmentProbe.h"
 #include "RememberedTests.h"
 #include "StressTests.h"
+#include "InitTests.h"
 
 } // namespace
 
@@ -1312,6 +1314,7 @@ int main(int argc, char** argv) {
     if (run("icons")) testIcons(s);
     if (run("hung")) testHungNotes(s);
     if (run("remembered")) testRemembered(s);
+    if (run("init")) testInit(s);
     if (run("hung") || run("timeline")) testWaveringTimeline(s);
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;
     return s.failed == 0 ? 0 : 1;

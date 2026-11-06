@@ -75,7 +75,7 @@ the checklist below.
   - [x] Part 3 — Hummed Memory removed; DISTANT RADIO in its slot (old sessions load it), icon, presets; in tune, level-matched, distinct — push `[skip ci]`
   - [x] Part 4 — listening render of the four-part piece before/after (`--render-piece`, CI test-logs); DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] **Hotfix + rename 2026-11-06 — Init preset, synth levels, LIMINAL becomes TAPEWORN** (section at the end). Resume from the first unticked line:
-  - [ ] Part 1 — presets: an INIT (no preset) entry at the top of every preset list + a reset button by the preset name, a clean default (state compared with a fresh instance), undoable (UNDO / REDO, Cmd+Z); the PRESETS button visible and reachable at every window size — push `[skip ci]`
+  - [x] Part 1 — presets: an INIT (no preset) entry at the top of every preset list + a reset button by the preset name, a clean default (state compared with a fresh instance), undoable (UNDO / REDO, Cmd+Z); the PRESETS button visible and reachable at every window size — push `[skip ci]`
   - [ ] Part 2 — levels: loudness of all twenty instruments at default (same phrase, same room), the quiet synth-based ones raised so all are within +/-1.5 dB; no clipping; group `loudness` + `instruments` pass — push `[skip ci]`
   - [ ] Part 3 — rename to TAPEWORN by Elsewhere Audio (AU/VST3 names, wordmark, window title, folders, README, manual, scripts, CI artifacts, package; bundle ID com.elsewhereaudio.tapeworn; AU codes and parameter IDs unchanged; the installer removes the old LIMINAL bundles); an old LIMINAL session loads unchanged; snapshots — push `[skip ci]`
   - [ ] Part 4 — DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green

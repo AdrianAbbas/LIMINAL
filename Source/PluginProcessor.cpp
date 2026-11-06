@@ -719,10 +719,63 @@ void LiminalProcessor::resetToDefaults() {
     }
 }
 
+// INIT: a clean default, as a new instance has it.
+void LiminalProcessor::initPreset() {
+    undoable(initName, [this] {
+        resetToDefaults();
+        requestEvolutionReset();
+        currentPresetName = initName;
+    });
+}
+
+LiminalProcessor::Snapshot LiminalProcessor::snapshot() const {
+    Snapshot s;
+    s.values.reserve(mirrored.size());
+    for (const auto& m : mirrored) s.values.push_back(m.parameter->getValue());
+    s.name = currentPresetName;
+    return s;
+}
+
+void LiminalProcessor::restore(const Snapshot& s) {
+    for (std::size_t i = 0; i < mirrored.size() && i < s.values.size(); ++i) {
+        auto* p = mirrored[i].parameter;
+        if (p->getValue() == s.values[i]) continue;
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(s.values[i]);
+        p->endChangeGesture();
+    }
+    currentPresetName = s.name;
+}
+
+namespace {
+struct PresetStep final : juce::UndoableAction {
+    PresetStep(std::function<void(bool)> apply) : applyFn(std::move(apply)) {}
+    bool perform() override { applyFn(true); return true; }    // (the first time: already done)
+    bool undo() override { applyFn(false); return true; }
+    std::function<void(bool)> applyFn;
+};
+}
+
+void LiminalProcessor::undoable(const juce::String& name, const std::function<void()>& load) {
+    auto before = snapshot();
+    load();
+    auto after = snapshot();
+    if (after.values == before.values && after.name == before.name) return;   // nothing changed: nothing to undo
+    presetUndo.beginNewTransaction(name);
+    presetUndo.perform(new PresetStep([this, before = std::move(before), after = std::move(after)](bool forward) { restore(forward ? after : before); }), name);
+}
+
+bool LiminalProcessor::undoPreset() { return presetUndo.undo(); }
+bool LiminalProcessor::redoPreset() { return presetUndo.redo(); }
+
 // What a preset resets before it applies its values depends on its group: a scene sets
 // everything; a place or Character preset only the place's controls; an instrument preset
 // only the instruments (the chosen one back to its defaults).
 void LiminalProcessor::applyPreset(const presets::Preset& preset) {
+    undoable(preset.name, [this, &preset] { applyPresetNow(preset); });
+}
+
+void LiminalProcessor::applyPresetNow(const presets::Preset& preset) {
     using presets::Category;
     const auto resetIds = [&](const juce::StringArray& ids) {
         for (const auto& id : ids)
@@ -767,8 +820,7 @@ void LiminalProcessor::setCurrentProgram(int index) {
     const auto scenes = presets::inCategory(presets::Category::scene);
     currentProgram = std::clamp(index, 0, int(scenes.size()));
     if (currentProgram == 0) {
-        resetToDefaults();
-        currentPresetName = "INIT";
+        initPreset();
     } else {
         applyPreset(presets::factory()[std::size_t(scenes[std::size_t(currentProgram - 1)])]);
     }
@@ -803,9 +855,12 @@ juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
 bool LiminalProcessor::loadUserPreset(const juce::File& file) {
     auto xml = juce::XmlDocument::parse(file);
     if (xml == nullptr || !xml->hasTagName("LIMINAL_PRESET")) return false;
-    resetToDefaults();   // parameters the preset does not know (added later) take their defaults
-    for (auto* e : xml->getChildWithTagNameIterator("PARAM")) setParameter(e->getStringAttribute("id"), float(e->getDoubleAttribute("value")));
-    currentPresetName = xml->getStringAttribute("name", file.getFileNameWithoutExtension());
+    const auto name = xml->getStringAttribute("name", file.getFileNameWithoutExtension());
+    undoable(name, [&] {
+        resetToDefaults();   // parameters the preset does not know (added later) take their defaults
+        for (auto* e : xml->getChildWithTagNameIterator("PARAM")) setParameter(e->getStringAttribute("id"), float(e->getDoubleAttribute("value")));
+        currentPresetName = name;
+    });
     return true;
 }
 

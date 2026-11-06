@@ -1374,8 +1374,47 @@ PresetDrawer::PresetDrawer(LiminalProcessor& p) : processor(p) {
     exportButton.setTooltip("Render the place's own sounds (no instruments) to a WAV file, with the same engine, offline");
     exportButton.onClick = [this] { startExport(); };
     addAndMakeVisible(exportButton);
+    reset.setTooltip("INIT: no preset - every instrument, the place, the effects and LIMINALITY back to their defaults (undoable)");
+    reset.onClick = [this] { loadInit(); };
+    undo.setTooltip("Undo the last preset load");
+    undo.onClick = [this] {
+        processor.undoPreset();
+        if (onLoad) onLoad();
+        refreshUndo();
+        repaint();
+    };
+    redo.setTooltip("Redo the preset load you undid");
+    redo.onClick = [this] {
+        processor.redoPreset();
+        if (onLoad) onLoad();
+        refreshUndo();
+        repaint();
+    };
+    for (auto* b : { &reset, &undo, &redo }) addAndMakeVisible(b);
     setWantsKeyboardFocus(true);   // the list's keys (arrows, page up / down, home / end) once it is clicked
     showCategory(3);
+    refreshUndo();
+}
+
+void PresetDrawer::refreshUndo() {
+    if (shownName != processor.presetName()) {
+        shownName = processor.presetName();
+        resized();
+        repaint();
+    }
+    undo.setEnabled(processor.canUndoPreset());
+    redo.setEnabled(processor.canRedoPreset());
+    undo.setAlpha(undo.isEnabled() ? 1.0f : 0.35f);
+    redo.setAlpha(redo.isEnabled() ? 1.0f : 0.35f);
+    undo.setTooltip(undo.isEnabled() ? "Undo loading " + processor.undoPresetName() : "Nothing to undo");
+    redo.setTooltip(redo.isEnabled() ? "Redo loading " + processor.redoPresetName() : "Nothing to redo");
+}
+
+void PresetDrawer::loadInit() {
+    processor.initPreset();
+    if (onLoad) onLoad();
+    refreshUndo();
+    repaint();
 }
 
 int PresetDrawer::rows() const {
@@ -1407,6 +1446,7 @@ void PresetDrawer::load(int row) {
     if (category == 4) processor.loadUserPreset(userFiles[row]);
     else processor.applyPreset(presets::factory()[std::size_t(presets::inCategory(presets::Category(category))[std::size_t(row)])]);
     if (onLoad) onLoad();
+    refreshUndo();
     repaint();
 }
 
@@ -1418,7 +1458,23 @@ void PresetDrawer::paint(juce::Graphics& g) {
     g.drawRect(area, 1.0f);
     g.setFont(font(9.5f));
     g.setColour(ink.withAlpha(0.45f));
-    g.drawText("PRESETS  -  NOW: " + processor.presetName().toUpperCase(), area.reduced(16, 10).removeFromTop(14), juce::Justification::centredLeft);
+    g.drawFittedText(headerText(), area.reduced(16, 10).removeFromTop(14).toNearestInt().withRight(reset.getX() - 2), juce::Justification::centredLeft, 1, 0.8f);
+    {   // INIT: no preset, above the list
+        const auto r = initRowArea().toFloat();
+        const bool current = processor.presetName() == LiminalProcessor::initName;
+        if (current || hoverInit) {
+            g.setColour(ink.withAlpha(current ? 0.14f : 0.07f));
+            g.fillRoundedRectangle(r, 3.0f);
+        }
+        g.setColour(ink.withAlpha(current ? 1.0f : hoverInit ? 0.9f : 0.72f));
+        g.setFont(font(10.5f, current));
+        g.drawText("INIT", r.reduced(10, 0), juce::Justification::centredLeft);
+        g.setColour(ink.withAlpha(0.45f));
+        g.setFont(font(9.0f));
+        g.drawText("NO PRESET  -  EVERYTHING AT ITS DEFAULT", r.reduced(10, 0).withTrimmedLeft(52), juce::Justification::centredLeft);
+        g.setColour(ink.withAlpha(0.12f));
+        g.fillRect(16.0f, r.getBottom() + 2.0f, float(getWidth() - 32), 1.0f);
+    }
     const int total = rows();
     {
         juce::Graphics::ScopedSaveState clip(g);
@@ -1459,9 +1515,17 @@ void PresetDrawer::paint(juce::Graphics& g) {
                      juce::Justification::centredLeft, 1, 0.8f);
 }
 
+juce::String PresetDrawer::headerText() const { return "PRESETS  -  NOW: " + processor.presetName().toUpperCase(); }
+
 void PresetDrawer::resized() {
     auto area = getLocalBounds().reduced(16, 10);
-    area.removeFromTop(18);
+    {   // the preset's name, RESET right beside it; UNDO / REDO at the end of the line
+        auto header = area.removeFromTop(18).withTrimmedTop(-3);
+        redo.setBounds(header.removeFromRight(46));
+        undo.setBounds(header.removeFromRight(46));
+        const int nameWidth = juce::roundToInt(juce::GlyphArrangement::getStringWidth(font(9.5f), headerText())) + 10;
+        reset.setBounds(header.getX() + std::min(nameWidth, header.getWidth() - 56), header.getY(), 56, header.getHeight());
+    }
     auto tabRow = area.removeFromTop(24);
     const int widths[] { 58, 92, 100, 62, 0 };   // by the length of each word
     for (int i = 0; i < 5; ++i) tabs[std::size_t(i)].setBounds(i < 4 ? tabRow.removeFromLeft(widths[i]) : tabRow);
@@ -1483,6 +1547,12 @@ void PresetDrawer::resized() {
 }
 
 void PresetDrawer::mouseMove(const juce::MouseEvent& e) {
+    const bool onInit = initRowArea().contains(e.getPosition());
+    if (onInit != hoverInit) {
+        hoverInit = onInit;
+        repaint(initRowArea());
+    }
+    if (onInit) { setMouseCursor(juce::MouseCursor::PointingHandCursor); return; }
     const int h = scroller.rowAt(e.getPosition());
     const bool onBar = scroller.scrollable() && scroller.barArea().expanded(3, 0).contains(e.getPosition());
     setMouseCursor(h >= 0 ? juce::MouseCursor::PointingHandCursor : onBar ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
@@ -1494,6 +1564,7 @@ void PresetDrawer::mouseMove(const juce::MouseEvent& e) {
 
 void PresetDrawer::mouseExit(const juce::MouseEvent&) {
     hover = -1;
+    hoverInit = false;
     repaint();
 }
 
@@ -1514,6 +1585,7 @@ void PresetDrawer::mouseUp(const juce::MouseEvent& e) {
     scroller.mouseUp();
     if (wasDragging) { repaint(); return; }
     if (!e.mouseWasClicked()) return;
+    if (initRowArea().contains(e.getPosition())) { loadInit(); return; }
     const int row = scroller.rowAt(e.getPosition());
     if (row >= 0) load(row);
 }
@@ -1556,6 +1628,7 @@ void PresetDrawer::startExport() {
 }
 
 bool PresetDrawer::poll() {
+    if (shownName != processor.presetName() || undo.isEnabled() != processor.canUndoPreset() || redo.isEnabled() != processor.canRedoPreset()) refreshUndo();   // (a host program, automation)
     if (job == nullptr) return false;
     if (job->finished()) {
         status = job->succeeded() ? "SAVED " + job->file().getFileName().toUpperCase() : "EXPORT FAILED";
@@ -1822,6 +1895,7 @@ void MainView::closeDrawersExcept(juce::Component* keep) {
 void MainView::showPresets(bool show) {
     if (show) closeDrawersExcept(&presetsPanel);
     presetsPanel.setVisible(show);
+    if (show) presetsPanel.refreshUndo();
     presetsButton.setToggleState(show, juce::dontSendNotification);
     repaint(drawerArea());
     repaint(presetsButton.getBounds());
@@ -2443,11 +2517,32 @@ LiminalEditor::LiminalEditor(LiminalProcessor& p) : AudioProcessorEditor(p), pro
     resized();
 }
 
+// The view is scaled to fit the window whole (2026-11-06): a host that gives the window another
+// shape than ours (or a size outside the limits) gets the view centred, never cut off - the page
+// buttons, PRESETS among them, stay on screen and clickable at every size.
+float LiminalEditor::fitScale(int width, int height) {
+    return std::max(0.05f, std::min(float(width) / float(defaultWidth), float(height) / float(defaultHeight)));
+}
+
 void LiminalEditor::resized() {
-    const float scale = float(getWidth()) / float(defaultWidth);
+    const float scale = fitScale(getWidth(), getHeight());
+    const float x = std::floor(0.5f * (float(getWidth()) - scale * float(defaultWidth)));
+    const float y = std::floor(0.5f * (float(getHeight()) - scale * float(defaultHeight)));
     main.setBounds(0, 0, defaultWidth, defaultHeight);
-    main.setTransform(juce::AffineTransform::scale(scale));
-    if (ready) processor.uiScale.store(scale);
+    main.setTransform(juce::AffineTransform::scale(scale).translated(std::max(0.0f, x), std::max(0.0f, y)));
+    if (ready) processor.uiScale.store(std::clamp(scale, 0.85f, 1.5f));
+}
+
+void LiminalEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour(0xff07100f)); }   // (only seen beside a view the host's window does not fit)
+
+// Cmd+Z / Cmd+Shift+Z: undo / redo the last preset load (when the host passes the keys on).
+bool LiminalEditor::keyPressed(const juce::KeyPress& key) {
+    if (key.getKeyCode() != 'Z' && key.getKeyCode() != 'z') return false;
+    if (!key.getModifiers().isCommandDown()) return false;
+    const bool done = key.getModifiers().isShiftDown() ? processor.redoPreset() : processor.undoPreset();
+    main.presetDrawer().refreshUndo();
+    main.repaint();
+    return done;
 }
 
 } // namespace liminal
