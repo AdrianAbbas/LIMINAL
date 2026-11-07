@@ -93,7 +93,7 @@ the checklist below.
   - [x] Part 1 — identity: company "Windward Audio" for both, AU/VST3 names VACANCY / VACANCY FX, bundle IDs com.windwardaudio.vacancy / com.windwardaudio.vacancyfx; AU codes (aumu Lmnl **Veil**, aufx Tpfx Wnwd) and every parameter ID unchanged (why Veil stays: see the section); wordmark, window title, thread names, export file names; presets in `~/Library/Windward Audio/VACANCY[ FX]/Presets`, TAPEWORN's, LIMINAL's and TAPEWORN FX's carried over (`Brand.h`) — push `[skip ci]`
   - [x] Part 2 — install / uninstall / CI: the installer removes LIMINAL, TAPEWORN and TAPEWORN FX by name and by their old bundle IDs (user and system folders); package, artifacts, release `VACANCY-*`; bundle gate (names, IDs, no old name in any Info.plist); CI plants all the old copies and checks the registry lists each plug-in once under Windward Audio; AU harnesses: host-visible names, a TAPEWORN song and a TAPEWORN FX song restored — push `[skip ci]`
   - [x] Part 3 — tests (fixtures of sessions written by TAPEWORN and TAPEWORN FX themselves; preset carry-over from each old folder), README, manual (`docs/VACANCY_FX.md`), INSTALL.txt, docs, snapshots — push `[skip ci]`
-  - [ ] Part 4 — DEVLOG section + GarageBand handoff; final push **without** `[skip ci]`, wait for CI green
+  - [x] Part 4 — DEVLOG section + GarageBand handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
@@ -3059,6 +3059,17 @@ code instead of the name would show two groups; GarageBand and Logic group by th
 - **Snapshots** (new wordmarks): `docs/snapshots/vacancy-main.jpg`, `vacancy-presets*.jpg`,
   `vacancy-window-*.jpg` (`LiminalTests --rename-snapshots`) and `vacancy-fx*.jpg` (the effect's editor and
   its three pages); the `tapeworn-*.jpg` the earlier sections name were replaced by these.
+
+### Local results (this container: no recordings, no captures - the private samples are fetched in CI only)
+
+- VACANCY FX full suite: **131 passed, 0 failed** (`sessions`: 28 TAPEWORN FX states, worst 0.0005 dB).
+- VACANCY `smoke,sessions,init`: **64 passed, 0 failed** (LIMINAL's 32 states worst 0.006 dB, TAPEWORN's
+  32 states worst 0.000 dB; both preset carry-overs).
+- VACANCY full suite: 1223 passed, 12 failed, all on the synthesised stand-ins or CPU timing on a
+  loaded container (loudness tables calibrated on the recordings, stand-in clicks in `hung`, the
+  Lounge E-Piano + clarinet stand-in level, Liminality CPU 39 % vs 6 % with four shards at once, one
+  library margin): none touches names, state or presets, and the rename changes no DSP. CI runs the
+  suite with the recordings.
 
 ### Not verified here
 
