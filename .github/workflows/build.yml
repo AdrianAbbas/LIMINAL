@@ -81,8 +81,8 @@ jobs:
         run: /usr/bin/arch -arm64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters,recorded,woodwind
       - name: Smoke test (x86_64 under Rosetta)
         run: /usr/bin/arch -x86_64 build/LiminalTests_artefacts/Release/LiminalTests --only smoke,parameters
-      # TAPEWORN FX (2026-11-06), the effect built from the same sources: its own suite.
-      - name: TAPEWORN FX smoke test (arm64 and x86_64 under Rosetta)
+      # VACANCY FX (2026-11-06), the effect built from the same sources: its own suite.
+      - name: VACANCY FX smoke test (arm64 and x86_64 under Rosetta)
         run: |
           /usr/bin/arch -arm64 build/TapewornFXTests_artefacts/Release/TapewornFXTests --only smoke,parameters,latency,mono
           /usr/bin/arch -x86_64 build/TapewornFXTests_artefacts/Release/TapewornFXTests --only smoke,parameters,latency
@@ -103,7 +103,7 @@ jobs:
       - name: Build AU host harnesses (instrument and effect)
         run: bash scripts/build-au-harness.sh build/LiminalAUHarness
       - name: Install a quarantined download with install-mac.sh, then auval and harnesses for both plug-ins (arm64 + x86_64)
-        run: bash scripts/ci-user-install-test.sh dist/TAPEWORN-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
+        run: bash scripts/ci-user-install-test.sh dist/VACANCY-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
       # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
       - name: Publish install and arm64 harness logs as annotations
         if: always()
@@ -118,20 +118,20 @@ jobs:
       - name: Upload installable package (only when every check passed)
         uses: actions/upload-artifact@v4
         with:
-          name: TAPEWORN-macOS-Universal
-          path: dist/TAPEWORN-macOS-Universal.zip
+          name: VACANCY-macOS-Universal
+          path: dist/VACANCY-macOS-Universal.zip
           if-no-files-found: error
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: TAPEWORN-macOS-diagnostics
+          name: VACANCY-macOS-diagnostics
           path: |
             build/ci-logs/
           if-no-files-found: warn
   linux:
     runs-on: ubuntu-24.04
-    # 2026-11-06: 90 (as the macOS job): TAPEWORN FX's suite and listening render join the instrument's.
+    # 2026-11-06: 90 (as the macOS job): VACANCY FX's suite and listening render join the instrument's.
     timeout-minutes: 90
     env:
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -186,13 +186,13 @@ jobs:
       # The full processor suite in parallel shards, then the CPU-measuring group alone.
       - name: Processor tests (full suite)
         run: bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests build/test-logs
-      # TAPEWORN FX: its full suite (strength on guitar, vocal and a full mix in every room, level match,
+      # VACANCY FX: its full suite (strength on guitar, vocal and a full mix in every room, level match,
       # clicks, latency, real-time safety, presets, the editor), then its listening render.
-      - name: TAPEWORN FX processor tests (full suite)
+      - name: VACANCY FX processor tests (full suite)
         run: |
           set -o pipefail
           build/TapewornFXTests_artefacts/Release/TapewornFXTests --snapshot build/test-logs/fx-editor.png | tee build/test-logs/fx-tests.txt
-      - name: TAPEWORN FX listening render (the same guitar, vocal and mix phrase dry and through six rooms at LIMINALITY 0, 50 and 100 percent, with cue sheet)
+      - name: VACANCY FX listening render (the same guitar, vocal and mix phrase dry and through six rooms at LIMINALITY 0, 50 and 100 percent, with cue sheet)
         run: build/TapewornFXTests_artefacts/Release/TapewornFXTests --render build/test-logs/fx-listening
       - name: Listening render (each instrument, in the corridor, then dry)
         run: build/LiminalTests_artefacts/Release/LiminalTests --render build/test-logs/m1b-instruments.wav
@@ -223,7 +223,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: TAPEWORN-linux-test-logs
+          name: VACANCY-linux-test-logs
           path: build/test-logs/
           if-no-files-found: warn
   release:
@@ -236,8 +236,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: TAPEWORN-macOS-Universal
+          name: VACANCY-macOS-Universal
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" TAPEWORN-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "TAPEWORN $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" VACANCY-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "VACANCY $GITHUB_REF_NAME" --generate-notes

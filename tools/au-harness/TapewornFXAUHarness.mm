@@ -1,7 +1,7 @@
-// TapewornFXAUHarness: a small AudioToolbox host that loads aufx/Tpfx/Wnwd (TAPEWORN FX, by
-// Windward Audio) the way real hosts do and checks that it actually processes sound and shows its
+// TapewornFXAUHarness: a small AudioToolbox host that loads aufx/Tpfx/Wnwd (VACANCY FX, by
+// Windward Audio; TAPEWORN FX until 2026-11-07) the way real hosts do and checks that it actually processes sound and shows its
 // view. Adapted from DUNGEON CRAWLER FX's effect harness (AdrianAbbas/Dungeon-Crawler,
-// tools/au-harness, the same developer); the instrument, TAPEWORN, keeps its own harness
+// tools/au-harness, the same developer); the instrument, VACANCY, keeps its own harness
 // (LiminalAUHarness.mm).
 //
 // It deliberately does not use JUCE's hosting code. Three hosting paths run:
@@ -12,15 +12,16 @@
 //      and Logic use on Apple Silicon, where AUv2 plug-ins are bridged into
 //      AUHostingServiceXPC), rendered by AVAudioEngine in manual rendering mode
 //
-// TAPEWORN FX is an effect (audio in, audio out) with 20 ms of reported latency (its LIMINALITY
+// VACANCY FX is an effect (audio in, audio out) with 20 ms of reported latency (its LIMINALITY
 // pitch line): every comparison with the input is made that many samples later (the plug-in's
 // kAudioUnitProperty_Latency). Each path renders a 440 Hz sine and checks that the input is pulled
 // and processed, host bypass and Mix 0 pass the input through exactly (latency compensated),
-// Output and Room changes, presets (report only), the state round trip and the editor view.
+// Output and Room changes, presets (report only), the state round trip and the editor view;
+// the host-visible name, and (--tapeworn-fx-state) a song's state saved by TAPEWORN FX restored.
 //
 // Usage:
 //   TapewornFXAUHarness [--strict] [--no-window] [--component aufx:Tpfx:Wnwd]
-//                 [--only v2-oop|v2-inproc|auaudiounit]
+//                 [--only v2-oop|v2-inproc|auaudiounit] [--tapeworn-fx-state file]
 //
 // Without --strict the harness reports and exits 0 (used to characterise an
 // old build). With --strict any FAIL gives exit code 1. Exit code 2 means the
@@ -161,7 +162,8 @@ const char* harnessArchitecture() {
    #endif
 }
 
-constexpr const char* pluginImageNeedle = "TAPEWORN FX.component/Contents/MacOS/";
+constexpr const char* pluginImageNeedle = "VACANCY FX.component/Contents/MacOS/";
+std::string oldStatePath;   // --tapeworn-fx-state: a state TAPEWORN FX saved (VACANCY FX's old name)
 
 // Out-of-process rendering goes through Apple's render pipe, which expects a host's
 // timing: one block per block-duration with host time set, and playback stopped
@@ -753,6 +755,40 @@ void v2Suite(Report& r, AudioComponent component, bool outOfProcess, bool useWin
         }
         r.trace("releasing ClassInfo");
         if (state != nullptr) CFRelease(state);
+
+        // A song saved with TAPEWORN FX (VACANCY FX's old name, 2026-11-07): the plug-in's state as a host
+        // keeps it (ClassInfo: version, type, subtype, manufacturer, JUCE's state data), written by
+        // TAPEWORN FX ("moved, A / B" in Tests/fixtures/sessions-tapeworn-fx.xml), restores in VACANCY FX.
+        if (!oldStatePath.empty()) {
+            NSData* blob = [NSData dataWithContentsOfFile: [NSString stringWithUTF8String: oldStatePath.c_str()]];
+            if (r.check(blob != nil && blob.length > 0, "a TAPEWORN FX song's saved state is readable", oldStatePath)) {
+                AudioComponentDescription d {};
+                AudioComponentGetDescription(component, &d);
+                NSDictionary* classInfo = @{ @kAUPresetVersionKey: @0, @kAUPresetTypeKey: @(int(d.componentType)), @kAUPresetSubtypeKey: @(int(d.componentSubType)),
+                                             @kAUPresetManufacturerKey: @(int(d.componentManufacturer)), @kAUPresetNameKey: @"Untitled", @"jucePluginState": blob };
+                OSStatus s4 = noErr;
+                AudioComponentInstance old = instantiate(component, outOfProcess, s4);
+                if (r.check(old != nullptr, "an instance for the TAPEWORN FX song", statusText(s4))) {
+                    CFPropertyListRef info = (__bridge CFPropertyListRef) classInfo;
+                    s4 = AudioUnitSetProperty(old, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &info, sizeof(info));
+                    pump(0.3);
+                    const auto oldParams = listParameters(old);
+                    const Param* room = findParameter(oldParams, { "Room" });
+                    const Param* liminality = findParameter(oldParams, { "Liminality" });
+                    const Param* mixParam = findParameter(oldParams, { "Mix" });
+                    const float roomValue = room != nullptr ? getParameter(old, room->id) : -1.0f;
+                    const float limValue = liminality != nullptr ? getParameter(old, liminality->id) : -1.0f;
+                    const float mixValue = mixParam != nullptr ? getParameter(old, mixParam->id) : -1.0f;
+                    // (the saved room is index 6, the subway; LIMINALITY 80 %, Mix 70 %: real values, or 0..1 if the host scales them)
+                    const bool roomOk = std::abs(roomValue - 6.0f) < 0.01f || std::abs(roomValue - 6.0f / 9.0f) < 0.01f;
+                    const bool limOk = std::abs(limValue - 0.8f) < 0.01f;
+                    const bool mixOk = std::abs(mixValue - 0.7f) < 0.01f;
+                    r.check(s4 == noErr && roomOk && limOk && mixOk, "a song saved with TAPEWORN FX opens in VACANCY FX with its settings",
+                            strf("set=%s Room=%g Liminality=%g Mix=%g", statusText(s4).c_str(), double(roomValue), double(limValue), double(mixValue)));
+                    AudioComponentInstanceDispose(old);
+                }
+            }
+        }
         r.trace("restoring changed parameters");
         for (const auto& [id, original] : changed) setParameter(unit, id, original);
     }
@@ -985,9 +1021,10 @@ void auAudioUnitSuite(Report& r, AudioComponentDescription description, bool use
 }
 
 //==============================================================================
-void describeComponent(Report& r, AudioComponent component) {
+void describeComponent(Report& r, AudioComponent component, bool ours) {
     CFStringRef name = nullptr;
     AudioComponentCopyName(component, &name);
+    if (ours) r.check(toString(name) == "Windward Audio: VACANCY FX", "the host sees it as 'Windward Audio: VACANCY FX'", toString(name));
     UInt32 version = 0;
     AudioComponentGetVersion(component, &version);
     AudioComponentDescription d {};
@@ -1013,6 +1050,7 @@ int main(int argc, const char* argv[]) {
             else if (a == "--no-window") useWindow = false;
             else if (a == "--only" && i + 1 < argc) only = argv[++i];
             else if (a == "--component" && i + 1 < argc) componentText = argv[++i];
+            else if (a == "--tapeworn-fx-state" && i + 1 < argc) oldStatePath = argv[++i];
             else { std::fprintf(stderr, "unknown argument %s\n", a.c_str()); return 64; }
         }
         if (componentText.size() != 14 || componentText[4] != ':' || componentText[9] != ':') {
@@ -1047,7 +1085,7 @@ int main(int argc, const char* argv[]) {
         int matches = 0;
         for (AudioComponent c = nullptr; (c = AudioComponentFindNext(c, &description)) != nullptr;) ++matches;
         r.check(matches == 1, "exactly one registered component matches", strf("%d", matches));
-        describeComponent(r, component);
+        describeComponent(r, component, componentText == "aufx:Tpfx:Wnwd");
 
         // Out-of-process first, before the in-process load maps the plug-in into this process.
         if (only.empty() || only == "v2-oop") v2Suite(r, component, true, useWindow);

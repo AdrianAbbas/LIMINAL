@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Install a TAPEWORN.component into ~/Library/Audio/Plug-Ins/Components, restart the
+# Install a VACANCY.component into ~/Library/Audio/Plug-Ins/Components, restart the
 # AU registrar and wait until aumu/Lmnl/Veil is listed. Used by CI experiments.
-# Usage: scripts/register-au.sh <path/to/TAPEWORN.component>
+# Usage: scripts/register-au.sh <path/to/VACANCY.component>
 set -euo pipefail
 source_bundle="$1"
 components="$HOME/Library/Audio/Plug-Ins/Components"
-installed="$components/TAPEWORN.component"
+installed="$components/VACANCY.component"
 mkdir -p "$components"
 rm -rf "$installed"
 /usr/bin/ditto "$source_bundle" "$installed"

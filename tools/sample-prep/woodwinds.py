@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepares woodwind samples (one note per file) for TAPEWORN's sample bank (2026-11-06).
+"""Prepares woodwind samples (one note per file) for VACANCY's sample bank (2026-11-06).
 
 Two sources, both outside this repository (nothing they hold is committed here):
   * the free CC0 library "VSCO 2 Community Edition" (docs/LICENSES/README.md): its sustained

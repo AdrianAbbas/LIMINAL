@@ -2,7 +2,7 @@
 # Fetches the woodwind samples of the free CC0 library "VSCO 2 Community Edition" (Versilian Studios)
 # from its OFFICIAL source, github.com/sgossner/VSCO-2-CE at release tag 1.1.0 (docs/LICENSES/README.md),
 # and prepares them into <samples out> with tools/sample-prep/woodwinds.py (sets ww-flute, ww-clarinet).
-# Only what TAPEWORN uses is fetched (a sparse, blob-filtered checkout: the sustained flute and clarinet
+# Only what VACANCY uses is fetched (a sparse, blob-filtered checkout: the sustained flute and clarinet
 # folders, LICENSE, Readme.txt); <cache dir> keeps it between runs (actions/cache). The licence is checked
 # every time: the LICENSE file must be the CC0 1.0 text recorded in docs/LICENSES (md5 below), or nothing
 # is prepared and the step fails. Nothing fetched or prepared here is committed. Without network access

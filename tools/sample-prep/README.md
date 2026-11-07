@@ -1,7 +1,7 @@
-# Sample preparation (TAPEWORN Milestone 8)
+# Sample preparation (VACANCY Milestone 8)
 
 Copied from LIGHT SEEKER's `tools/sample-prep` (itself WORLDBUILDER's; those repositories were
-only read): `prepare.py`, `sweeps.py` unchanged, `manifest.json` rewritten for TAPEWORN (only the
+only read): `prepare.py`, `sweeps.py` unchanged, `manifest.json` rewritten for VACANCY (only the
 sets its instruments play; everything else listed in `unused` with the reason), plus
 **`liminal.py`**, run after `prepare.py` on its output: the Forgotten Piano's measurements
 (each note's onset and damper point, the short->long handover aligned on the waveform, the

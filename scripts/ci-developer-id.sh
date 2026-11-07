@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # OPTIONAL: Developer ID signing with hardened runtime, notarisation and stapling,
-# for distributing TAPEWORN to other people. CI runs this only when the signing
+# for distributing VACANCY to other people. CI runs this only when the signing
 # secrets exist; without them the build is ad-hoc signed instead.
 # UNTESTED: no signing identity was available when this was written.
 #
@@ -13,20 +13,20 @@
 set -euo pipefail
 artefacts="$1"
 fx="${2:-}"
-keychain="$RUNNER_TEMP/tapeworn-signing.keychain-db"
+keychain="$RUNNER_TEMP/vacancy-signing.keychain-db"
 keychain_password="$(/usr/bin/uuidgen)"
 /usr/bin/security create-keychain -p "$keychain_password" "$keychain"
 /usr/bin/security set-keychain-settings -lut 21600 "$keychain"
 /usr/bin/security unlock-keychain -p "$keychain_password" "$keychain"
-echo "$MACOS_CERTIFICATE" | /usr/bin/base64 --decode > "$RUNNER_TEMP/tapeworn-cert.p12"
-/usr/bin/security import "$RUNNER_TEMP/tapeworn-cert.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-rm -f "$RUNNER_TEMP/tapeworn-cert.p12"
+echo "$MACOS_CERTIFICATE" | /usr/bin/base64 --decode > "$RUNNER_TEMP/vacancy-cert.p12"
+/usr/bin/security import "$RUNNER_TEMP/vacancy-cert.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+rm -f "$RUNNER_TEMP/vacancy-cert.p12"
 # shellcheck disable=SC2046
 /usr/bin/security list-keychains -d user -s "$keychain" $(/usr/bin/security list-keychains -d user | tr -d '"')
 /usr/bin/security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
 
-bundles=("$artefacts/AU/TAPEWORN.component" "$artefacts/VST3/TAPEWORN.vst3" "$artefacts/Standalone/TAPEWORN.app")
-[[ -n "$fx" ]] && bundles+=("$fx/AU/TAPEWORN FX.component" "$fx/VST3/TAPEWORN FX.vst3")
+bundles=("$artefacts/AU/VACANCY.component" "$artefacts/VST3/VACANCY.vst3" "$artefacts/Standalone/VACANCY.app")
+[[ -n "$fx" ]] && bundles+=("$fx/AU/VACANCY FX.component" "$fx/VST3/VACANCY FX.vst3")
 for bundle in "${bundles[@]}"; do
     /usr/bin/codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$bundle"
     /usr/bin/codesign --verify --strict --verbose=2 "$bundle"

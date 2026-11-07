@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TAPEWORN FX's level match table (2026-11-06).
+"""VACANCY FX's level match table (2026-11-06).
 
 Reads the output of `TapewornFXTests --calibrate-levels` (lines "place character offset_db": each
 room's loudness against the input, the mean over the guitar, vocal and mix test sources, measured
