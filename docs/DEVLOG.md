@@ -89,7 +89,7 @@ the checklist below.
   - [x] Part 1 — prep (`tools/sample-prep/woodwinds.py`: soft sustained flute + clarinet, looped, in tune; the alto recorder slot), CI fetch from the official source (cached, licence checked, never committed) — push `[skip ci]`
   - [x] Part 2 — the wind layer (`DSP/Woodwind`): recorded + synthesised stand-in (level-matched), always heard distant and faded (its own remembered treatment); optional blend on its own control for Elevator Vibraphone (flute) and Lounge E-Piano (clarinet); Recorder voice (the developer's alto recorder when recorded, else the flute); editor, presets — push `[skip ci]`
   - [x] Part 3 — tests (group `woodwind`: cents report, clicks at loops / note-offs, realistic loudness, distinct, Liminality and the rooms), listening render `--render-woodwinds` (before / after, dry + three rooms), DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
-- [ ] **Rename + company 2026-11-07 — TAPEWORN becomes VACANCY, TAPEWORN FX becomes VACANCY FX, both by Windward Audio** (section at the end) — 1.0 is frozen: names only. Resume from the first unticked line:
+- [x] **Rename + company 2026-11-07 — TAPEWORN becomes VACANCY, TAPEWORN FX becomes VACANCY FX, both by Windward Audio** (section at the end) — *waiting for the developer's GarageBand check* — 1.0 is frozen: names only. Resume from the first unticked line:
   - [x] Part 1 — identity: company "Windward Audio" for both, AU/VST3 names VACANCY / VACANCY FX, bundle IDs com.windwardaudio.vacancy / com.windwardaudio.vacancyfx; AU codes (aumu Lmnl **Veil**, aufx Tpfx Wnwd) and every parameter ID unchanged (why Veil stays: see the section); wordmark, window title, thread names, export file names; presets in `~/Library/Windward Audio/VACANCY[ FX]/Presets`, TAPEWORN's, LIMINAL's and TAPEWORN FX's carried over (`Brand.h`) — push `[skip ci]`
   - [x] Part 2 — install / uninstall / CI: the installer removes LIMINAL, TAPEWORN and TAPEWORN FX by name and by their old bundle IDs (user and system folders); package, artifacts, release `VACANCY-*`; bundle gate (names, IDs, no old name in any Info.plist); CI plants all the old copies and checks the registry lists each plug-in once under Windward Audio; AU harnesses: host-visible names, a TAPEWORN song and a TAPEWORN FX song restored — push `[skip ci]`
   - [x] Part 3 — tests (fixtures of sessions written by TAPEWORN and TAPEWORN FX themselves; preset carry-over from each old folder), README, manual (`docs/VACANCY_FX.md`), INSTALL.txt, docs, snapshots — push `[skip ci]`
@@ -3090,3 +3090,18 @@ check that).
    Mix and sound. The window shows the VACANCY / VACANCY FX wordmark.
 4. PRESETS > USER: the presets you saved with TAPEWORN (or LIMINAL) and with TAPEWORN FX are there;
    new ones go to `~/Library/Windward Audio/VACANCY/Presets` and `.../VACANCY FX/Presets`.
+
+### CI after the final push (2026-11-07)
+
+**`d78263f`: CI green on the first run** (run 42352582934). `Prepared: 790 notes in all` + both
+woodwinds. Linux: the instrument's full suite **1391 passed, 0 failed** (on the recordings: the twelve
+stand-in / CPU misses of this container are not there), VACANCY FX **131 passed, 0 failed**, every
+listening render. macOS: build; smoke on arm64 (140 / 0) and x86_64 (18 / 0), VACANCY FX smoke 44 / 0
+and 39 / 0 (name, Windward Audio, codes unchanged); the bundle gate (names, factories, codes, bundle IDs
+`com.windwardaudio.vacancy` / `.vacancyfx`, no old name in any Info.plist); package; the installer
+removed all seven planted old copies (LIMINAL, TAPEWORN, TAPEWORN FX as AU and VST3, and the renamed
+"Old Effect Copy.component" by its old bundle ID); the registry lists `aumu Lmnl Veil` once as
+"Windward Audio: VACANCY" and `aufx Tpfx Wnwd` once as "Windward Audio: VACANCY FX", exactly two
+Windward Audio entries, no LIMINAL / TAPEWORN / Elsewhere; auval on both (arm64 + x86_64) and both AU
+harnesses in- and out-of-process (strict) with the host-visible names and the LIMINAL, TAPEWORN and
+TAPEWORN FX songs restored. The installable zip is the run's `VACANCY-macOS-Universal` artifact.
