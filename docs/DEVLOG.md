@@ -1,4 +1,4 @@
-# TAPEWORN (formerly LIMINAL) — Development log
+# VACANCY and VACANCY FX (formerly LIMINAL, then TAPEWORN and TAPEWORN FX) — Development log
 
 Read `LIMINAL_CLAUDE_BRIEF.md` first, then `LIMINAL_DIRECTION_UPDATE_1.md`, then
 `LIMINAL_DIRECTION_UPDATE_2.md` (it overrides the other two where they conflict). Resume from
@@ -89,6 +89,11 @@ the checklist below.
   - [x] Part 1 — prep (`tools/sample-prep/woodwinds.py`: soft sustained flute + clarinet, looped, in tune; the alto recorder slot), CI fetch from the official source (cached, licence checked, never committed) — push `[skip ci]`
   - [x] Part 2 — the wind layer (`DSP/Woodwind`): recorded + synthesised stand-in (level-matched), always heard distant and faded (its own remembered treatment); optional blend on its own control for Elevator Vibraphone (flute) and Lounge E-Piano (clarinet); Recorder voice (the developer's alto recorder when recorded, else the flute); editor, presets — push `[skip ci]`
   - [x] Part 3 — tests (group `woodwind`: cents report, clicks at loops / note-offs, realistic loudness, distinct, Liminality and the rooms), listening render `--render-woodwinds` (before / after, dry + three rooms), DEVLOG section + handoff; final push **without** `[skip ci]`, wait for CI green
+- [ ] **Rename + company 2026-11-07 — TAPEWORN becomes VACANCY, TAPEWORN FX becomes VACANCY FX, both by Windward Audio** (section at the end) — 1.0 is frozen: names only. Resume from the first unticked line:
+  - [x] Part 1 — identity: company "Windward Audio" for both, AU/VST3 names VACANCY / VACANCY FX, bundle IDs com.windwardaudio.vacancy / com.windwardaudio.vacancyfx; AU codes (aumu Lmnl **Veil**, aufx Tpfx Wnwd) and every parameter ID unchanged (why Veil stays: see the section); wordmark, window title, thread names, export file names; presets in `~/Library/Windward Audio/VACANCY[ FX]/Presets`, TAPEWORN's, LIMINAL's and TAPEWORN FX's carried over (`Brand.h`) — push `[skip ci]`
+  - [x] Part 2 — install / uninstall / CI: the installer removes LIMINAL, TAPEWORN and TAPEWORN FX by name and by their old bundle IDs (user and system folders); package, artifacts, release `VACANCY-*`; bundle gate (names, IDs, no old name in any Info.plist); CI plants all the old copies and checks the registry lists each plug-in once under Windward Audio; AU harnesses: host-visible names, a TAPEWORN song and a TAPEWORN FX song restored — push `[skip ci]`
+  - [x] Part 3 — tests (fixtures of sessions written by TAPEWORN and TAPEWORN FX themselves; preset carry-over from each old folder), README, manual (`docs/VACANCY_FX.md`), INSTALL.txt, docs, snapshots — push `[skip ci]`
+  - [ ] Part 4 — DEVLOG section + GarageBand handoff; final push **without** `[skip ci]`, wait for CI green
 - [ ] 7 — Final sound/visual polish and validation (not in tonight's plan)
 - [x] **8 — The developer's own recordings from `AdrianAbbas/Samples`** (2026-11-02; section at the end) — *waiting for the developer's GarageBand listen*
   - [x] 8.1 Sample prep: `tools/sample-prep` copied from LIGHT SEEKER (prepare.py, sweeps.py, README; manifest rewritten for LIMINAL) + `liminal.py` (piano onset/damper, short->long handover aligned on the waveform, layer correlation, natural-decay tail, noises, stretch curve); `scripts/ci-fetch-samples.sh` fetches once for the recordings and the captures (replaces `ci-fetch-captures.sh`), prints `Prepared: N notes (set)`; never committed — push `[skip ci]`
@@ -2963,3 +2968,114 @@ Nothing was listened to (no audio output in this container); macOS, auval, Garag
   including `woodwinds.flac` (artifact `TAPEWORN-linux-test-logs`). macOS: build, smoke on arm64 (with
   `woodwind`) and x86_64, bundle gate, package, install, auval and both harnesses; the installable zip is
   the run's `TAPEWORN-macOS-Universal` artifact.
+
+## Rename + company 2026-11-07 — TAPEWORN becomes VACANCY, TAPEWORN FX becomes VACANCY FX, by Windward Audio
+
+The request: both plug-ins under one company, **Windward Audio** (the instrument still showed
+"Elsewhere Audio"), and new names: TAPEWORN becomes **VACANCY**, TAPEWORN FX becomes **VACANCY FX**.
+Songs made with LIMINAL, TAPEWORN and TAPEWORN FX must still open with their settings. 1.0 is frozen:
+nothing but names changed (no sound, no parameter, no layout).
+
+### The manufacturer code: kept (Veil), only the company name changed
+
+Checked first, as asked. An Audio Unit is found by its component description: **type, subtype and
+manufacturer code**. GarageBand and Logic store exactly these three codes for every plug-in in a song
+(and the AU's ClassInfo, its saved state, carries them too); on opening they look the component up by
+them, and the name ("Company: Product") is only what the menus show. A new manufacturer code for the
+instrument (e.g. the effect's `Wnwd`) would make `aumu Lmnl Wnwd` a different Audio Unit: every song
+made with LIMINAL or TAPEWORN would open with the plug-in missing. JUCE also derives the VST3 class
+ID from the manufacturer and plug-in codes (`ABCDEF019182FAEB5665696C4C6D6E6C` = ...`Veil` `Lmnl`), so
+VST3 projects would break the same way. **So the instrument keeps `aumu Lmnl Veil` and only its
+displayed company changes** (`COMPANY_NAME "Windward Audio"`): hosts list the AU by the name
+"Windward Audio: VACANCY", which is what puts it under **Windward Audio** in GarageBand's and Logic's
+menus, next to "Windward Audio: VACANCY FX" (`aufx Tpfx Wnwd`, also unchanged). The two codes differ
+(Veil / Wnwd) but nothing a user sees shows a code. (The cost: a host that grouped by the four-letter
+code instead of the name would show two groups; GarageBand and Logic group by the name.)
+
+### What changed
+
+| | VACANCY (instrument) | VACANCY FX (effect) |
+|---|---|---|
+| AU name (host menus) | "Windward Audio: VACANCY" (was "Elsewhere Audio: TAPEWORN") | "Windward Audio: VACANCY FX" (was "...: TAPEWORN FX") |
+| VST3 name / vendor | VACANCY / Windward Audio | VACANCY FX / Windward Audio |
+| Bundle ID | `com.windwardaudio.vacancy` (was `com.elsewhereaudio.tapeworn`) | `com.windwardaudio.vacancyfx` (was `com.windwardaudio.tapewornfx`) |
+| Bundles | `VACANCY.component`, `.vst3`, `.app` | `VACANCY FX.component`, `.vst3` |
+| AU factory | `VACANCYAUFactory` | `VacancyFXAUFactory` |
+| Presets | `~/Library/Windward Audio/VACANCY/Presets`, `.vacancypreset` | `~/Library/Windward Audio/VACANCY FX/Presets`, `.vacancyfxpreset` |
+| Scene cache | `~/Library/Windward Audio/VACANCY/Scenes` | `~/Library/Windward Audio/VACANCY FX/Scenes` |
+
+- **Unchanged on purpose:** the AU type / subtype / manufacturer codes of both (`aumu Lmnl Veil`,
+  `aufx Tpfx Wnwd`) and so the VST3 class IDs, every parameter ID, the states' XML tags (`LIMINAL`,
+  `TAPEWORN_FX`), the CMake targets (`LIMINAL`, `TapewornFX`), the test binaries and the code's
+  internal names. Nothing in the sound or the interface beyond the names.
+- **The editor:** the wordmark and the standalone's window title read VACANCY / VACANCY FX (both come
+  from `Brand.h` / the plug-in name); exported ambience files are "VACANCY <place> - <Character>.wav";
+  the effect's Mix tooltip says "VACANCY's world"; the worker threads are named VACANCY.
+- **Presets (`Source/Brand.h`):** each plug-in lists the earlier names' preset folders
+  (`legacyPresets`): VACANCY reads `~/Library/Elsewhere Audio/TAPEWORN/Presets` (`.tapewornpreset`)
+  and `~/Library/Veil Audio/LIMINAL/Presets` (`.liminalpreset`); VACANCY FX reads
+  `~/Library/Windward Audio/TAPEWORN FX/Presets` (`.tapewornfxpreset`). The first time the preset list
+  is shown they are copied into the new folder (newest name first; a preset already there is never
+  replaced; the old files stay), and every old tag (`TAPEWORN_PRESET`, `LIMINAL_PRESET`,
+  `TAPEWORN_FX_PRESET`) loads. New presets are saved as `VACANCY_PRESET` / `VACANCY_FX_PRESET`.
+- **Install (`scripts/install-mac.sh`):** step 0 removes LIMINAL, TAPEWORN and TAPEWORN FX (`.component`
+  and `.vst3`) from the user's and the system plug-in folders, **and any bundle there whose
+  CFBundleIdentifier is an old one** (`audio.veil.liminal`, `com.elsewhereaudio.tapeworn`,
+  `com.windwardaudio.tapewornfx`) whatever its file name; system copies it may not delete are printed
+  with their `sudo rm` line. `uninstall-mac.sh` removes the new and old names; `--purge` the new and
+  old preset folders. `diagnose-mac.sh` looks for all names.
+- **Names elsewhere:** CI artifacts `VACANCY-macOS-Universal` (and its zip), `VACANCY-macOS-diagnostics`,
+  `VACANCY-linux-test-logs`, the release title; README, `packaging/INSTALL.txt`, the manual
+  (`docs/TAPEWORN_FX.md` is now `docs/VACANCY_FX.md`), the other docs, the licence's copyright line,
+  this file's title. The briefs (`LIMINAL_*.md`), `legacy/` and the earlier sections of this log are
+  the history and keep their names.
+
+### Tests
+
+- **Fixtures written by the old plug-ins themselves.** Before any change, TAPEWORN at `9f6be75` was
+  built here and wrote `Tests/fixtures/sessions-tapeworn.xml` (`LiminalTests --write-session-fixtures`:
+  32 states - the default, "all six, moved", every factory scene - with a fingerprint of a phrase
+  rendered from each) and, with the same new fixture writer copied into that tree,
+  `Tests/fixtures/sessions-tapeworn-fx.xml` (`TapewornFXTests --write-session-fixtures`: 28 states - the
+  default, a moved state with A / B, all 26 presets - each with a fingerprint of the test mix).
+- Group **`sessions`** (instrument): LIMINAL's and now TAPEWORN's states load in VACANCY with every
+  parameter, every slot its instrument, the same sound (every 250 ms window within 0.05 dB); a preset in
+  TAPEWORN's folder and one in LIMINAL's are carried over to `Windward Audio/VACANCY/Presets` and load
+  with their values (also from where they are); new presets are VACANCY presets.
+- Group **`sessions`** (effect, new, `Tests/FxSessionTests.h`): every TAPEWORN FX state loads with every
+  parameter, its preset name and A / B, is saved again identical, and renders as before (0.05 dB).
+  Group `presets`: the folder is `Windward Audio/VACANCY FX/Presets`; a TAPEWORN FX preset is carried
+  over and loads.
+- `smoke` (both): the plug-in's name, the company Windward Audio and the AU codes unchanged.
+- **macOS CI:** the bundle gate checks the AU names, factories, codes, both bundle IDs and that no
+  Info.plist names LIMINAL, TAPEWORN or Elsewhere; the install test plants LIMINAL, TAPEWORN and
+  TAPEWORN FX copies with their old bundle IDs, plus one renamed copy only its old bundle ID gives
+  away, runs the installer and checks they are all gone, that the registry lists `aumu Lmnl Veil` once
+  as "Windward Audio: VACANCY" and `aufx Tpfx Wnwd` once as "Windward Audio: VACANCY FX", exactly two
+  Windward Audio entries, and no LIMINAL / TAPEWORN / Elsewhere anywhere in it. The AU harnesses (arm64
+  and x86_64, in- and out-of-process) check the host-visible names and restore **a TAPEWORN song**
+  (`tools/au-harness/tapeworn-session.state`) and **a TAPEWORN FX song**
+  (`tools/au-harness/tapeworn-fx-session.state`) besides the LIMINAL one, reading the settings back.
+- **Snapshots** (new wordmarks): `docs/snapshots/vacancy-main.jpg`, `vacancy-presets*.jpg`,
+  `vacancy-window-*.jpg` (`LiminalTests --rename-snapshots`) and `vacancy-fx*.jpg` (the effect's editor and
+  its three pages); the `tapeworn-*.jpg` the earlier sections name were replaced by these.
+
+### Not verified here
+
+macOS, auval, the AU harnesses, the installer and GarageBand / Logic: CI's macOS job is the first macOS
+build of the new names. Nothing was listened to (the rename changes no sound; the session fingerprints
+check that).
+
+### For the developer's GarageBand check
+
+1. Quit GarageBand. Download `VACANCY-macOS-Universal` from the run below, unzip it and run
+   `bash install-mac.sh`: step 0 should say it removed TAPEWORN and TAPEWORN FX (and LIMINAL if it was
+   still there); it ends with "VACANCY and VACANCY FX are installed and validated."
+2. Open GarageBand. On a Software Instrument track, Plug-ins > Instrument slot: **AU Instruments >
+   Windward Audio > VACANCY**, once, and no Elsewhere Audio, TAPEWORN or LIMINAL anywhere. On any
+   track, an empty effect slot: **Audio Units > Windward Audio > VACANCY FX**, once.
+3. Open a song made with TAPEWORN (or LIMINAL) and one with TAPEWORN FX on a track: they should open
+   with VACANCY / VACANCY FX in place of the old plug-ins, with the same place, instruments, LIMINALITY,
+   Mix and sound. The window shows the VACANCY / VACANCY FX wordmark.
+4. PRESETS > USER: the presets you saved with TAPEWORN (or LIMINAL) and with TAPEWORN FX are there;
+   new ones go to `~/Library/Windward Audio/VACANCY/Presets` and `.../VACANCY FX/Presets`.
