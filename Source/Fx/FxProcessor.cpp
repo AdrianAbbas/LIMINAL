@@ -548,7 +548,7 @@ void FxProcessor::setCurrentProgram(int index) {
     else applyPreset(presets::factory()[std::size_t(currentProgram - 1)]);
 }
 
-juce::File FxProcessor::userPresetFolder() { return brand::appDataFolder().getChildFile("Presets"); }
+juce::File FxProcessor::userPresetFolder() { return brand::presetFolder(); }
 
 juce::File FxProcessor::saveUserPreset(const juce::String& name) {
     const auto clean = juce::File::createLegalFileName(name.trim().isEmpty() ? juce::String("Untitled") : name.trim());
@@ -572,7 +572,7 @@ juce::File FxProcessor::saveUserPreset(const juce::String& name) {
 
 bool FxProcessor::loadUserPreset(const juce::File& file) {
     auto xml = juce::XmlDocument::parse(file);
-    if (xml == nullptr || !xml->hasTagName(brand::presetTag)) return false;
+    if (xml == nullptr || !brand::isPresetTag(xml->getTagName())) return false;   // (TAPEWORN FX's presets too)
     const auto name = xml->getStringAttribute("name", file.getFileNameWithoutExtension());
     undoable(name, [&] {
         resetToDefaults();
@@ -583,7 +583,8 @@ bool FxProcessor::loadUserPreset(const juce::File& file) {
 }
 
 juce::Array<juce::File> FxProcessor::userPresets() const {
-    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, juce::String("*") + brand::presetExtension);
+    brand::carryOverLegacyPresets();   // TAPEWORN FX's presets, copied over once (the old files stay)
+    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, brand::presetWildcard());
     files.sort();
     return files;
 }

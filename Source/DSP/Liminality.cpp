@@ -283,7 +283,7 @@ void Liminality::audioSide(std::uint64_t clock) {
     }
 
     // Fade: the highs close in over seconds of holding, plus a slight blur.
-    // (Audio input, TAPEWORN FX: no held notes to fade; its own Fade makes the sound fade away and return.)
+    // (Audio input, VACANCY FX: no held notes to fade; its own Fade makes the sound fade away and return.)
     fadeMixTarget = audioInput ? 0.0f : std::min(1.0f, 5.0f * ef);
     blurMixTarget = audioInput ? 0.0f : 0.5f * std::min(ef, 1.3f) * sustainFade;
     {

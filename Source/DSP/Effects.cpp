@@ -174,7 +174,7 @@ void EffectRack::setPlace(Place p, int ch) {
     next.setAmount(now.colour);
     next.snapAmount();
     // The new place's processing starts from rest (empty delay lines, filters at zero): it runs unheard
-    // for 40 ms before it fades in, so its start-up never shows in the sound (2026-11-06, TAPEWORN FX:
+    // for 40 ms before it fades in, so its start-up never shows in the sound (2026-11-06, VACANCY FX:
     // a click on a held tone).
     colourFade = -colourFadeStep * float(0.04 * sr);
     setSettings(user, envAmount, bpm, liveNow);

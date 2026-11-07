@@ -853,20 +853,11 @@ void LiminalProcessor::setCurrentProgram(int index) {
 
 // User presets: one XML file each, every parameter by ID (scenes A/B are part of the song,
 // not of a preset).
-juce::File LiminalProcessor::userPresetFolder() { return brand::appDataFolder().getChildFile("Presets"); }
-juce::File LiminalProcessor::legacyUserPresetFolder() { return brand::legacyAppDataFolder().getChildFile("Presets"); }
+juce::File LiminalProcessor::userPresetFolder() { return brand::presetFolder(); }
+juce::File LiminalProcessor::legacyUserPresetFolder(int which) { return brand::legacyPresetFolder(brand::legacyPresets[which]); }
 
-// The presets saved with LIMINAL are copied over once (the old files are left where they were).
-void LiminalProcessor::carryOverLegacyPresets() {
-    const auto old = legacyUserPresetFolder();
-    if (!old.isDirectory()) return;
-    const auto folder = userPresetFolder();
-    for (const auto& f : old.findChildFiles(juce::File::findFiles, false, juce::String("*") + brand::legacyPresetExtension)) {
-        const auto target = folder.getChildFile(f.getFileNameWithoutExtension() + brand::presetExtension);
-        if (target.existsAsFile() || !folder.createDirectory()) continue;
-        f.copyFileTo(target);
-    }
-}
+// The presets saved with TAPEWORN and LIMINAL are copied over once (the old files are left where they were).
+void LiminalProcessor::carryOverLegacyPresets() { brand::carryOverLegacyPresets(); }
 
 juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
     const auto clean = juce::File::createLegalFileName(name.trim().isEmpty() ? juce::String("Untitled") : name.trim());
@@ -890,7 +881,7 @@ juce::File LiminalProcessor::saveUserPreset(const juce::String& name) {
 
 bool LiminalProcessor::loadUserPreset(const juce::File& file) {
     auto xml = juce::XmlDocument::parse(file);
-    if (xml == nullptr || !(xml->hasTagName(brand::presetTag) || xml->hasTagName(brand::legacyPresetTag))) return false;   // (LIMINAL's presets too)
+    if (xml == nullptr || !brand::isPresetTag(xml->getTagName())) return false;   // (TAPEWORN's and LIMINAL's presets too)
     const auto name = xml->getStringAttribute("name", file.getFileNameWithoutExtension());
     undoable(name, [&] {
         resetToDefaults();   // parameters the preset does not know (added later) take their defaults
@@ -902,7 +893,7 @@ bool LiminalProcessor::loadUserPreset(const juce::File& file) {
 
 juce::Array<juce::File> LiminalProcessor::userPresets() const {
     carryOverLegacyPresets();
-    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, juce::String("*") + brand::presetExtension + ";*" + brand::legacyPresetExtension);
+    auto files = userPresetFolder().findChildFiles(juce::File::findFiles, false, brand::presetWildcard());
     files.sort();
     return files;
 }

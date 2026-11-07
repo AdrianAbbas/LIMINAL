@@ -226,7 +226,7 @@ public:
     // dryL/R: the instruments' dry bus; the place's signature (DSP/Signature) replaces it in out.
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
                  const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n, const float* gains = nullptr);
-    // (2026-11-06, TAPEWORN FX) A gain on everything the chain adds (its level match): per sample while
+    // (2026-11-06, VACANCY FX) A gain on everything the chain adds (its level match): per sample while
     // it is the place being heard; a chain that is fading out keeps the last one (its tail rings out at
     // the level it had).
     float outputGain() const { return heldGain; }
@@ -297,7 +297,7 @@ public:
     void setEvolutionSeed(unsigned s) { evolutionSeed = s; }
     const EnvironmentChain& current() const { return chains[std::size_t(active)]; }
     void setAmount(float a);
-    // `gains` (optional, per sample): the level match of the place being heard (TAPEWORN FX).
+    // `gains` (optional, per sample): the level match of the place being heard (VACANCY FX).
     void process(const float* sendL, const float* sendR, const float* echoInL, const float* echoInR, const float* dryL, const float* dryR,
                  const float* ambienceGain, const float* space, float* outL, float* outR, float* ambienceOut, int n, const float* gains = nullptr);
     Place place() const { return chains[std::size_t(active)].place(); }

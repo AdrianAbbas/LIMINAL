@@ -1,5 +1,5 @@
 #pragma once
-// LIMINALITY for audio (TAPEWORN FX, 2026-11-06). The instrument's stage (DSP/Liminality) acts on
+// LIMINALITY for audio (VACANCY FX, 2026-11-06). The instrument's stage (DSP/Liminality) acts on
 // notes - a detuned key, a sour note, a note held back - and on the instrument's output. An effect
 // has no notes, so here every control is done to the audio itself:
 //

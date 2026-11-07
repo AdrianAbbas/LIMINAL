@@ -1,5 +1,5 @@
 #pragma once
-// TAPEWORN FX (2026-11-06): TAPEWORN's world for any audio. The instrument's places - their rooms
+// VACANCY FX (2026-11-06): VACANCY's world for any audio. The instrument's places - their rooms
 // with the captured spaces and convolution, their signatures, Characters, evolution, the macros,
 // the cross-fade between places - and its LIMINALITY stage, adapted for audio (Fx/FxLiminality),
 // on whatever comes in: guitar, vocals, synths, drums, a whole mix. Everything except the
@@ -78,7 +78,7 @@ public:
     bool canUndo() const { return undoManager.canUndo(); }
     bool canRedo() const { return undoManager.canRedo(); }
     juce::String presetName() const { return currentPresetName; }
-    static juce::File userPresetFolder();   // Windward Audio/TAPEWORN FX/Presets
+    static juce::File userPresetFolder();   // Windward Audio/VACANCY FX/Presets
     juce::File saveUserPreset(const juce::String& name);
     bool loadUserPreset(const juce::File&);
     juce::Array<juce::File> userPresets() const;

@@ -1,5 +1,5 @@
 #pragma once
-// TAPEWORN FX's factory presets (2026-11-06): TAPEWORN's places for audio, each made for a kind of
+// VACANCY FX's factory presets (2026-11-06): VACANCY's places for audio, each made for a kind of
 // source (it works on any). A preset sets every parameter of the sound (the rest at its default);
 // Bypass and the VHS look (viewing preferences) are kept.
 #include <juce_core/juce_core.h>

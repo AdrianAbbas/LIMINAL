@@ -1,5 +1,5 @@
 #pragma once
-// TAPEWORN FX's window (2026-11-06): the instrument's viewfinder (UI/Viewfinder: the place's scene,
+// VACANCY FX's window (2026-11-06): the instrument's viewfinder (UI/Viewfinder: the place's scene,
 // the VHS look, the camcorder overlay, the film strip of places, the Character chips, the clean
 // place changes) with the effect's controls - Mix, Intensity, Input, Output and Bypass on the strip,
 // the big LIMINALITY knob on the scene, A / B beside the page buttons - and three pages: PLACE (the

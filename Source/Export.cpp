@@ -36,7 +36,7 @@ bool renderAmbience(const juce::MemoryBlock& state, const Options& o, const juce
     return true;
 }
 
-Job::Job(juce::MemoryBlock s, Options o, juce::File f) : juce::Thread("TAPEWORN ambience export"), state(std::move(s)), options(o), target(std::move(f)) {
+Job::Job(juce::MemoryBlock s, Options o, juce::File f) : juce::Thread("VACANCY ambience export"), state(std::move(s)), options(o), target(std::move(f)) {
     startThread(juce::Thread::Priority::low);
 }
 

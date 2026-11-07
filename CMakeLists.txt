@@ -25,16 +25,19 @@ set(LIMINAL_FORMATS VST3 Standalone)
 if(APPLE)
     list(APPEND LIMINAL_FORMATS AU)
 endif()
-# 2026-11-06: the product is TAPEWORN by Elsewhere Audio. The CMake target keeps its internal name
-# (LIMINAL), and the AU's manufacturer / subtype codes (Veil / Lmnl) - which also make the VST3's
-# class ID - are unchanged on purpose: songs made with LIMINAL find TAPEWORN and load unchanged.
+# 2026-11-07: the product is VACANCY by Windward Audio (LIMINAL until 2026-11-06, then TAPEWORN by
+# Elsewhere Audio). The CMake target keeps its internal name (LIMINAL), and the AU's manufacturer /
+# subtype codes (Veil / Lmnl) - which also make the VST3's class ID - are unchanged on purpose: hosts
+# find an Audio Unit in a song by type / subtype / manufacturer code, so a new manufacturer code
+# (e.g. the effect's Wnwd) would leave every LIMINAL and TAPEWORN song with a missing plug-in. Only
+# the company name hosts show changes (docs/DEVLOG.md, 2026-11-07).
 juce_add_plugin(LIMINAL
-    COMPANY_NAME "Elsewhere Audio"
-    BUNDLE_ID "com.elsewhereaudio.tapeworn"
+    COMPANY_NAME "Windward Audio"
+    BUNDLE_ID "com.windwardaudio.vacancy"
     PLUGIN_MANUFACTURER_CODE Veil
     PLUGIN_CODE Lmnl
-    PRODUCT_NAME "TAPEWORN"
-    PLUGIN_NAME "TAPEWORN"
+    PRODUCT_NAME "VACANCY"
+    PLUGIN_NAME "VACANCY"
     DESCRIPTION "Cinematic Environmental Instrument"
     FORMATS ${LIMINAL_FORMATS}
     # An instrument: GarageBand and Logic only reliably host generators this way.
@@ -80,10 +83,10 @@ if(EXISTS "${LIMINAL_CAPTURES_DIR}/profiles.json")
     juce_add_binary_data(LiminalCaptures HEADER_NAME CaptureData.h NAMESPACE CaptureData SOURCES ${LIMINAL_CAPTURE_FILES})
     target_link_libraries(LIMINAL PRIVATE LiminalCaptures)
     target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_CAPTURES=1)
-    message(STATUS "TAPEWORN: effect captures embedded from ${LIMINAL_CAPTURES_DIR}")
+    message(STATUS "VACANCY: effect captures embedded from ${LIMINAL_CAPTURES_DIR}")
 else()
     target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_CAPTURES=0)
-    message(STATUS "TAPEWORN: no effect captures (${LIMINAL_CAPTURES_DIR}) - the rooms keep their previous sound")
+    message(STATUS "VACANCY: no effect captures (${LIMINAL_CAPTURES_DIR}) - the rooms keep their previous sound")
 endif()
 # The developer's recordings (Milestone 8): notes prepared by tools/sample-prep (prepare.py +
 # liminal.py) from the PRIVATE Samples repository (CI: SAMPLES_TOKEN, scripts/ci-fetch-samples.sh).
@@ -107,10 +110,10 @@ if(EXISTS "${LIMINAL_SAMPLES_DIR}/index.json")
                 VERBATIM)
         endif()
     endforeach()
-    message(STATUS "TAPEWORN: recordings shipped from ${LIMINAL_SAMPLES_DIR}")
+    message(STATUS "VACANCY: recordings shipped from ${LIMINAL_SAMPLES_DIR}")
 else()
     target_compile_definitions(LIMINAL PUBLIC LIMINAL_HAS_SAMPLES=0)
-    message(STATUS "TAPEWORN: no recordings (${LIMINAL_SAMPLES_DIR}) - the instruments play their synthesised stand-ins")
+    message(STATUS "VACANCY: no recordings (${LIMINAL_SAMPLES_DIR}) - the instruments play their synthesised stand-ins")
 endif()
 target_compile_definitions(LIMINAL PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
@@ -118,21 +121,23 @@ target_compile_definitions(LIMINAL PUBLIC
 target_link_libraries(LIMINAL PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 
-# TAPEWORN FX (2026-11-06): the audio effect from the same sources - TAPEWORN's places and LIMINALITY
-# on any input. Its own identity: AU aufx / Tpfx / Wnwd ("Windward Audio: TAPEWORN FX"), bundle ID
-# com.windwardaudio.tapewornfx, a VST3 effect. The instrument's codes above are untouched.
+# VACANCY FX (2026-11-06 as TAPEWORN FX; renamed 2026-11-07): the audio effect from the same sources -
+# VACANCY's places and LIMINALITY on any input. Its own identity: AU aufx / Tpfx / Wnwd ("Windward
+# Audio: VACANCY FX"; codes unchanged by the rename, so TAPEWORN FX songs find it), bundle ID
+# com.windwardaudio.vacancyfx, a VST3 effect. The instrument's codes above are untouched. The CMake
+# target keeps its internal name (TapewornFX).
 set(TAPEWORN_FX_FORMATS VST3)
 if(APPLE)
     list(APPEND TAPEWORN_FX_FORMATS AU)
 endif()
 juce_add_plugin(TapewornFX
     COMPANY_NAME "Windward Audio"
-    BUNDLE_ID "com.windwardaudio.tapewornfx"
+    BUNDLE_ID "com.windwardaudio.vacancyfx"
     PLUGIN_MANUFACTURER_CODE Wnwd
     PLUGIN_CODE Tpfx
-    PRODUCT_NAME "TAPEWORN FX"
-    PLUGIN_NAME "TAPEWORN FX"
-    AU_EXPORT_PREFIX TapewornFXAU
+    PRODUCT_NAME "VACANCY FX"
+    PLUGIN_NAME "VACANCY FX"
+    AU_EXPORT_PREFIX VacancyFXAU
     DESCRIPTION "Liminal spaces and worn tape for any sound"
     FORMATS ${TAPEWORN_FX_FORMATS}
     IS_SYNTH FALSE
@@ -177,7 +182,7 @@ if(LIMINAL_BUILD_TESTS)
     target_compile_definitions(LiminalTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
         LIMINAL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")   # (fixtures: __FILE__ is relative under ccache's base dir)
     add_test(NAME liminal_tests COMMAND LiminalTests)
-    # TAPEWORN FX's own suite (it links the effect; the instrument's suite links the instrument).
+    # VACANCY FX's own suite (it links the effect; the instrument's suite links the instrument).
     juce_add_console_app(TapewornFXTests PRODUCT_NAME "TAPEWORN FX Tests")
     get_target_property(fx_test_definitions TapewornFXTests COMPILE_DEFINITIONS)
     if(fx_test_definitions)

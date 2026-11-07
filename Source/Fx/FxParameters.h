@@ -1,5 +1,5 @@
 #pragma once
-// TAPEWORN FX's automatable parameters (2026-11-06). IDs are stable: append, never rename.
+// VACANCY FX's automatable parameters (2026-11-06). IDs are stable: append, never rename.
 // The place's parameters share their IDs (and meaning) with the instrument - environment,
 // character, space, ambience, the four macros, evolution, far_away, quality, vhs, vhs_warble and
 // liminality - so the editor's shared parts (UI/Widgets, UI/Viewfinder) bind to either plug-in.
@@ -11,7 +11,7 @@
 namespace liminal::fxp {
 
 inline constexpr const char* bypass = "fx_bypass";        // click-free (a 25 ms cross-fade to the input)
-inline constexpr const char* mix = "fx_mix";              // dry / wet: 0 = the input untouched, 1 = only TAPEWORN's world
+inline constexpr const char* mix = "fx_mix";              // dry / wet: 0 = the input untouched, 1 = only VACANCY's world
 inline constexpr const char* input = "fx_input";          // Input level, dB (into the world; the dry share keeps the input's own level)
 inline constexpr const char* output = "fx_output";        // Output level, dB
 inline constexpr const char* intensity = "fx_intensity";  // how strongly the place transforms the input

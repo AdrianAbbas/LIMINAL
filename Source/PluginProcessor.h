@@ -54,7 +54,7 @@ public:
     juce::AudioProcessorValueTreeState parameters;
 
     // Read by the editor (message thread); written once per block by the audio thread.
-    // (The viewfinder's part, SceneMeters, is shared with TAPEWORN FX.)
+    // (The viewfinder's part, SceneMeters, is shared with VACANCY FX.)
     struct Meters : SceneMeters {
         std::atomic<int> voices { 0 };
         std::atomic<int> held { 0 };    // voices a key or the pedal still holds (hung-note tests)
@@ -87,8 +87,8 @@ public:
     juce::String undoPresetName() const { return presetUndo.getUndoDescription(); }   // what UNDO goes back from
     juce::String redoPresetName() const { return presetUndo.getRedoDescription(); }
     juce::String presetName() const { return currentPresetName; }
-    static juce::File userPresetFolder();          // Elsewhere Audio/TAPEWORN/Presets
-    static juce::File legacyUserPresetFolder();    // Veil Audio/LIMINAL/Presets (read: carried over)
+    static juce::File userPresetFolder();          // Windward Audio/VACANCY/Presets
+    static juce::File legacyUserPresetFolder(int which);   // 0: Elsewhere Audio/TAPEWORN/Presets, 1: Veil Audio/LIMINAL/Presets (read: carried over)
     static void carryOverLegacyPresets();
     juce::File saveUserPreset(const juce::String& name);   // returns the file (or {} on failure)
     bool loadUserPreset(const juce::File&);

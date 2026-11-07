@@ -49,7 +49,7 @@ inline constexpr const char* names[count] { "Detune", "Drift", "Wow & Flutter", 
 inline constexpr float defaults[count] { 0.40f, 0.35f, 0.40f, 0.35f, 0.35f, 0.40f, 0.35f, 0.40f, 0.35f, 0.35f };
 inline constexpr float macroDefault = 0.4f;   // the macro's default; 100 % is 2.5x the amounts
 inline constexpr float maxEffective = 1.5f;   // past 1 (deeply unsettling) towards broken
-// The stage's deterministic randomness (shared with TAPEWORN FX's audio stage): a 32-bit hash, its
+// The stage's deterministic randomness (shared with VACANCY FX's audio stage): a 32-bit hash, its
 // value in [0, 1), and a smooth random curve in about [-1, 1] that is a pure function of x.
 std::uint32_t hash(std::uint32_t a, std::uint32_t b);
 float unit(std::uint32_t h);
@@ -81,7 +81,7 @@ public:
     // Every control tick (64 samples, on the processor's grid). `clock`: the stage's timeline
     // position. Hands the instrument its pitch (Drift, Wow & Flutter, Warble depth, wander gate).
     void control(Instrument&, std::uint64_t clock);
-    // Audio input (TAPEWORN FX, 2026-11-06): the same control tick without an instrument. The audio
+    // Audio input (VACANCY FX, 2026-11-06): the same control tick without an instrument. The audio
     // side (Ghost, Warble's swell and chorus, Wear, dropouts) runs on whatever comes in; onset()
     // stands in for a note-on (Warble grows back from it); with setAudioInput(true) the held-note
     // Fade and Unevenness' make-up are off (the effect has its own Fade and Unevenness).

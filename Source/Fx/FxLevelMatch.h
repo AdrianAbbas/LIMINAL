@@ -1,5 +1,5 @@
 #pragma once
-// TAPEWORN FX's level match (2026-11-06): every room and Character brings the input back to the
+// VACANCY FX's level match (2026-11-06): every room and Character brings the input back to the
 // loudness it came in with (at Mix 100 %, the default settings), so changing rooms compares the
 // places, not their levels. dB per place x Character, measured (ITU-R BS.1770, gated) over the
 // three test sources (guitar, vocal, a full mix) by `TapewornFXTests --calibrate-levels`

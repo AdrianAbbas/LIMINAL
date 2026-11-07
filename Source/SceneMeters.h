@@ -1,5 +1,5 @@
 #pragma once
-// The audio thread's view for the editor (2026-11-06: shared by TAPEWORN and TAPEWORN FX).
+// The audio thread's view for the editor (2026-11-06: shared by VACANCY and VACANCY FX).
 #include <atomic>
 
 namespace liminal {

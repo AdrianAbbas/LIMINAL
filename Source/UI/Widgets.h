@@ -1,7 +1,7 @@
 #pragma once
-// The editor's shared parts (2026-11-06, TAPEWORN FX): the look, the level slider, the film strip
-// of places, the Character chips, the ring knobs and the page buttons. Used by TAPEWORN (the
-// instrument) and TAPEWORN FX (the effect) alike; they bind to the parameters both share by ID
+// The editor's shared parts (2026-11-06, VACANCY FX): the look, the level slider, the film strip
+// of places, the Character chips, the ring knobs and the page buttons. Used by VACANCY (the
+// instrument) and VACANCY FX (the effect) alike; they bind to the parameters both share by ID
 // (environment, character, the macros), so each plug-in's own APVTS works with them.
 #include "DSP/Characters.h"
 #include "DSP/Environment.h"

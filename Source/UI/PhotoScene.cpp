@@ -72,7 +72,7 @@ Source sourceFor(const char* name) {
 
 class PhotoScene::Worker : public juce::Thread {
 public:
-    explicit Worker(PhotoScene& s) : juce::Thread("TAPEWORN scene"), scene(s) { startThread(juce::Thread::Priority::low); }
+    explicit Worker(PhotoScene& s) : juce::Thread("VACANCY scene"), scene(s) { startThread(juce::Thread::Priority::low); }
     ~Worker() override { stopThread(4000); }
     void run() override {
         if (!scene.load()) return;

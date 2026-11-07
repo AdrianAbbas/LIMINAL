@@ -422,7 +422,7 @@ FxView::FxView(FxProcessor& p)
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters, fxp::bypass, bypass);
     bypass.setTooltip("BYPASS: the input untouched (a short cross-fade, in time with the track)");
     addAndMakeVisible(bypass);
-    mixKnob.slider.setTooltip("MIX: the input untouched (0 %) to only TAPEWORN's world (100 %)");
+    mixKnob.slider.setTooltip("MIX: the input untouched (0 %) to only VACANCY's world (100 %)");
     intensityKnob.slider.setTooltip("INTENSITY: how strongly the place transforms the sound (its processing and its room)");
     liminalityKnob.big = true;
     liminalityKnob.slider.setTooltip("LIMINALITY: how unstable, detuned, worn and half-remembered the sound is. 0 % clean, 40 % as set on its page, 100 % deeply unsettling");

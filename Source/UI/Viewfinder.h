@@ -1,5 +1,5 @@
 #pragma once
-// The viewfinder (2026-11-06, shared by TAPEWORN and TAPEWORN FX): the whole window is the place's
+// The viewfinder (2026-11-06, shared by VACANCY and VACANCY FX): the whole window is the place's
 // scene - photographic (light passes composited live, UI/PhotoScene) or painted (UI/SceneArt) -
 // with the VHS "found footage" look (UI/Vhs), the camcorder overlay (REC, time stamp, battery-style
 // meters, frame corners), the film strip of places and the Character chips, lights that answer the
