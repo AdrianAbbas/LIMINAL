@@ -1,4 +1,4 @@
-// TAPEWORN FX's offline tests (2026-11-06), through the real processBlock. Exit code 0 only if
+// VACANCY FX's offline tests (2026-11-06 as TAPEWORN FX; renamed 2026-11-07), through the real processBlock. Exit code 0 only if
 // every check passes.
 //   TapewornFXTests                         run everything
 //   TapewornFXTests --only a,b              some groups (smoke, parameters, latency, strength, levels,
@@ -9,10 +9,13 @@
 //   TapewornFXTests --calibrate-levels      the rooms' loudness (for tools/levelmatch/fx_levelmatch.py)
 //   TapewornFXTests --probe-strength        every room's strength numbers (tuning aid)
 //   TapewornFXTests --write-sources dir     the three test sources as WAV files
+//   TapewornFXTests --write-session-fixtures f   states + fingerprints for the group sessions (run by the build before a rename)
+//   TapewornFXTests --write-au-state f      the AU harness's TAPEWORN FX song (from Tests/fixtures/sessions-tapeworn-fx.xml)
 // The three test sources (guitar, vocal, a full mix) are synthesised here, deterministically, so
 // the tests need no files and give the same numbers everywhere.
 #include "Fx/FxEditor.h"
 #include "Fx/FxProcessor.h"
+#include "DSP/Captures.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <algorithm>
@@ -526,7 +529,11 @@ Signal through(const Signal& in, int place, int character, const std::function<v
 void testSmoke(Suite& s) {
     s.section("smoke");
     Rig rig;
-    s.check(rig.p->getName() == "TAPEWORN FX", "the plug-in is called TAPEWORN FX", rig.p->getName().toStdString());
+    s.check(rig.p->getName() == "VACANCY FX", "the plug-in is called VACANCY FX", rig.p->getName().toStdString());
+   #ifdef JucePlugin_Manufacturer
+    s.check(juce::String(JucePlugin_Manufacturer) == "Windward Audio" && JucePlugin_ManufacturerCode == 0x576e7764 && JucePlugin_PluginCode == 0x54706678,
+            "by Windward Audio, AU codes unchanged (aufx Tpfx Wnwd)", JucePlugin_Manufacturer);
+   #endif
     s.check(!rig.p->acceptsMidi() && !rig.p->isMidiEffect() && rig.p->getTotalNumInputChannels() == 2 && rig.p->getTotalNumOutputChannels() == 2,
             "an audio effect: stereo in, stereo out, no MIDI");
     s.check(rig.latency() == int(std::lround(0.02 * sr)), "latency reported: 20 ms (960 samples at 48 kHz)", std::to_string(rig.latency()));
@@ -1051,8 +1058,43 @@ void testPresets(Suite& s) {
     const bool loaded = file.existsAsFile() && p.loadUserPreset(file) && p.parameters.getRawParameterValue(fxp::environment)->load() == aRoom;
     file.deleteFile();
     s.check(loaded, "your own presets save and load", file.getFullPathName().toStdString());
-    s.check(file.getParentDirectory().getFullPathName().contains("Windward Audio") && file.getFileExtension() == ".tapewornfxpreset",
-            "your presets live in Windward Audio/TAPEWORN FX/Presets as .tapewornfxpreset files");
+    s.check(file.getParentDirectory().getFullPathName().endsWith("Windward Audio/VACANCY FX/Presets") && file.getFileExtension() == ".vacancyfxpreset",
+            "your presets live in Windward Audio/VACANCY FX/Presets as .vacancyfxpreset files", file.getFullPathName().toStdString());
+    // A preset saved with TAPEWORN FX (its folder, tag and extension) is carried over and loads (2026-11-07).
+    {
+        const auto& from = brand::legacyPresets[0];
+        const auto old = brand::legacyPresetFolder(from);
+        const bool hadOld = old.isDirectory();
+        old.createDirectory();
+        const juce::String name = "ZZ FX CARRYOVER TEST";
+        const auto legacy = old.getChildFile(name + from.extension);
+        const auto carried = FxProcessor::userPresetFolder().getChildFile(name + brand::presetExtension);
+        carried.deleteFile();
+        {   // as TAPEWORN FX wrote one (FxProcessor::saveUserPreset before the rename)
+            juce::XmlElement xml(from.tag);
+            xml.setAttribute("name", name);
+            xml.setAttribute("stateVersion", 1);
+            const std::pair<const char*, double> values[] { { fxp::environment, 7.0 }, { fxp::mix, 0.4 }, { fxp::liminality, 0.9 } };
+            for (const auto& [id, v] : values) {
+                auto* e = xml.createNewChildElement("PARAM");
+                e->setAttribute("id", id);
+                e->setAttribute("value", v);
+            }
+            xml.writeTo(legacy);
+        }
+        bool listed = false;
+        for (const auto& f : p.userPresets()) listed |= f == carried;
+        s.check(listed && carried.existsAsFile() && legacy.existsAsFile(), "a preset saved with TAPEWORN FX is carried over to VACANCY FX's folder (the old file left in place)",
+                carried.getFullPathName().toStdString());
+        const bool ok = p.loadUserPreset(carried) && std::lround(p.parameters.getRawParameterValue(fxp::environment)->load()) == 7
+                        && std::abs(p.parameters.getRawParameterValue(fxp::mix)->load() - 0.4f) < 1.0e-5f && std::abs(p.parameters.getRawParameterValue(fxp::liminality)->load() - 0.9f) < 1.0e-5f
+                        && p.presetName() == name;
+        s.check(ok, "TAPEWORN FX's preset loads in VACANCY FX with its values");
+        s.check(p.loadUserPreset(legacy), "TAPEWORN FX's preset file loads from its old folder too");
+        carried.deleteFile();
+        legacy.deleteFile();
+        if (!hadOld) old.deleteRecursively();
+    }
 }
 
 void testState(Suite& s) {
@@ -1181,7 +1223,7 @@ bool writeAudio(const Signal& out, const juce::File& file) {
 int renderListening(const juce::String& path) {
     const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(path);
     folder.createDirectory();
-    juce::String cues = "TAPEWORN FX listening render: the same phrase dry, then through six rooms at LIMINALITY 0 / 50 / 100 %.\n"
+    juce::String cues = "VACANCY FX listening render: the same phrase dry, then through six rooms at LIMINALITY 0 / 50 / 100 %.\n"
                         "Defaults otherwise (Mix 100 %, Intensity 70 %, Space 45 %, Room Sound -12 dB, first Character). 48 kHz, 24-bit FLAC.\n\n";
     const int rooms[] { 0, 1, 2, 4, 5, 9 };
     for (const auto& mat : materials()) {
@@ -1414,6 +1456,8 @@ int writeSources(const juce::String& path) {
     return 0;
 }
 
+#include "FxSessionTests.h"
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -1436,6 +1480,8 @@ int main(int argc, char** argv) {
         else if (arg == "--probe-trace" && i + 3 < argc) return probeTrace(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]), std::atoi(argv[i + 3]));
         else if (arg == "--probe-level" && i + 2 < argc) return probeLevel(std::atoi(argv[i + 1]), std::atoi(argv[i + 2]));
         else if (arg == "--write-sources" && i + 1 < argc) return writeSources(argv[++i]);
+        else if (arg == "--write-session-fixtures" && i + 1 < argc) return writeSessionFixtures(argv[++i]);
+        else if (arg == "--write-au-state" && i + 1 < argc) return writeAuState(argv[++i]);
     }
     const auto run = [&](const char* name) { return only.isEmpty() || only.contains(name); };
     Suite s;
@@ -1444,6 +1490,7 @@ int main(int argc, char** argv) {
     if (run("latency")) testLatency(s);
     if (run("presets")) testPresets(s);
     if (run("state")) testState(s);
+    if (run("sessions")) testSessions(s);
     if (run("mono")) testMono(s);
     if (run("clicks")) testClicks(s);
     if (run("levels")) testLevels(s);

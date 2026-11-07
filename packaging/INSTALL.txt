@@ -1,48 +1,50 @@
-TAPEWORN by Elsewhere Audio - Cinematic Environmental Instrument
-TAPEWORN FX by Windward Audio - the same places and LIMINALITY, for any sound
+VACANCY by Windward Audio - Cinematic Environmental Instrument
+VACANCY FX by Windward Audio - the same places and LIMINALITY, for any sound
 (Audio Unit and VST3, macOS 10.15+, Apple Silicon and Intel)
 
 This folder holds both plug-ins. They install side by side and are separate plug-ins
-in your host: TAPEWORN is an instrument (played with MIDI), TAPEWORN FX is an audio
+in your host: VACANCY is an instrument (played with MIDI), VACANCY FX is an audio
 effect (put it on a guitar, a voice, a synth, drums or a whole mix).
 
-TAPEWORN is the new name of LIMINAL. It is the same instrument: songs and presets
-made with LIMINAL open in TAPEWORN unchanged. The installer removes the old
-LIMINAL copy so your host does not list it twice.
+VACANCY is the new name of TAPEWORN (and before that, LIMINAL); VACANCY FX is the
+new name of TAPEWORN FX. They are the same plug-ins: songs and presets made with
+LIMINAL, TAPEWORN or TAPEWORN FX open in VACANCY and VACANCY FX unchanged. The
+installer removes the old copies so your host does not list them twice.
 
 INSTALL
   1. Quit GarageBand and Logic.
   2. Open Terminal (Applications > Utilities > Terminal).
   3. Type "bash " (with a space), drag install-mac.sh from this folder into the
      Terminal window, and press Return.
-  4. Wait for "TAPEWORN and TAPEWORN FX are installed and validated."
+  4. Wait for "VACANCY and VACANCY FX are installed and validated."
 
   Why a script? This build is not signed with an Apple Developer ID. When a browser
   downloads it, macOS marks every file as quarantined and then refuses to load the
   plug-in: GarageBand shows a silent slot with plain sliders. The script removes that
-  flag, re-signs both plug-ins for this Mac, removes LIMINAL (the old name), refreshes
+  flag, re-signs both plug-ins for this Mac, removes the copies under the old names
+  (LIMINAL, TAPEWORN, TAPEWORN FX), refreshes
   the Audio Unit list and runs Apple's validator on both.
 
 GARAGEBAND
   Settings > Audio/MIDI: tick "Audio Units". Restart GarageBand.
   Track > New Track > Software Instrument. Smart Controls (B) > Plug-ins >
-  Instrument slot (top) > AU Instruments > Elsewhere Audio > TAPEWORN.
+  Instrument slot (top) > AU Instruments > Windward Audio > VACANCY.
   The room plays straight away while the track is selected. Play notes (a MIDI
   keyboard, or Window > Show Musical Typing) to hear the Forgotten Piano.
-  If you see sliders instead of the TAPEWORN interface, switch the plug-in
+  If you see sliders instead of the VACANCY interface, switch the plug-in
   window's view menu from "Controls" to "Editor".
 
-TAPEWORN FX IN GARAGEBAND
+VACANCY FX IN GARAGEBAND
   Select an audio track (or any track). Smart Controls (B) > Plug-ins > an empty
-  slot > Audio Units > Windward Audio > TAPEWORN FX. Play the track: it is heard in
+  slot > Audio Units > Windward Audio > VACANCY FX. Play the track: it is heard in
   the place on screen.
 
 LOGIC PRO
-  Settings > Plug-in Manager > Elsewhere Audio > TAPEWORN and Windward Audio >
-  TAPEWORN FX. If one is marked failed, select it and click "Reset & Rescan
-  Selection". TAPEWORN goes in the Instrument slot of a Software Instrument track
-  (AU Instruments > Elsewhere Audio > TAPEWORN); TAPEWORN FX in any Audio FX slot
-  (Audio Units > Windward Audio > TAPEWORN FX).
+  Settings > Plug-in Manager > Windward Audio > VACANCY and Windward Audio >
+  VACANCY FX. If one is marked failed, select it and click "Reset & Rescan
+  Selection". VACANCY goes in the Instrument slot of a Software Instrument track
+  (AU Instruments > Windward Audio > VACANCY); VACANCY FX in any Audio FX slot
+  (Audio Units > Windward Audio > VACANCY FX).
 
 THE WINDOW
   INSTRUMENTS  six slots; each plays any of the twenty instruments (CHOOSE)
@@ -53,8 +55,8 @@ THE WINDOW
   The big LIMINALITY knob (lower left) sets how unstable, detuned and
   half-remembered every instrument is.
 
-TAPEWORN FX
-  The strip    MIX (the input untouched at 0 %, only TAPEWORN's world at 100 %,
+VACANCY FX
+  The strip    MIX (the input untouched at 0 %, only VACANCY's world at 100 %,
                the default), INTENSITY (how strongly the place transforms the
                sound), INPUT and OUTPUT (dB), SPACE (how much of the room),
                ROOM SOUND (the place's own hum and rare events, only while
@@ -70,18 +72,19 @@ TAPEWORN FX
   A / B        two settings to compare; A>B copies the one shown into the other.
   It reports 20 ms of latency (its pitch line); hosts compensate it, so the
   track stays in time. Every place is level-matched to what comes in.
-  Your own presets: ~/Library/Windward Audio/TAPEWORN FX/Presets.
+  Your own presets: ~/Library/Windward Audio/VACANCY FX/Presets (the ones you
+  saved with TAPEWORN FX are copied there the first time you open PRESETS).
 
 PRESETS
   INIT, at the top of every list, is "no preset": every instrument, the place,
-  the effects and LIMINALITY back to their defaults, as when TAPEWORN is first
+  the effects and LIMINALITY back to their defaults, as when VACANCY is first
   opened. RESET (beside the preset's name) does the same.
   UNDO / REDO (top right of the drawer) go back and forth between preset loads.
   (Cmd+Z / Cmd+Shift+Z do the same in the standalone app; most hosts keep those
   keys for their own undo.)
-  Your own presets are kept in ~/Library/Elsewhere Audio/TAPEWORN/Presets.
-  Presets you saved with LIMINAL are copied there the first time you open the
-  USER list (the old files stay where they were).
+  Your own presets are kept in ~/Library/Windward Audio/VACANCY/Presets.
+  Presets you saved with TAPEWORN or LIMINAL are copied there the first time you
+  open the USER list (the old files stay where they were).
 
 LEVELS
   All twenty instruments play at the same loudness in every place and Character
@@ -90,16 +93,18 @@ LEVELS
 
 UNINSTALL
   bash uninstall-mac.sh            (add --purge to also delete saved presets)
-  It removes TAPEWORN, TAPEWORN FX and any LIMINAL copy.
+  It removes VACANCY, VACANCY FX and any copy under the old names.
 
 MANUAL INSTALL (if you prefer not to run the script)
   rm -rf ~/Library/Audio/Plug-Ins/Components/LIMINAL.component
-  cp -R TAPEWORN.component ~/Library/Audio/Plug-Ins/Components/
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/TAPEWORN.component
-  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/TAPEWORN.component
-  cp -R "TAPEWORN FX.component" ~/Library/Audio/Plug-Ins/Components/
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"TAPEWORN FX.component"
-  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/"TAPEWORN FX.component"
+  rm -rf ~/Library/Audio/Plug-Ins/Components/TAPEWORN.component
+  rm -rf ~/Library/Audio/Plug-Ins/Components/"TAPEWORN FX.component"
+  cp -R VACANCY.component ~/Library/Audio/Plug-Ins/Components/
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/VACANCY.component
+  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/VACANCY.component
+  cp -R "VACANCY FX.component" ~/Library/Audio/Plug-Ins/Components/
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"VACANCY FX.component"
+  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/"VACANCY FX.component"
   killall -9 AudioComponentRegistrar
   auval -v aumu Lmnl Veil
   auval -v aufx Tpfx Wnwd

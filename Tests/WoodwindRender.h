@@ -33,7 +33,7 @@ int renderWoodwinds(const juce::String& path) {
     const Take takes[] { { "dry", -1 }, { "hotel", int(dsp::Place::hotel) }, { "mall", int(dsp::Place::mall) }, { "school", int(dsp::Place::school) } };
     Signal out;
     const bool ww = dsp::recordings("ww-flute") != nullptr;
-    juce::String cues = "TAPEWORN - real woodwinds: each changed instrument BEFORE (its woodwind at 0 %: exactly as it was)\n"
+    juce::String cues = "VACANCY - real woodwinds: each changed instrument BEFORE (its woodwind at 0 %: exactly as it was)\n"
                         "and AFTER (its woodwind at 60 %, the factory presets' amount), dry (no room, no ambience) and in\n"
                         "the hotel, the mall and the school (default Character, ambience at -14 dB), LIMINALITY 40 % (default).\n"
                         "Phrase: E4 G4 C5 B4 A4 G4 F4 E4 D4 E4, then the chords C, Am, F held.\n"

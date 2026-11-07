@@ -194,7 +194,7 @@ void testInit(Suite& s) {
     }
 }
 
-// The renamed editor (2026-11-06) for docs/snapshots: the main view with the TAPEWORN wordmark, the
+// The renamed editor (2026-11-06) for docs/snapshots: the main view with the VACANCY wordmark (2026-11-07), the
 // presets drawer with INIT / RESET / UNDO, and two window shapes a host may give (the view fitted).
 int writeRenameSnapshots(const juce::String& path) {
     const auto folder = juce::File::getCurrentWorkingDirectory().getChildFile(path);
@@ -215,19 +215,19 @@ int writeRenameSnapshots(const juce::String& path) {
     auto& view = lm->view();
     p.parameters.getParameter(params::vhs)->setValueNotifyingHost(0.0f);
     view.animate();
-    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "tapeworn-main");
+    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "vacancy-main");
     // A scene preset loaded, then the drawer: NOW shows it, RESET beside it, UNDO lit.
     p.applyPreset(presets::factory()[std::size_t(presets::inCategory(presets::Category::scene)[2])]);
     lm->showPresets(true);
     lm->presetDrawer().showCategory(3);
     view.tick();
     view.animate();
-    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "tapeworn-presets");
+    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "vacancy-presets");
     lm->presetDrawer().loadInit();
     view.tick();
     view.animate();
-    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "tapeworn-presets-init");
-    for (const auto& [w, h, name] : { std::tuple { 1400, 720, "tapeworn-window-wide" }, std::tuple { 700, 900, "tapeworn-window-tall" } }) {
+    save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), "vacancy-presets-init");
+    for (const auto& [w, h, name] : { std::tuple { 1400, 720, "vacancy-window-wide" }, std::tuple { 700, 900, "vacancy-window-tall" } }) {
         editor->setSize(w, h);
         view.animate();
         save(editor->createComponentSnapshot(editor->getLocalBounds(), true, 1.0f), name);

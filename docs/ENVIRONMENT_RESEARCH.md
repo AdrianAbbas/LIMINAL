@@ -1,6 +1,6 @@
-# TAPEWORN — Environment acoustics research
+# VACANCY — Environment acoustics research
 
-Research notes on the ten TAPEWORN places. Each place gets its physical facts, a confirmed or
+Research notes on the ten VACANCY places. Each place gets its physical facts, a confirmed or
 corrected "signature" phenomenon, and concrete DSP suggestions.
 
 **How to read the numbers.** Every figure comes from one of three kinds of source, and is
@@ -104,7 +104,7 @@ The sources disagree by up to about ×2 on some entries.
   region, i.e. the train high-passes itself as it bounces
   [src: https://www.ioa.org.uk/system/files/proceedings/t_halmrast_why_do_flutter_echoes_always_end_up_around_1-2_khz.pdf
   (title/abstract only)].
-- **Key consequence for TAPEWORN:** an **absorptive ceiling does not remove wall-to-wall
+- **Key consequence for VACANCY:** an **absorptive ceiling does not remove wall-to-wall
   flutter. It makes flutter more likely**, because it creates exactly the uneven absorption the
   definition requires. This is why acoustic ceiling tiles matter in the corridor rooms.
 
@@ -176,7 +176,7 @@ ASA 159th, https://acoustics.org/pressroom/httpdocs/159th/hsu.htm].
 - **WHO (1999 Guidelines for Community Noise):** wards 30 dB LAeq at night, 40 dB LAmax.
   Daytime figures are quoted as 30–35 dB. Few hospitals comply [src: WHO via nonoise.org,
   https://nonoise.org/library/whonoise/whonoise.htm; PMC review,
-  https://pmc.ncbi.nlm.nih.gov/articles/PMC2443309/]. For TAPEWORN this means the corridor is
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC2443309/]. For VACANCY this means the corridor is
   **meant to be near-silent**, so a low bed level is realistic.
 
 **RT60.**
@@ -788,7 +788,7 @@ RT60 values are per band at **125 Hz / 500 Hz–1 kHz / 4 kHz**. Labels: [src] m
 
 ---
 
-## What TAPEWORN does with this (2026-10-31)
+## What VACANCY does with this (2026-10-31)
 
 Each place now has an acoustic profile (`Source/DSP/Environment.cpp`, the room) and **one signature effect no other
 place uses** (`Source/DSP/Signature.cpp`), applied to each instrument's share of the dry sound (its Influence x
@@ -809,7 +809,7 @@ Characters) were removed from every place whose signature they are not.
 | Office | unchanged (0.5/0.35 s) | Hum infection: amplitude modulation by the full-wave rectified 60 Hz mains (120 Hz and harmonics), deeper when the tube stutters; a little buzz rides on the notes; dead, damped | After Hours / Dream State: softer / Infinite Cubicles: the ballast stutters |
 | Impossible | RT60 9.0/7.5 s -> **7.5/9.5 s** (the highs outlast the lows: no real room does that, as suggested) | Wrong acoustics: each half second played backwards and rising into the moment it was played (reversed swells), reflections at +7 and -5 semitones, and now and then the sound freezes (0.2 s held 2.5 s, rare) | Familiar: subtle / Unstable: short reversed swells, frequent freezes / Beyond Reality: long reversed swells |
 
-**Where TAPEWORN departs from the research, on purpose:** the school's tape wobble is not an acoustic property (the
+**Where VACANCY departs from the research, on purpose:** the school's tape wobble is not an acoustic property (the
 research says so) but the developer asked for it as the school's nostalgia; the pool's "light on water" shimmer of
 the tail has no acoustic basis but is kept as an aesthetic choice from Direction Update 2; the subway's metallic comb
 is kept subtle because no measurement supports it; the hospital's RT60 follows the measurements (short) rather than

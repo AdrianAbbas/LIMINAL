@@ -159,25 +159,31 @@ int refreshSessionFingerprints() {
 void testSessionFixture(Suite& s, const char* file, const std::string& who);
 
 void testSessions(Suite& s) {
-    s.section("old sessions and presets open exactly as before (2026-11-02; 2026-11-06: LIMINAL's, in TAPEWORN)");
+    s.section("old sessions and presets open exactly as before (2026-11-02; LIMINAL's and TAPEWORN's, in VACANCY)");
     // Saved before the instrument library (fingerprints re-taken when the sound changed on purpose).
     testSessionFixture(s, "sessions-v2.xml", "saved before the library");
-    // Saved by LIMINAL 0.4 just before the rename: TAPEWORN must load them unchanged (the state's tag,
+    // Saved by LIMINAL 0.4 just before the rename: VACANCY must load them unchanged (the state's tag,
     // the parameter IDs), and sound exactly the same (the rename changes no sound: fingerprints as written).
     testSessionFixture(s, "sessions-liminal.xml", "saved by LIMINAL (before the rename to TAPEWORN)");
-    // A preset saved with LIMINAL (its own folder, tag and extension) is carried over and loads.
-    {
+    // Saved by TAPEWORN just before the rename to VACANCY (2026-11-07): the same, through the build of
+    // that day (`LiminalTests --write-session-fixtures`, run by TAPEWORN itself).
+    testSessionFixture(s, "sessions-tapeworn.xml", "saved by TAPEWORN (before the rename to VACANCY)");
+    // A preset saved with TAPEWORN and one saved with LIMINAL (each in its own folder, with its own tag
+    // and extension) are carried over to VACANCY's folder and load.
+    for (int which = 0; which < 2; ++which) {
         using namespace sessiontest;
+        const auto& from = brand::legacyPresets[which];
+        const std::string oldName = from.product;
         LiminalProcessor p;
-        const auto old = LiminalProcessor::legacyUserPresetFolder();
+        const auto old = LiminalProcessor::legacyUserPresetFolder(which);
         const bool hadOld = old.isDirectory();
         old.createDirectory();
-        const juce::String name = "ZZ CARRYOVER TEST";
-        const auto legacy = old.getChildFile(name + brand::legacyPresetExtension);
+        const juce::String name = "ZZ CARRYOVER TEST " + juce::String(from.product);
+        const auto legacy = old.getChildFile(name + from.extension);
         const auto carried = LiminalProcessor::userPresetFolder().getChildFile(name + brand::presetExtension);
         carried.deleteFile();
-        {   // exactly as LIMINAL 0.4 wrote one (PluginProcessor.cpp, saveUserPreset, before the rename)
-            juce::XmlElement xml(brand::legacyPresetTag);
+        {   // exactly as LIMINAL 0.4 / TAPEWORN wrote one (PluginProcessor.cpp, saveUserPreset, before each rename)
+            juce::XmlElement xml(from.tag);
             xml.setAttribute("name", name);
             xml.setAttribute("stateVersion", 2);
             const std::pair<const char*, double> values[] { { params::environment, 6.0 }, { params::liminality, 0.75 }, { "synth_type", 18.0 }, { params::synthOn, 1.0 } };
@@ -191,17 +197,23 @@ void testSessions(Suite& s) {
         const auto list = p.userPresets();
         bool listed = false;
         for (const auto& f : list) listed |= f == carried;
-        s.check(listed && carried.existsAsFile() && legacy.existsAsFile(), "a preset saved with LIMINAL is carried over to TAPEWORN's folder (the old file left in place)",
+        s.check(listed && carried.existsAsFile() && legacy.existsAsFile(), "a preset saved with " + oldName + " is carried over to VACANCY's folder (the old file left in place)",
+                carried.getFullPathName().toStdString());
+        s.check(carried.getFullPathName().contains("Windward Audio") && carried.getFullPathName().contains("VACANCY"), "VACANCY's presets live in Windward Audio/VACANCY/Presets",
                 carried.getFullPathName().toStdString());
         const bool loaded = p.loadUserPreset(carried);
         s.check(loaded && std::lround(p.parameters.getRawParameterValue(params::environment)->load()) == 6 && std::abs(p.parameters.getRawParameterValue(params::liminality)->load() - 0.75f) < 1.0e-5f
                     && std::lround(p.parameters.getRawParameterValue("synth_type")->load()) == 18 && p.presetName() == name,
-                "LIMINAL's preset loads in TAPEWORN with its values");
-        const auto saved = p.saveUserPreset("ZZ SAVED TEST");
-        auto back = juce::XmlDocument::parse(saved);
-        s.check(saved.getFileExtension() == brand::presetExtension && back != nullptr && back->hasTagName(brand::presetTag), "new presets are saved as TAPEWORN presets",
-                saved.getFullPathName().toStdString());
-        saved.deleteFile();
+                oldName + "'s preset loads in VACANCY with its values");
+        const bool loadedInPlace = p.loadUserPreset(legacy);   // (an old file loads where it is, too)
+        s.check(loadedInPlace, oldName + "'s preset file loads from its old folder too", legacy.getFullPathName().toStdString());
+        if (which == 0) {
+            const auto saved = p.saveUserPreset("ZZ SAVED TEST");
+            auto back = juce::XmlDocument::parse(saved);
+            s.check(saved.getFileExtension() == ".vacancypreset" && back != nullptr && back->hasTagName("VACANCY_PRESET"), "new presets are saved as VACANCY presets",
+                    saved.getFullPathName().toStdString());
+            saved.deleteFile();
+        }
         carried.deleteFile();
         legacy.deleteFile();
         if (!hadOld) {
@@ -267,9 +279,10 @@ void testSessionFixture(Suite& s, const char* file, const std::string& who) {
 
 // The AU harness's LIMINAL song (tools/au-harness/liminal-session.state): the raw state LIMINAL 0.4 saved
 // for "all six, moved" (Tests/fixtures/sessions-liminal.xml), as an AU host keeps it in a song.
-int writeLiminalAuState(const juce::String& path) {
+// (2026-11-07: also TAPEWORN's, tools/au-harness/tapeworn-session.state, from sessions-tapeworn.xml.)
+int writeLiminalAuState(const juce::String& path, const char* fixture = "sessions-liminal.xml") {
     using namespace sessiontest;
-    auto xml = juce::XmlDocument::parse(fixtureFile("sessions-liminal.xml"));
+    auto xml = juce::XmlDocument::parse(fixtureFile(fixture));
     if (xml == nullptr) return 1;
     for (auto* e : xml->getChildWithTagNameIterator("SESSION")) {
         if (e->getStringAttribute("name") != "all six, moved") continue;

@@ -232,6 +232,14 @@ void testParameters(Suite& s) {
 
 void testSmoke(Suite& s) {
     s.section("smoke");
+    {   // 2026-11-07: VACANCY by Windward Audio; the AU codes (aumu Lmnl Veil) unchanged, so old songs find it
+        LiminalProcessor named;
+        s.check(named.getName() == "VACANCY", "the plug-in is called VACANCY", named.getName().toStdString());
+       #ifdef JucePlugin_Manufacturer
+        s.check(juce::String(JucePlugin_Manufacturer) == "Windward Audio" && JucePlugin_ManufacturerCode == 0x5665696c && JucePlugin_PluginCode == 0x4c6d6e6c,
+                "by Windward Audio, AU codes unchanged (aumu Lmnl Veil)", JucePlugin_Manufacturer);
+       #endif
+    }
     Rig rig;
     const auto bed = rig.render(3.0);
     const double bedRms = rms(bed.first, bed.second, std::size_t(rig.rate));
@@ -1246,6 +1254,7 @@ int main(int argc, char** argv) {
         else if (arg == "--write-session-fixtures" && i + 1 < argc) return writeSessionFixtures(argv[++i]);
         else if (arg == "--refresh-session-fingerprints") return refreshSessionFingerprints();
         else if (arg == "--write-liminal-au-state" && i + 1 < argc) return writeLiminalAuState(argv[++i]);
+        else if (arg == "--write-tapeworn-au-state" && i + 1 < argc) return writeLiminalAuState(argv[++i], "sessions-tapeworn.xml");
         else if (arg == "--capture-model" && i + 3 < argc) {
             const juce::String model(argv[i + 1]);
             const auto cwd = juce::File::getCurrentWorkingDirectory();

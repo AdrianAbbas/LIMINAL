@@ -1,18 +1,19 @@
-# TAPEWORN and TAPEWORN FX
+# VACANCY and VACANCY FX
 
-A cinematic environmental **instrument** by **Elsewhere Audio** (AU / VST3, macOS; GarageBand and
+A cinematic environmental **instrument** by **Windward Audio** (AU / VST3, macOS; GarageBand and
 Logic Pro): playable, unsettling instruments placed inside liminal spaces.
 
-**TAPEWORN FX** (2026-11-06), by **Windward Audio**: the audio **effect** built from the same
-repository - any sound (guitar, vocals, synths, drums, a whole mix) through TAPEWORN's ten places
+**VACANCY FX**, also by **Windward Audio**: the audio **effect** built from the same
+repository - any sound (guitar, vocals, synths, drums, a whole mix) through VACANCY's ten places
 (their rooms with the captured spaces, signatures, Characters, the cross-fade between places) and
 its LIMINALITY stage adapted for audio (Detune, Drift, Wow & Flutter, Warble, Ghost, Wear, Timing,
 Unevenness, Sour Notes, Fade), with Mix, Intensity, Input, Output and a click-free Bypass, the same
 viewfinder, 26 presets, A/B and undo. AU `aufx Tpfx Wnwd`, VST3 effect; level-matched in every
-room; 20 ms reported latency. See [`docs/TAPEWORN_FX.md`](docs/TAPEWORN_FX.md).
+room; 20 ms reported latency. See [`docs/VACANCY_FX.md`](docs/VACANCY_FX.md).
 
-*TAPEWORN was called LIMINAL until 2026-11-06. Songs and presets made with LIMINAL open in TAPEWORN
-unchanged (same Audio Unit codes, same parameters); the installer removes the old copy.*
+*VACANCY was called LIMINAL until 2026-11-06, then TAPEWORN until 2026-11-07; VACANCY FX was
+TAPEWORN FX. Songs and presets made under the old names open in VACANCY and VACANCY FX unchanged
+(same Audio Unit codes, same parameters); the installer removes the old copies.*
 
 **Status: Milestones 0–6 and 8 done (7 to come), plus the instrument library.** Twenty
 instruments in six slots (each slot plays any of them, with its own Liminality, effects and room):
@@ -47,9 +48,9 @@ and composited live, so the lights flicker with the hum and swell with the notes
 
 ## Install (macOS)
 
-Download `TAPEWORN-macOS-Universal` from the latest successful **Native build**
+Download `VACANCY-macOS-Universal` from the latest successful **Native build**
 Actions run, unzip it, and follow `INSTALL.txt` (run `bash install-mac.sh`): it installs both
-plug-ins, TAPEWORN and TAPEWORN FX, side by side.
+plug-ins, VACANCY and VACANCY FX, side by side.
 
 ## Build
 
@@ -57,7 +58,9 @@ plug-ins, TAPEWORN and TAPEWORN FX, side by side.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # add -DJUCE_PATH=... to use a local JUCE 8.0.16
 cmake --build build --parallel 4
 bash scripts/run-tests-parallel.sh build/LiminalTests_artefacts/Release/LiminalTests
-build/TapewornFXTests_artefacts/Release/TapewornFXTests          # TAPEWORN FX's suite
+build/TapewornFXTests_artefacts/Release/TapewornFXTests          # VACANCY FX's suite
 ```
+
+(The CMake targets and test binaries keep their internal names, `LIMINAL` and `TapewornFX`.)
 
 Licence: AGPL-3.0 (see `LICENSE`).

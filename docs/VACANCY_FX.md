@@ -1,17 +1,20 @@
-# TAPEWORN FX
+# VACANCY FX
+
+*Called TAPEWORN FX until 2026-11-07 (the instrument, VACANCY, was TAPEWORN). Songs and presets made
+with TAPEWORN FX open in VACANCY FX unchanged: the Audio Unit codes and parameters are the same.*
 
 An audio **effect** by **Windward Audio**, built from this repository alongside the instrument
 (one repository, two plug-ins, as DUNGEON CRAWLER / LIGHT SEEKER): any sound - guitar, vocals,
-synths, a full mix, drums - goes through TAPEWORN's world, everything except the instruments
+synths, a full mix, drums - goes through VACANCY's world, everything except the instruments
 themselves.
 
-| | TAPEWORN (instrument) | TAPEWORN FX (effect) |
+| | VACANCY (instrument) | VACANCY FX (effect) |
 |---|---|---|
-| AU | `aumu` / `Lmnl` / `Veil`, "Elsewhere Audio: TAPEWORN" | `aufx` / `Tpfx` / `Wnwd`, "Windward Audio: TAPEWORN FX" |
+| AU | `aumu` / `Lmnl` / `Veil`, "Windward Audio: VACANCY" | `aufx` / `Tpfx` / `Wnwd`, "Windward Audio: VACANCY FX" |
 | VST3 | Instrument / Synth | Fx / Reverb |
-| Bundle ID | `com.elsewhereaudio.tapeworn` | `com.windwardaudio.tapewornfx` |
-| Bundles | `TAPEWORN.component`, `.vst3`, `.app` | `TAPEWORN FX.component`, `.vst3` |
-| Presets | `~/Library/Elsewhere Audio/TAPEWORN/Presets` | `~/Library/Windward Audio/TAPEWORN FX/Presets` (`.tapewornfxpreset`) |
+| Bundle ID | `com.windwardaudio.vacancy` | `com.windwardaudio.vacancyfx` |
+| Bundles | `VACANCY.component`, `.vst3`, `.app` | `VACANCY FX.component`, `.vst3` |
+| Presets | `~/Library/Windward Audio/VACANCY/Presets` (`.vacancypreset`) | `~/Library/Windward Audio/VACANCY FX/Presets` (`.vacancyfxpreset`) |
 | Latency | 0 | 20 ms (reported; hosts compensate) |
 
 The instrument's codes, names and parameters are unchanged.
@@ -60,7 +63,7 @@ input -> Input -> LIMINALITY (pitch line, Ghost, Warble, Wear, Unevenness, Fade)
 
 | Control | Default | |
 |---|---|---|
-| Mix | 100 % | 0 % = the input untouched (delayed by the latency); 100 % = only TAPEWORN's world, which carries its own near sound of the source (an insert). Lower it for parallel use. |
+| Mix | 100 % | 0 % = the input untouched (delayed by the latency); 100 % = only VACANCY's world, which carries its own near sound of the source (an insert). Lower it for parallel use. |
 | Intensity | 70 % | how strongly the place transforms the sound: its processing (Environment Amount) and, with it, its room (Space x Intensity / 70 %) |
 | Input, Output | 0 dB | +/-24 dB; Input drives the world (its saturation), Output the result |
 | Room | Vacant Hospital | the ten places (the film strip, or the PLACE page) |
@@ -110,7 +113,7 @@ sits on the scene; A / B beside the page buttons PLACE, LIMINALITY and PRESETS. 
 Both plug-ins compile the same sources for the places (`DSP/Environment`, `Signature`, `Effects`,
 `Characters`, `Space`, `Convolver`, `Captures`, `Ambience`, `Liminality`) and the editor's
 viewfinder and parts (`UI/Viewfinder`, `UI/Widgets`, `UI/SceneArt`, `UI/PhotoScene`, `UI/Vhs`);
-`Brand.h` gives each its name (`TAPEWORN_FX` is defined for the effect's target). The effect's own
+`Brand.h` gives each its name (`TAPEWORN_FX` (an internal name) is defined for the effect's target). The effect's own
 files are in `Source/Fx/`.
 
 ## Tests

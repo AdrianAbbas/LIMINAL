@@ -1,6 +1,6 @@
 # Instrument notes (Milestone 1)
 
-How TAPEWORN's instruments are built, and the acoustics behind the numbers. Code:
+How VACANCY's instruments are built, and the acoustics behind the numbers. Code:
 `Source/DSP/Instrument.h` (shared voice handling, the mode bank), one file pair per
 instrument in `Source/DSP/`, and `Source/DSP/Distance.h`. Tests: `Tests/InstrumentTests.h`
 (`LiminalTests --only piano,synth,glass`).
