@@ -307,7 +307,7 @@ void Liminality::audioSide(std::uint64_t clock) {
     // loss (about 2.2 dB at 100 %), so only the uneven notes are quieter than before.
     // (Audio input: Unevenness is the FX's own slow level and tone fluctuation, no make-up here.)
     outGainTarget = audioInput ? 1.0f : dbGain(2.2f * std::min(now[lim::uneven], lim::maxEffective));
-    hissLevel = ea > 0.0f ? dbGain(-64.0f + 14.0f * std::min(ea, 1.25f)) : 0.0f;
+    hissLevel = ea > 0.0f ? dbGain(-70.0f + 14.0f * std::min(ea, 1.25f)) : 0.0f;   // 6 dB under the 2026-11 level
     crackleRate = ea > 0.08f ? 5.0f * ea : 0.0f;
     crackleLevel = 0.006f * std::min(ea, 1.5f);
     if (ea > 0.05f && dropLeft == 0 && dropTarget >= 1.0f) {
