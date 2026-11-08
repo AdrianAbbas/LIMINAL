@@ -309,7 +309,7 @@ void Liminality::audioSide(std::uint64_t clock) {
     outGainTarget = audioInput ? 1.0f : dbGain(2.2f * std::min(now[lim::uneven], lim::maxEffective));
     hissLevel = ea > 0.0f ? dbGain(-70.0f + 14.0f * std::min(ea, 1.25f)) : 0.0f;   // 6 dB under the 2026-11 level
     crackleRate = ea > 0.08f ? 5.0f * ea : 0.0f;
-    crackleLevel = 0.006f * std::min(ea, 1.5f);
+    crackleLevel = 0.003f * std::min(ea, 1.5f);   // 6 dB under the 2026-11 level, with the hiss
     if (ea > 0.05f && dropLeft == 0 && dropTarget >= 1.0f) {
         const float perSecond = 0.25f * std::pow(ea, 1.5f);
         if (noise.uniform() < perSecond * tick) {

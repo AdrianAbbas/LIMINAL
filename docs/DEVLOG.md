@@ -3106,5 +3106,5 @@ Windward Audio entries, no LIMINAL / TAPEWORN / Elsewhere; auval on both (arm64 
 harnesses in- and out-of-process (strict) with the host-visible names and the LIMINAL, TAPEWORN and
 TAPEWORN FX songs restored. The installable zip is the run's `VACANCY-macOS-Universal` artifact.
 
-## Hotfix 2026-11-08 — Wear hiss 6 dB quieter
-Wear's hiss gain (`DSP/Liminality.cpp`, shared by VACANCY and VACANCY FX) lowered by 6 dB at every setting (-64 → -70 dB base, same curve); dropouts, crackle, filtering, wow untouched. `--only liminality`: 49 passed.
+## Hotfix 2026-11-08 — Wear hiss and crackle 6 dB quieter
+Wear's hiss gain (`DSP/Liminality.cpp`, shared by VACANCY and VACANCY FX) lowered by 6 dB at every setting (-64 → -70 dB base, same curve). CI then failed 84 click checks (hung-notes stress): the hiss had masked Wear's crackle from the click detector, so the crackle is 6 dB quieter too (0.006 → 0.003), by the developer's choice. Dropouts, filtering, wow untouched. `--only liminality`: 49 passed.
