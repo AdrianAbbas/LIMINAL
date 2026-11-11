@@ -195,8 +195,9 @@ void Ambience::configure(Place p, unsigned s, const Character* ch) {
     gritL.set(4200.0f, 1.4f, sr);
     gritR.set(4700.0f, 1.4f, sr);
     clockTone.set(2300.0f, 6.0f, sr);
-    trickleA.set(1700.0f, 9.0f, sr);
-    trickleB.set(2900.0f, 9.0f, sr);
+    trickleA.set(1100.0f, 0.6f, sr);   // low-passed: a distant wash, not drops
+    trickleB.set(1200.0f, 0.6f, sr);
+    trickleCoef = float(1.0 - std::exp(-1.0 / (0.08 * sr)));
     lampCoef = float(1.0 - std::exp(-1.0 / (0.003 * sr)));
     silenceFall = float(1.0 - std::exp(-1.0 / (0.01 * sr)));
     silenceRise = float(1.0 - std::exp(-1.0 / (0.15 * sr)));
@@ -230,6 +231,7 @@ void Ambience::reset() {
             d.countdown = int(sr * double(d.onSeconds) * (0.4 + 0.6 * double(random())));
     }
     clockEnv = trickleEnv = whinePhase = 0;
+    trickleTarget = 0.8f * trickleLevel;
     clockCountdown = int(sr * 0.5);
     clockBeat = 0;
     silenceGain = silenceTarget = 1;
@@ -762,18 +764,15 @@ Ambience::Out Ambience::tick() {
         l += clockTone.band * 0.9f;
         r += clockTone.band * 0.7f;
     }
-    if (trickleLevel > 0.0f) {   // the fountain, far off: tiny drops, steady, never splashing
-        if (random() < float(35.0 / sr)) {
-            trickleEnv = trickleLevel * (0.4f + 0.6f * random());
-            trickleA.set(1300.0f + 1500.0f * random(), 9.0f, sr);
-            trickleB.set(2400.0f + 1500.0f * random(), 9.0f, sr);
-        }
-        const float x = trickleEnv * wl;
-        trickleEnv *= 0.995f;
-        trickleA.tick(x);
-        trickleB.tick(x);
-        l += trickleA.band;
-        r += trickleB.band;
+    if (trickleLevel > 0.0f) {   // the fountain, far off: a soft continuous trickle, no single drops
+        // 2026-11-11: it was 35 resonant drops a second with instant attacks - heard as a steady
+        // ticking. Now low-passed noise whose level wanders slowly (smoothed over ~80 ms): no edges.
+        if (random() < float(6.0 / sr)) trickleTarget = trickleLevel * (0.6f + 0.4f * random());
+        trickleEnv += trickleCoef * (trickleTarget - trickleEnv);
+        trickleA.tick(trickleEnv * wl);
+        trickleB.tick(trickleEnv * wr);
+        l += 0.7f * trickleA.low;
+        r += 0.7f * trickleB.low;
     }
     if (whineLevel > 0.0f) {   // a coil whining, almost too high to notice
         whinePhase += whineHz / float(sr);

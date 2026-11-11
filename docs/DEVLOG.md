@@ -3108,3 +3108,6 @@ TAPEWORN FX songs restored. The installable zip is the run's `VACANCY-macOS-Univ
 
 ## Hotfix 2026-11-08 — Wear hiss and crackle 6 dB quieter
 Wear's hiss gain (`DSP/Liminality.cpp`, shared by VACANCY and VACANCY FX) lowered by 6 dB at every setting (-64 → -70 dB base, same curve). CI then failed 84 click checks (hung-notes stress): the hiss had masked Wear's crackle from the click detector, so the crackle is 6 dB quieter too (0.006 → 0.003), by the developer's choice. Dropouts, filtering, wow untouched. The 14 TAPEWORN FX session fingerprints that use Wear (`Tests/fixtures/sessions-tapeworn-fx.xml`) re-rendered for the quieter hiss; their saved states unchanged. `--only liminality`: 49 passed; FX `--only sessions`: 5 passed.
+
+## Hotfix 2026-11-11 — Mall ticking
+The mall's ticking was its fountain trickle (`DSP/Ambience.cpp`, shared by VACANCY and VACANCY FX): 35 instant-attack, high-Q drops a second, about 24 transients/s in a 60 s render of the mall's ambience alone (escalator drone 0/s, flicker none). It is now a soft continuous distant trickle (low-passed noise, level smoothed over ~80 ms): 0 transients/s in the bed; no other place uses the trickle.

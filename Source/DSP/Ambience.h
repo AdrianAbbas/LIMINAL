@@ -107,7 +107,7 @@ private:
     float clockLevel = 0, clockEnv = 0;
     int clockCountdown = 0, clockBeat = 0;
     Svf clockTone;
-    float trickleLevel = 0, trickleEnv = 0;
+    float trickleLevel = 0, trickleEnv = 0, trickleTarget = 0, trickleCoef = 0.001f;
     Svf trickleA, trickleB;
     float whineHz = 0, whineLevel = 0, whinePhase = 0;
     // The impossible room: a hum that drifts in pitch, and moments of total silence.
