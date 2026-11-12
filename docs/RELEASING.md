@@ -106,8 +106,8 @@ sudo pkgutil --forget com.windwardaudio.vacancy.pkg.au; sudo pkgutil --forget co
 
 ## Renewing the certificates
 
-Developer ID certificates are valid for about 5 years (the setup step prints each expiry date and
-warns when fewer than 60 days remain). Code signed and notarised before expiry keeps working: the
+The current certificates expire on **12 December 2027** (both). The setup step prints each expiry
+date on every signing run and warns when fewer than 60 days remain. Code signed and notarised before expiry keeps working: the
 secure timestamp proves when it was signed. Only new builds need the new certificate.
 
 1. On a Mac, in **Keychain Access > Certificate Assistant > Request a Certificate From a Certificate
