@@ -17,7 +17,7 @@
         <line choice="au"/>
         <line choice="vst3"/>
     </choices-outline>
-    <choice id="old" visible="false" title="Remove LIMINAL and TAPEWORN">
+    <choice id="old" visible="false" title="Prepare installation">
         <pkg-ref id="com.windwardaudio.vacancy.pkg.remove-old"/>
     </choice>
     <choice id="au" title="Audio Units (GarageBand, Logic Pro)"

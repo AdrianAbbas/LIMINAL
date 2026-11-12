@@ -6,24 +6,11 @@ This folder holds both plug-ins. They install side by side and are separate plug
 in your host: VACANCY is an instrument (played with MIDI), VACANCY FX is an audio
 effect (put it on a guitar, a voice, a synth, drums or a whole mix).
 
-VACANCY is the new name of TAPEWORN (and before that, LIMINAL); VACANCY FX is the
-new name of TAPEWORN FX. They are the same plug-ins: songs and presets made with
-LIMINAL, TAPEWORN or TAPEWORN FX open in VACANCY and VACANCY FX unchanged. The
-installer removes the old copies so your host does not list them twice.
-
 INSTALL
-  1. Quit GarageBand and Logic.
-  2. Open Terminal (Applications > Utilities > Terminal).
-  3. Type "bash " (with a space), drag install-mac.sh from this folder into the
-     Terminal window, and press Return.
-  4. Wait for "VACANCY and VACANCY FX are installed and validated."
-
-  Why a script? This build is not signed with an Apple Developer ID. When a browser
-  downloads it, macOS marks every file as quarantined and then refuses to load the
-  plug-in: GarageBand shows a silent slot with plain sliders. The script removes that
-  flag, re-signs both plug-ins for this Mac, removes the copies under the old names
-  (LIMINAL, TAPEWORN, TAPEWORN FX), refreshes
-  the Audio Unit list and runs Apple's validator on both.
+  1. Quit GarageBand, Logic Pro and any other music apps.
+  2. Open VACANCY.pkg and follow the steps. It installs VACANCY and VACANCY FX
+     as Audio Unit and VST3 plug-ins, with their sounds and factory presets.
+  3. Open your DAW and find them under Windward Audio.
 
 GARAGEBAND
   Settings > Audio/MIDI: tick "Audio Units". Restart GarageBand.
@@ -72,8 +59,7 @@ VACANCY FX
   A / B        two settings to compare; A>B copies the one shown into the other.
   It reports 20 ms of latency (its pitch line); hosts compensate it, so the
   track stays in time. Every place is level-matched to what comes in.
-  Your own presets: ~/Library/Windward Audio/VACANCY FX/Presets (the ones you
-  saved with TAPEWORN FX are copied there the first time you open PRESETS).
+  Your own presets: ~/Library/Windward Audio/VACANCY FX/Presets
 
 PRESETS
   INIT, at the top of every list, is "no preset": every instrument, the place,
@@ -83,8 +69,6 @@ PRESETS
   (Cmd+Z / Cmd+Shift+Z do the same in the standalone app; most hosts keep those
   keys for their own undo.)
   Your own presets are kept in ~/Library/Windward Audio/VACANCY/Presets.
-  Presets you saved with TAPEWORN or LIMINAL are copied there the first time you
-  open the USER list (the old files stay where they were).
 
 LEVELS
   All twenty instruments play at the same loudness in every place and Character
@@ -92,19 +76,11 @@ LEVELS
   Influence at 0 they play at their own dry levels.
 
 UNINSTALL
-  bash uninstall-mac.sh            (add --purge to also delete saved presets)
-  It removes VACANCY, VACANCY FX and any copy under the old names.
+  Move these to the Trash:
+    /Library/Audio/Plug-Ins/Components/VACANCY.component
+    /Library/Audio/Plug-Ins/Components/VACANCY FX.component
+    /Library/Audio/Plug-Ins/VST3/VACANCY.vst3
+    /Library/Audio/Plug-Ins/VST3/VACANCY FX.vst3
 
-MANUAL INSTALL (if you prefer not to run the script)
-  rm -rf ~/Library/Audio/Plug-Ins/Components/LIMINAL.component
-  rm -rf ~/Library/Audio/Plug-Ins/Components/TAPEWORN.component
-  rm -rf ~/Library/Audio/Plug-Ins/Components/"TAPEWORN FX.component"
-  cp -R VACANCY.component ~/Library/Audio/Plug-Ins/Components/
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/VACANCY.component
-  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/VACANCY.component
-  cp -R "VACANCY FX.component" ~/Library/Audio/Plug-Ins/Components/
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"VACANCY FX.component"
-  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/"VACANCY FX.component"
-  killall -9 AudioComponentRegistrar
-  auval -v aumu Lmnl Veil
-  auval -v aufx Tpfx Wnwd
+HELP
+  general@windwardaudio.com
