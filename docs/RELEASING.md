@@ -21,8 +21,9 @@ secondary download. All of it happens in CI (`.github/workflows/build.yml`, job 
 | Package path: Gatekeeper on the quarantined `.pkg`, `sudo installer -pkg`, receipts, old copies removed, registry, codesign / Gatekeeper on the installed copies, auval and AU harnesses arm64 + x86_64 on the installed copies | `scripts/ci-pkg-install-test.sh` | always (Gatekeeper parts only when notarised) |
 | Delete the keychain and the key file, restore the keychain search list | `scripts/ci-signing-cleanup.sh` | always, last step |
 
-Artifacts: `VACANCY-macOS-Universal` (the zip, every run) and `VACANCY-macOS-Installer`
-(`VACANCY.pkg`, only signed and notarised runs). Notarisation logs are in the
+Artifacts: `VACANCY-dev-macOS` (the developer zip with the bundles and install scripts, every run,
+for testing only) and `VACANCY-1.0-macOS` (the customer download: only `VACANCY.pkg` and
+`VACANCY - Read Me.txt`, only signed and notarised runs; tagged releases publish it as `VACANCY-1.0-macOS.zip`). Notarisation logs are in the
 `VACANCY-macOS-diagnostics` artifact under `notary/`; on a rejection the log is also printed in the step.
 
 ### When it signs

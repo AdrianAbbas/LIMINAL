@@ -185,10 +185,10 @@ jobs:
             if [[ -f "$f" ]]; then tail -25 "$f" > "$f.tail"; fi
           done
           bash scripts/ci-annotate.sh --condense build/ci-logs/harness-x86_64-*.txt build/ci-logs/harness-fx-x86_64-*.txt build/ci-logs/control-*.txt build/ci-logs/crashes.txt build/ci-logs/auval-*.txt.tail
-      - name: Upload installable package (only when every check passed)
+      - name: Upload the developer package (bundles and install scripts, for testing only; only when every check passed)
         uses: actions/upload-artifact@v4
         with:
-          name: VACANCY-macOS-Universal
+          name: VACANCY-dev-macOS
           path: dist/VACANCY-macOS-Universal.zip
           if-no-files-found: error
       - name: Publish VACANCY.pkg install logs as annotations
@@ -198,12 +198,20 @@ jobs:
             if [[ -f "$f" ]]; then tail -12 "$f" > "$f.tail"; fi
           done
           bash scripts/ci-annotate.sh --condense build/ci-logs/pkg/pkg-gatekeeper.txt build/ci-logs/pkg/pkg-scripts.txt build/ci-logs/pkg/pkg-registry.txt build/ci-logs/pkg/pkg-crashes.txt build/ci-logs/pkg/pkg-auval-*.txt.tail
-      - name: Upload the signed and notarised installer VACANCY.pkg (only when every check passed)
+      # Customer download: only the signed, notarised VACANCY.pkg and the Read Me. Ad-hoc runs produce none.
+      - name: Stage the customer package (VACANCY.pkg and the Read Me)
+        run: |
+          if [[ "${{ steps.signing.outputs.enabled }}" == true ]]; then
+            bash scripts/package-mac.sh --customer dist/VACANCY.pkg dist
+          else
+            echo "::notice title=No customer package::This run was signed ad hoc, so VACANCY.pkg is unsigned and the customer artifact VACANCY-1.0-macOS was not produced. Only the developer artifact VACANCY-dev-macOS is available."
+          fi
+      - name: Upload the customer package VACANCY-1.0-macOS (signed runs only, when every check passed)
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: VACANCY-macOS-Installer
-          path: dist/VACANCY.pkg
+          name: VACANCY-1.0-macOS
+          path: dist/VACANCY-1.0-macOS/
           if-no-files-found: error
       - name: Upload diagnostics
         if: always()
@@ -315,7 +323,8 @@ jobs:
           path: build/test-logs/
           if-no-files-found: warn
   release:
-    # Tagged commits (v*) publish the same package as a GitHub Release.
+    # Tagged commits (v*) publish the customer package as a GitHub Release: VACANCY-1.0-macOS.zip
+    # with only VACANCY.pkg and the Read Me. It needs a signed run on the tag (docs/RELEASING.md).
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [macos, linux]
     runs-on: ubuntu-24.04
@@ -323,17 +332,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
-        with:
-          name: VACANCY-macOS-Universal
-      # Present only when the tag's run was signed and notarised (a manual run on the tag; docs/RELEASING.md).
-      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: VACANCY-macOS-Installer
+          name: VACANCY-1.0-macOS
+          path: VACANCY-1.0-macOS
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files=(VACANCY-macOS-Universal.zip)
-          if [[ -f VACANCY.pkg ]]; then files=(VACANCY.pkg "${files[@]}"); else echo "::warning::no signed VACANCY.pkg in this run; the release has the zip only"; fi
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --title "VACANCY $GITHUB_REF_NAME" --generate-notes
+          if [[ ! -f VACANCY-1.0-macOS/VACANCY.pkg ]]; then
+            echo "::error::no signed VACANCY.pkg in this run (ad-hoc build), so there is no customer package to release"
+            exit 1
+          fi
+          (cd VACANCY-1.0-macOS && zip -X ../VACANCY-1.0-macOS.zip VACANCY.pkg "VACANCY - Read Me.txt")
+          gh release create "$GITHUB_REF_NAME" VACANCY-1.0-macOS.zip --repo "$GITHUB_REPOSITORY" --title "VACANCY $GITHUB_REF_NAME" --generate-notes
