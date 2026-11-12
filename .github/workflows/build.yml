@@ -15,10 +15,10 @@ env:
 jobs:
   macos:
     runs-on: macos-15
-    timeout-minutes: 90
+    # 2026-11-12: 120 (was 90): Developer ID signing and two notarisations join the job.
+    timeout-minutes: 120
     env:
-      # The optional Developer ID path runs only when these secrets exist.
-      HAS_DEVELOPER_ID: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      APPLE_TEAM_ID: YYZP4W7G7D # LJP Records Inc. (Windward Audio); not a secret
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
@@ -88,22 +88,92 @@ jobs:
           /usr/bin/arch -x86_64 build/TapewornFXTests_artefacts/Release/TapewornFXTests --only smoke,parameters,latency
       - name: Universal binary and Info.plist gate (instrument and effect)
         run: bash scripts/ci-check-bundles.sh build/LIMINAL_artefacts/Release build/TapewornFX_artefacts/Release
-      - name: Developer ID signing and notarisation (optional, untested)
-        if: env.HAS_DEVELOPER_ID == 'true'
+      # Developer ID signing and notarisation (docs/RELEASING.md): only for pushes to main and manual
+      # runs, never for pull requests or forks, and only when all seven secrets exist. Otherwise the
+      # build is signed ad hoc as before (scripts/package-mac.sh) and VACANCY.pkg is built unsigned
+      # for the install test only. Secrets reach only the steps that need them and are never printed.
+      - name: Decide whether this run signs with Developer ID
+        id: signing
         env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-        run: bash scripts/ci-developer-id.sh build/LIMINAL_artefacts/Release build/TapewornFX_artefacts/Release
+          ELIGIBLE: ${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && !github.event.repository.fork }}
+          HAVE_MACOS_APP_CERT_P12: ${{ secrets.MACOS_APP_CERT_P12 != '' }}
+          HAVE_MACOS_APP_CERT_PASSWORD: ${{ secrets.MACOS_APP_CERT_PASSWORD != '' }}
+          HAVE_MACOS_INSTALLER_CERT_P12: ${{ secrets.MACOS_INSTALLER_CERT_P12 != '' }}
+          HAVE_MACOS_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERT_PASSWORD != '' }}
+          HAVE_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID != '' }}
+          HAVE_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID != '' }}
+          HAVE_ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 != '' }}
+        run: |
+          missing=""
+          for name in MACOS_APP_CERT_P12 MACOS_APP_CERT_PASSWORD MACOS_INSTALLER_CERT_P12 MACOS_INSTALLER_CERT_PASSWORD ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            have="HAVE_$name"
+            [[ "${!have}" == true ]] || missing="$missing $name"
+          done
+          if [[ "$ELIGIBLE" != true ]]; then
+            echo "::notice title=Ad-hoc build::Developer ID signing and notarisation run only for pushes to main and manual runs ($GITHUB_EVENT_NAME on $GITHUB_REF): this build is signed ad hoc and VACANCY.pkg is unsigned (install test only)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$missing" ]]; then
+            echo "::notice title=Ad-hoc build::Developer ID signing skipped, these secrets are missing:$missing. This build is signed ad hoc and VACANCY.pkg is unsigned (install test only). See docs/RELEASING.md."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Developer ID signing and notarisation enabled (team $APPLE_TEAM_ID)."
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Import the Developer ID certificates and the G2 intermediate into a temporary keychain
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          MACOS_APP_CERT_P12: ${{ secrets.MACOS_APP_CERT_P12 }}
+          MACOS_APP_CERT_PASSWORD: ${{ secrets.MACOS_APP_CERT_PASSWORD }}
+          MACOS_INSTALLER_CERT_P12: ${{ secrets.MACOS_INSTALLER_CERT_P12 }}
+          MACOS_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERT_PASSWORD }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: bash scripts/ci-signing-setup.sh
+      - name: Sign both plug-ins with Developer ID (hardened runtime, secure timestamp, no entitlements)
+        if: steps.signing.outputs.enabled == 'true'
+        run: >
+          bash scripts/sign-mac.sh
+          build/LIMINAL_artefacts/Release/AU/VACANCY.component build/LIMINAL_artefacts/Release/VST3/VACANCY.vst3
+          "build/TapewornFX_artefacts/Release/AU/VACANCY FX.component" "build/TapewornFX_artefacts/Release/VST3/VACANCY FX.vst3"
+      # Bundles already signed with Developer ID keep their signature; everything else is signed ad hoc.
       - name: Sign, verify and package (both plug-ins)
         run: bash scripts/package-mac.sh build/LIMINAL_artefacts/Release dist build/TapewornFX_artefacts/Release
+      - name: Notarise the zip, staple the tickets to the four bundles and re-package
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          bash scripts/notarize-mac.sh dist/VACANCY-macOS-Universal.zip build/ci-logs/notary
+          for bundle in build/LIMINAL_artefacts/Release/AU/VACANCY.component build/LIMINAL_artefacts/Release/VST3/VACANCY.vst3 \
+                        "build/TapewornFX_artefacts/Release/AU/VACANCY FX.component" "build/TapewornFX_artefacts/Release/VST3/VACANCY FX.vst3"; do
+            stapled=0
+            for attempt in 1 2 3 4; do
+              if xcrun stapler staple "$bundle"; then stapled=1; break; fi
+              sleep $((attempt * 15))
+            done
+            [[ $stapled == 1 ]] || echo "::warning::could not staple a ticket to $bundle (Gatekeeper still finds the ticket online)"
+          done
+          bash scripts/package-mac.sh build/LIMINAL_artefacts/Release dist build/TapewornFX_artefacts/Release
+      - name: Build the installer package VACANCY.pkg (productbuild, Developer ID Installer when signing)
+        run: bash scripts/build-pkg.sh build/LIMINAL_artefacts/Release build/TapewornFX_artefacts/Release dist/VACANCY.pkg
+      - name: Notarise VACANCY.pkg and staple the ticket
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: bash scripts/notarize-mac.sh --staple dist/VACANCY.pkg build/ci-logs/notary
+      - name: Verify signatures, notarisation and Gatekeeper (four bundles and the installer)
+        if: steps.signing.outputs.enabled == 'true'
+        run: >
+          bash scripts/ci-verify-signing.sh dist/VACANCY.pkg
+          build/LIMINAL_artefacts/Release/AU/VACANCY.component build/LIMINAL_artefacts/Release/VST3/VACANCY.vst3
+          "build/TapewornFX_artefacts/Release/AU/VACANCY FX.component" "build/TapewornFX_artefacts/Release/VST3/VACANCY FX.vst3"
       - name: Build AU host harnesses (instrument and effect)
         run: bash scripts/build-au-harness.sh build/LiminalAUHarness
       - name: Install a quarantined download with install-mac.sh, then auval and harnesses for both plug-ins (arm64 + x86_64)
         run: bash scripts/ci-user-install-test.sh dist/VACANCY-macOS-Universal.zip build/LiminalAUHarness build/ci-logs
+      - name: Install VACANCY.pkg on the runner, then auval and harnesses on the installed copies (arm64 + x86_64)
+        run: bash scripts/ci-pkg-install-test.sh ${{ steps.signing.outputs.enabled == 'true' && '--notarized' || '' }} dist/VACANCY.pkg build/LiminalAUHarness build/ci-logs/pkg
       # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
       - name: Publish install and arm64 harness logs as annotations
         if: always()
@@ -121,6 +191,20 @@ jobs:
           name: VACANCY-macOS-Universal
           path: dist/VACANCY-macOS-Universal.zip
           if-no-files-found: error
+      - name: Publish VACANCY.pkg install logs as annotations
+        if: always()
+        run: |
+          for f in build/ci-logs/pkg/pkg-auval-*.txt; do
+            if [[ -f "$f" ]]; then tail -12 "$f" > "$f.tail"; fi
+          done
+          bash scripts/ci-annotate.sh --condense build/ci-logs/pkg/pkg-gatekeeper.txt build/ci-logs/pkg/pkg-scripts.txt build/ci-logs/pkg/pkg-registry.txt build/ci-logs/pkg/pkg-crashes.txt build/ci-logs/pkg/pkg-auval-*.txt.tail
+      - name: Upload the signed and notarised installer VACANCY.pkg (only when every check passed)
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VACANCY-macOS-Installer
+          path: dist/VACANCY.pkg
+          if-no-files-found: error
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -129,6 +213,10 @@ jobs:
           path: |
             build/ci-logs/
           if-no-files-found: warn
+      # Always last: the temporary keychain and the API key file are deleted whatever happened.
+      - name: Delete the temporary signing keychain
+        if: always()
+        run: bash scripts/ci-signing-cleanup.sh
   linux:
     runs-on: ubuntu-24.04
     # 2026-11-06: 90 (as the macOS job): VACANCY FX's suite and listening render join the instrument's.
@@ -237,7 +325,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: VACANCY-macOS-Universal
+      # Present only when the tag's run was signed and notarised (a manual run on the tag; docs/RELEASING.md).
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: VACANCY-macOS-Installer
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" VACANCY-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "VACANCY $GITHUB_REF_NAME" --generate-notes
+        run: |
+          files=(VACANCY-macOS-Universal.zip)
+          if [[ -f VACANCY.pkg ]]; then files=(VACANCY.pkg "${files[@]}"); else echo "::warning::no signed VACANCY.pkg in this run; the release has the zip only"; fi
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --title "VACANCY $GITHUB_REF_NAME" --generate-notes

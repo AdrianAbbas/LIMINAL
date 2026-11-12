@@ -1,0 +1,5 @@
+#!/bin/bash
+# VACANCY.pkg (Audio Units): make every user's Audio Unit registry list the new copies.
+/usr/bin/killall -9 AudioComponentRegistrar 2>/dev/null || true
+echo "VACANCY installer: Audio Unit registry reset"
+exit 0
