@@ -22,8 +22,9 @@ secondary download. All of it happens in CI (`.github/workflows/build.yml`, job 
 | Delete the keychain and the key file, restore the keychain search list | `scripts/ci-signing-cleanup.sh` | always, last step |
 
 Artifacts: `VACANCY-dev-macOS` (the developer zip with the bundles and install scripts, every run,
-for testing only) and `VACANCY-1.0-macOS` (the customer download: only `VACANCY.pkg` and
-`VACANCY - Read Me.txt`, only signed and notarised runs; tagged releases publish it as `VACANCY-1.0-macOS.zip`). Notarisation logs are in the
+for testing only) and `VACANCY-1.0-macOS` (the customer download, to the
+[installer standard](INSTALLER_STANDARD.md): only `VACANCY Installer.pkg` and `VACANCY - Read Me.pdf`,
+only signed and notarised runs; tagged releases publish it as `VACANCY-1.0-macOS.zip`). Notarisation logs are in the
 `VACANCY-macOS-diagnostics` artifact under `notary/`; on a rejection the log is also printed in the step.
 
 ### When it signs
@@ -38,7 +39,7 @@ installer is still tested, and it is not uploaded. CI never fails because the se
 
 Tag pushes (`v*`) are not signing runs. To publish a signed release, push the tag, then start
 **Run workflow** on that tag: the run signs and notarises, and the `release` job (which runs for
-`refs/tags/v*`) attaches `VACANCY.pkg` and the zip to the GitHub Release.
+`refs/tags/v*`) attaches `VACANCY-1.0-macOS.zip` (`VACANCY Installer.pkg` and the Read Me) to the GitHub Release.
 
 ## Secrets (Settings > Secrets and variables > Actions)
 
@@ -74,7 +75,8 @@ shipped, stays ad-hoc signed.)
 
 ## The installer package
 
-`VACANCY.pkg` installs for all users:
+Pages, wording, background, licence and Read Me follow the Windward Audio
+[installer standard](INSTALLER_STANDARD.md). `VACANCY.pkg` (shipped as `VACANCY Installer.pkg`) installs for all users:
 
 - `/Library/Audio/Plug-Ins/Components/VACANCY.component` and `VACANCY FX.component` (choice "Audio Units")
 - `/Library/Audio/Plug-Ins/VST3/VACANCY.vst3` and `VACANCY FX.vst3` (choice "VST3")
@@ -102,7 +104,7 @@ sudo rm -rf "/Library/Audio/Plug-Ins/Components/VACANCY.component" "/Library/Aud
 ```
 
 ```bash
-sudo pkgutil --forget com.windwardaudio.vacancy.pkg.au; sudo pkgutil --forget com.windwardaudio.vacancy.pkg.vst3
+sudo pkgutil --forget com.windwardaudio.pkg.vacancy.au; sudo pkgutil --forget com.windwardaudio.pkg.vacancy.vst3
 ```
 
 ## Renewing the certificates

@@ -1,0 +1,14 @@
+{
+    "_comment": "The only per-product file of the Windward Audio installer standard (docs/INSTALLER_STANDARD.md). Everything else in installer/ is copied unchanged between products.",
+    "product": "VACANCY",
+    "id": "vacancy",
+    "version": "1.0",
+    "description": "A cinematic environmental instrument and effect: twenty instruments, and any sound you play, inside ten half-remembered places.",
+    "accent": "#9effc4",
+    "min_macos": "10.15",
+    "min_macos_name": "Catalina",
+    "plugins": [
+        { "name": "VACANCY", "kind": "instrument" },
+        { "name": "VACANCY FX", "kind": "effect" }
+    ]
+}

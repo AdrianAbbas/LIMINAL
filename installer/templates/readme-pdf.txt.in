@@ -1,0 +1,54 @@
+= @PRODUCT@ by Windward Audio
+~ Read Me, version @VERSION@
+
+== What it is
+@DESCRIPTION@
+
+@EACH_PLUGIN@- @NAME@: @KIND_ARTICLE@ @KIND@, as an Audio Unit (AU) and a VST3 plug-in.
+@END@
+
+Everything is installed by @PRODUCT@ Installer.pkg, with the sounds and factory presets, for all users of this Mac.
+
+== System requirements
+- macOS @MIN_MACOS@ (@MIN_MACOS_NAME@) or later
+- Apple Silicon or Intel Mac
+- @DISK_SPACE@ of disk space
+- A music app that loads Audio Unit or VST3 plug-ins (GarageBand, Logic Pro, Ableton Live, Cubase, Reaper, Studio One, ...)
+
+== Install
+1. Quit GarageBand, Logic Pro and any other music apps.
+2. Double-click @PRODUCT@ Installer.pkg and follow the steps. To leave out the AU or the VST3 version, click Customize on the Installation Type page.
+3. Open your music app and find @PRODUCT@ under Windward Audio.
+
+== Where to find it
+:: GarageBand
+@EACH_PLUGIN@- @NAME@: @GARAGEBAND_PATH@.
+@END@
+- If you see sliders instead of the plug-in's window, switch the plug-in window's view menu from "Controls" to "Editor".
+:: Logic Pro
+@EACH_PLUGIN@- @NAME@: @LOGIC_PATH@.
+@END@
+- If it is missing, open Settings > Plug-in Manager, select it under Windward Audio and click "Reset & Rescan Selection".
+:: Other music apps
+Rescan plug-ins if your app asks, then look for Windward Audio (or the plug-in's name) in the instrument or effect list, as AU or VST3.
+
+== Presets
+The factory presets are built into the plug-ins. Presets you save are kept in:
+@EACH_PLUGIN@    ~/Library/Windward Audio/@NAME@/Presets
+@END@
+> ~ is your home folder. In Finder, choose Go > Go to Folder and paste the path.
+
+== Updates
+When a new version of @PRODUCT@ is available, download it and run its installer. It replaces the installed version; your own presets are kept.
+
+== Uninstall
+Quit your music apps, then move these to the Trash (Finder will ask for your password):
+@EACH_PLUGIN@    /Library/Audio/Plug-Ins/Components/@NAME@.component
+    /Library/Audio/Plug-Ins/VST3/@NAME@.vst3
+@END@
+To remove your saved presets as well, also move these to the Trash:
+@EACH_PLUGIN@    ~/Library/Windward Audio/@NAME@
+@END@
+
+== Support
+support@windwardaudio.com

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Windward Audio installer standard (docs/INSTALLER_STANDARD.md), rendered by installer/render.py. -->
+<installer-gui-script minSpecVersion="2">
+    <title>@PRODUCT@ by Windward Audio</title>
+    <organization>com.windwardaudio</organization>
+    <background file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none"/>
+    <background-darkAqua file="background-dark.png" mime-type="image/png" alignment="bottomleft" scaling="none"/>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <readme file="readme.html" mime-type="text/html"/>
+    <license file="EULA.rtf" mime-type="text/rtf"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false"/>
+    <options customize="allow" rootVolumeOnly="true" hostArchitectures="arm64,x86_64"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="@MIN_MACOS@"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+        <line choice="prepare"/>
+        <line choice="au"/>
+        <line choice="vst3"/>
+    </choices-outline>
+    <choice id="prepare" visible="false" title="Prepare installation">
+        <pkg-ref id="com.windwardaudio.pkg.@ID@.prepare"/>
+    </choice>
+    <choice id="au" title="Audio Units (GarageBand, Logic Pro)"
+            description="@PLUGIN_NAMES@ as Audio Units, in /Library/Audio/Plug-Ins/Components.">
+        <pkg-ref id="com.windwardaudio.pkg.@ID@.au"/>
+    </choice>
+    <choice id="vst3" title="VST3 (Ableton Live, Cubase, Reaper, Bitwig, ...)"
+            description="@PLUGIN_NAMES@ as VST3 plug-ins, in /Library/Audio/Plug-Ins/VST3.">
+        <pkg-ref id="com.windwardaudio.pkg.@ID@.vst3"/>
+    </choice>
+    <pkg-ref id="com.windwardaudio.pkg.@ID@.prepare" version="@PKG_VERSION@" onConclusion="none">prepare.pkg</pkg-ref>
+    <pkg-ref id="com.windwardaudio.pkg.@ID@.au" version="@PKG_VERSION@" onConclusion="none">au.pkg</pkg-ref>
+    <pkg-ref id="com.windwardaudio.pkg.@ID@.vst3" version="@PKG_VERSION@" onConclusion="none">vst3.pkg</pkg-ref>
+</installer-gui-script>

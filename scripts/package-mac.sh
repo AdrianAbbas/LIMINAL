@@ -5,9 +5,11 @@
 # That zip is the developer package (CI artifact VACANCY-dev-macOS), for testing only.
 # Usage: scripts/package-mac.sh <instrument artefacts dir> <dist dir> <effect artefacts dir>
 #
-# Customer package: scripts/package-mac.sh --customer <signed, notarised VACANCY.pkg> <dist dir>
-# stages <dist dir>/VACANCY-1.0-macOS with only VACANCY.pkg and "VACANCY - Read Me.txt", and
-# zips it as <dist dir>/VACANCY-1.0-macOS.zip (the release asset). It refuses an unsigned pkg.
+# Customer package (docs/INSTALLER_STANDARD.md): scripts/package-mac.sh --customer <signed,
+# notarised VACANCY.pkg> <dist dir> stages <dist dir>/VACANCY-<version>-macOS with only
+# "VACANCY Installer.pkg" and "VACANCY - Read Me.pdf" (written by scripts/build-pkg.sh next to the
+# pkg), and zips it as <dist dir>/VACANCY-<version>-macOS.zip (the release asset). <version> is
+# installer/product.json's. It refuses an unsigned pkg.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "${1:-}" == --customer ]]; then
@@ -17,11 +19,12 @@ if [[ "${1:-}" == --customer ]]; then
         echo "error: $pkg is not signed with Developer ID Installer; no customer package" >&2
         exit 1
     fi
-    customer="$dist/VACANCY-1.0-macOS"
+    version=$(/usr/bin/python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$here/installer/product.json")
+    customer="$dist/VACANCY-$version-macOS"
     rm -rf "$customer" "$customer.zip"
     mkdir -p "$customer"
-    /usr/bin/ditto "$pkg" "$customer/VACANCY.pkg"
-    install -m 644 "$here/packaging/VACANCY - Read Me.txt" "$customer/"
+    /usr/bin/ditto "$pkg" "$customer/VACANCY Installer.pkg"
+    install -m 644 "$(dirname "$pkg")/VACANCY - Read Me.pdf" "$customer/"
     /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$customer" "$customer.zip"
     echo "Packaged $customer.zip"
     /usr/bin/unzip -l "$customer.zip"

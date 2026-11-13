@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Build the installer package VACANCY.pkg with productbuild: VACANCY and VACANCY FX as Audio
+# Build the installer package VACANCY.pkg with productbuild, to the Windward Audio installer standard
+# (docs/INSTALLER_STANDARD.md: pages, wording, background and Read Me from installer/, rendered by
+# installer/render.py; identifiers com.windwardaudio.pkg.vacancy[.au|.vst3|.prepare]): VACANCY and VACANCY FX as Audio
 # Units (/Library/Audio/Plug-Ins/Components) and VST3s (/Library/Audio/Plug-Ins/VST3), for all
 # users. The recordings (Contents/Resources/Samples) and the factory presets (compiled into each
-# binary) travel inside the bundles. Preinstall scripts remove LIMINAL / TAPEWORN / TAPEWORN FX
+# binary) travel inside the bundles. Preinstall scripts silently remove bundles under earlier names
 # and competing copies (packaging/pkg/remove-copies.sh); the AU postinstall resets the registry.
 # The bundles must already be signed (scripts/sign-mac.sh, or ad hoc by scripts/package-mac.sh).
 # With an installer identity the product is signed (Developer ID Installer, secure timestamp);
 # without one it is left unsigned, for the ad-hoc CI build only.
 #
 # Environment (optional): VACANCY_INSTALLER_IDENTITY, VACANCY_KEYCHAIN
+# The customer download renames it "VACANCY Installer.pkg" (scripts/package-mac.sh --customer).
 # Usage: scripts/build-pkg.sh <instrument artefacts dir> <effect artefacts dir> <output .pkg>
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,7 +37,7 @@ for bundle in "$work"/root-*/*; do
 done
 
 # Preinstall scripts: one mode line above the shared body.
-for mode in old au vst3; do
+for mode in prepare au vst3; do
     mkdir -p "$work/scripts-$mode"
     { echo '#!/bin/bash'; echo "mode=$mode"; cat "$here/packaging/pkg/remove-copies.sh"; } > "$work/scripts-$mode/preinstall"
     chmod 755 "$work/scripts-$mode/preinstall"
@@ -55,16 +58,20 @@ component_pkg() {   # component_pkg <name> <install location>
         i=$((i + 1))
     done
     /usr/bin/pkgbuild --root "$work/root-$name" --component-plist "$plist" --install-location "$location" \
-        --scripts "$work/scripts-$name" --identifier "com.windwardaudio.vacancy.pkg.$name" --version "$version" \
+        --scripts "$work/scripts-$name" --identifier "com.windwardaudio.pkg.vacancy.$name" --version "$version" \
         --ownership recommended "$work/packages/$name.pkg"
 }
 component_pkg au /Library/Audio/Plug-Ins/Components
 component_pkg vst3 /Library/Audio/Plug-Ins/VST3
-/usr/bin/pkgbuild --nopayload --scripts "$work/scripts-old" --identifier com.windwardaudio.vacancy.pkg.remove-old \
-    --version "$version" "$work/packages/remove-old.pkg"
+/usr/bin/pkgbuild --nopayload --scripts "$work/scripts-prepare" --identifier com.windwardaudio.pkg.vacancy.prepare \
+    --version "$version" "$work/packages/prepare.pkg"
 
-/usr/bin/sed "s/@VERSION@/$version/g" "$here/packaging/pkg/distribution.xml" > "$work/distribution.xml"
-cp "$here/packaging/pkg/welcome.html" "$here/packaging/pkg/conclusion.html" "$work/resources/"
+# Installer pages, background, licence and the distribution (installer/product.json + templates).
+# Disk space: the payload, rounded up to 10 MB.
+kb=$(/usr/bin/du -sk "$work/root-au" "$work/root-vst3" | /usr/bin/awk '{ s += $1 } END { print s }')
+disk="$(( (kb + 10239) / 10240 * 10 )) MB"
+/usr/bin/python3 "$here/installer/render.py" --pkg-version "$version" --disk-space "$disk" \
+    --resources "$work/resources" --distribution "$work/distribution.xml" --readme-pdf "$(dirname "$out")/VACANCY - Read Me.pdf"
 mkdir -p "$(dirname "$out")"
 rm -f "$out"
 sign_args=()
@@ -75,7 +82,7 @@ else
     echo "::notice::VACANCY.pkg is built UNSIGNED (no Developer ID Installer identity): for the CI install test only, not for distribution"
 fi
 /usr/bin/productbuild --distribution "$work/distribution.xml" --package-path "$work/packages" \
-    --resources "$work/resources" --identifier com.windwardaudio.vacancy.pkg --version "$version" \
+    --resources "$work/resources" --identifier com.windwardaudio.pkg.vacancy --version "$version" \
     ${sign_args[@]+"${sign_args[@]}"} "$out"
 echo "Built $out ($(/usr/bin/du -h "$out" | /usr/bin/cut -f1))"
 /usr/sbin/pkgutil --check-signature "$out" || [[ -z "$identity" ]]

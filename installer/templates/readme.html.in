@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><style>
+@STYLE@
+</style></head>
+<body>
+<h2>What gets installed</h2>
+<ul>
+@EACH_PLUGIN@<li><b>@NAME@</b> (@KIND@)</li>
+@END@</ul>
+<p>Each as an Audio Unit (AU) and a VST3 plug-in, with their sounds and factory presets, for all
+users of this Mac. Disk space: @DISK_SPACE@.</p>
+<p class="small">Audio Units go to <code>/Library/Audio/Plug-Ins/Components</code>, VST3 plug-ins to
+<code>/Library/Audio/Plug-Ins/VST3</code>. Click Customize on the Installation Type page to leave out
+either format.</p>
+
+<h2>System requirements</h2>
+<ul>
+<li>macOS @MIN_MACOS@ (@MIN_MACOS_NAME@) or later</li>
+<li>Apple Silicon or Intel Mac</li>
+<li>A music app that loads Audio Unit or VST3 plug-ins (GarageBand, Logic Pro, Ableton Live, Cubase, Reaper, Studio One, ...)</li>
+</ul>
+
+<h2>Where to find it</h2>
+<p>In your music app, @PRODUCT@ is listed under <b>Windward Audio</b>:</p>
+<ul>
+@EACH_PLUGIN@<li>@NAME@: @LOGIC_PATH@</li>
+@END@</ul>
+<p class="small">The Read Me PDF in the download has the steps for each app.</p>
+
+<h2>Support</h2>
+<p><a href="mailto:support@windwardaudio.com">support@windwardaudio.com</a></p>
+</body></html>

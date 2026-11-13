@@ -1,7 +1,7 @@
 # Shared body of VACANCY.pkg's preinstall scripts (scripts/build-pkg.sh puts a line
-# `mode=old|au|vst3` above it). Runs as root, with macOS's bash 3.2. Everything it removes is
+# `mode=prepare|au|vst3` above it). Runs as root, with macOS's bash 3.2. Everything it removes is
 # logged to /var/log/install.log. Never removes presets or anything outside the plug-in folders.
-#   mode=old   LIMINAL, TAPEWORN and TAPEWORN FX (VACANCY's and VACANCY FX's old names: the same
+#   mode=prepare  LIMINAL, TAPEWORN and TAPEWORN FX (VACANCY's and VACANCY FX's old names: the same
 #              Audio Units and VST3s, so hosts would list two copies), by name and by old bundle
 #              ID, in every format, system-wide and in every user's ~/Library
 #   mode=au    other copies of VACANCY.component and VACANCY FX.component: per-user copies
@@ -12,8 +12,12 @@
 set -u
 log() { echo "VACANCY installer: $*"; }
 case "$mode" in
-    old)  exts="component vst3"; names="LIMINAL|TAPEWORN|TAPEWORN FX"
-          ids=" audio.veil.liminal com.elsewhereaudio.tapeworn com.windwardaudio.tapewornfx " ;;
+    prepare) exts="component vst3"; names="LIMINAL|TAPEWORN|TAPEWORN FX"
+          ids=" audio.veil.liminal com.elsewhereaudio.tapeworn com.windwardaudio.tapewornfx "
+          # Receipts of the package's earlier identifiers (com.windwardaudio.vacancy.pkg.*).
+          for receipt in au vst3 remove-old; do
+              /usr/sbin/pkgutil --forget "com.windwardaudio.vacancy.pkg.$receipt" > /dev/null 2>&1 || true
+          done ;;
     au)   exts="component"; names="VACANCY|VACANCY FX"; ids=" com.windwardaudio.vacancy com.windwardaudio.vacancyfx " ;;
     vst3) exts="vst3"; names="VACANCY|VACANCY FX"; ids=" com.windwardaudio.vacancy com.windwardaudio.vacancyfx " ;;
     *)    log "unknown mode $mode"; exit 0 ;;
@@ -36,7 +40,7 @@ for home in /Library /Users/*/Library; do
             [ $by_name = 1 ] || [ $by_id = 1 ] || continue
             # The copy this package installs (mode au/vst3, system-wide, its own name) is
             # replaced by the payload; leave it to the installer.
-            if [ "$mode" != old ] && [ "$home" = /Library ] && [ $by_name = 1 ]; then continue; fi
+            if [ "$mode" != prepare ] && [ "$home" = /Library ] && [ $by_name = 1 ]; then continue; fi
             remove "$bundle"
         done
     done

@@ -1,0 +1,14 @@
+{
+    "instrument": {
+        "kind": "instrument",
+        "garageband": "create a Software Instrument track, open Smart Controls (B) > Plug-ins > Instrument slot > AU Instruments > Windward Audio > @NAME@",
+        "logic": "Instrument slot of a Software Instrument track > AU Instruments > Windward Audio > @NAME@",
+        "other": "in the instrument list, as AU or VST3"
+    },
+    "effect": {
+        "kind": "effect",
+        "garageband": "on any track, open Smart Controls (B) > Plug-ins > an empty slot > Audio Units > Windward Audio > @NAME@",
+        "logic": "any Audio FX slot > Audio Units > Windward Audio > @NAME@",
+        "other": "in the effect list, as AU or VST3"
+    }
+}
